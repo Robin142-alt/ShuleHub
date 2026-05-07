@@ -10,6 +10,12 @@ import { RequestContextService } from '../../common/request-context/request-cont
 import { DatabaseService } from '../../database/database.service';
 import { AdjustStockDto, CreateInventoryItemDto, UpdateInventoryItemDto } from './dto/create-inventory-item.dto';
 import {
+  CreateInventoryCategoryDto,
+  CreateInventorySupplierDto,
+  UpdateInventoryCategoryDto,
+  UpdateInventorySupplierDto,
+} from './dto/inventory-master-data.dto';
+import {
   CreateIncidentDto,
   CreateInventoryRequestDto,
   CreatePurchaseOrderDto,
@@ -147,12 +153,88 @@ export class InventoryService {
     return this.inventoryRepository.listCategories(this.requireTenantId());
   }
 
+  async createCategory(dto: CreateInventoryCategoryDto) {
+    try {
+      return await this.inventoryRepository.createCategory({
+        tenant_id: this.requireTenantId(),
+        code: dto.code.trim().toUpperCase(),
+        name: dto.name.trim(),
+        manager: dto.manager?.trim() || 'Stores Office',
+        storage_zones: dto.storage_zones?.trim() || 'Main Store',
+        description: dto.description?.trim() || null,
+      });
+    } catch (error) {
+      this.rethrowUniqueCategoryCode(error);
+      throw error;
+    }
+  }
+
+  async updateCategory(categoryId: string, dto: UpdateInventoryCategoryDto) {
+    try {
+      const updated = await this.inventoryRepository.updateCategory(this.requireTenantId(), categoryId, {
+        code: dto.code?.trim().toUpperCase(),
+        name: dto.name?.trim(),
+        manager: dto.manager === undefined ? undefined : dto.manager.trim() || null,
+        storage_zones: dto.storage_zones === undefined ? undefined : dto.storage_zones.trim() || null,
+        description: dto.description === undefined ? undefined : dto.description.trim() || null,
+      });
+
+      if (!updated) {
+        throw new NotFoundException(`Inventory category "${categoryId}" was not found`);
+      }
+
+      return updated;
+    } catch (error) {
+      this.rethrowUniqueCategoryCode(error);
+      throw error;
+    }
+  }
+
   async listStockMovements(query: ListInventoryQueryDto) {
     return this.inventoryRepository.listStockMovements(this.requireTenantId(), query.limit ?? 50);
   }
 
   async listSuppliers() {
     return this.inventoryRepository.listSuppliers(this.requireTenantId());
+  }
+
+  async createSupplier(dto: CreateInventorySupplierDto) {
+    try {
+      return await this.inventoryRepository.createSupplier({
+        tenant_id: this.requireTenantId(),
+        supplier_name: dto.supplier_name.trim(),
+        contact_person: dto.contact_person?.trim() || null,
+        email: dto.email?.trim() || null,
+        phone: dto.phone?.trim() || null,
+        county: dto.county?.trim() || 'Nairobi',
+        status: dto.status ?? 'active',
+      });
+    } catch (error) {
+      this.rethrowUniqueSupplierName(error);
+      throw error;
+    }
+  }
+
+  async updateSupplier(supplierId: string, dto: UpdateInventorySupplierDto) {
+    try {
+      const updated = await this.inventoryRepository.updateSupplier(this.requireTenantId(), supplierId, {
+        supplier_name: dto.supplier_name?.trim(),
+        contact_person: dto.contact_person === undefined ? undefined : dto.contact_person.trim() || null,
+        email: dto.email === undefined ? undefined : dto.email.trim() || null,
+        phone: dto.phone === undefined ? undefined : dto.phone.trim() || null,
+        county: dto.county === undefined ? undefined : dto.county.trim() || null,
+        status: dto.status,
+      });
+
+      if (!updated) {
+        throw new NotFoundException(`Inventory supplier "${supplierId}" was not found`);
+      }
+
+      return updated;
+    } catch (error) {
+      this.rethrowUniqueSupplierName(error);
+      throw error;
+    }
   }
 
   async listPurchaseOrders() {
@@ -463,6 +545,22 @@ export class InventoryService {
 
     if (databaseError?.code === '23505' && databaseError.constraint?.includes('sku')) {
       throw new ConflictException('inventory SKU already exists in this tenant');
+    }
+  }
+
+  private rethrowUniqueCategoryCode(error: unknown) {
+    const databaseError = error as { code?: string; constraint?: string };
+
+    if (databaseError?.code === '23505' && databaseError.constraint?.includes('tenant_code')) {
+      throw new ConflictException('inventory category code already exists in this tenant');
+    }
+  }
+
+  private rethrowUniqueSupplierName(error: unknown) {
+    const databaseError = error as { code?: string; constraint?: string };
+
+    if (databaseError?.code === '23505' && databaseError.constraint?.includes('tenant_name')) {
+      throw new ConflictException('inventory supplier already exists in this tenant');
     }
   }
 }

@@ -23,6 +23,8 @@ export interface LiveInventoryCategory {
   id: string;
   code: string;
   name: string;
+  manager?: string | null;
+  storage_zones?: string | null;
   description?: string | null;
 }
 
@@ -32,6 +34,7 @@ export interface LiveInventorySupplier {
   contact_person?: string | null;
   email?: string | null;
   phone?: string | null;
+  county?: string | null;
   last_delivery_at?: string | null;
   status: string;
 }
@@ -202,9 +205,10 @@ function mapCategory(category: LiveInventoryCategory): InventoryCategory {
 
   return {
     id: category.id,
+    code: category.code,
     name: category.name,
-    manager: fallback?.manager ?? "Stores Office",
-    storageZones: fallback?.storageZones ?? "Main Store",
+    manager: category.manager ?? fallback?.manager ?? "Stores Office",
+    storageZones: category.storage_zones ?? fallback?.storageZones ?? "Main Store",
     notes: fallback?.notes ?? category.description ?? "Operational inventory category.",
   };
 }
@@ -220,7 +224,7 @@ function mapSupplier(supplier: LiveInventorySupplier): InventorySupplier {
     phone: supplier.phone ?? fallback?.phone ?? "Not on file",
     lastDelivery: formatDate(supplier.last_delivery_at),
     status: supplier.status === "on_hold" ? "on_hold" : "active",
-    county: fallback?.county ?? "Nairobi",
+    county: supplier.county ?? fallback?.county ?? "Nairobi",
   };
 }
 
@@ -464,6 +468,23 @@ export interface SaveInventoryItemInput {
   notes?: string;
 }
 
+export interface SaveInventoryCategoryInput {
+  code: string;
+  name: string;
+  manager: string;
+  storage_zones: string;
+  description?: string;
+}
+
+export interface SaveInventorySupplierInput {
+  supplier_name: string;
+  contact_person?: string;
+  email?: string;
+  phone?: string;
+  county?: string;
+  status?: "active" | "on_hold";
+}
+
 export function createInventoryItemLive(
   session: LiveAuthSession,
   input: SaveInventoryItemInput,
@@ -474,6 +495,48 @@ export function createInventoryItemLive(
       ...input,
       quantity: input.quantity ?? 0,
     },
+  });
+}
+
+export function createInventoryCategoryLive(
+  session: LiveAuthSession,
+  input: SaveInventoryCategoryInput,
+) {
+  return withSession(session, "/inventory/categories", {
+    method: "POST",
+    body: { ...input },
+  });
+}
+
+export function updateInventoryCategoryLive(
+  session: LiveAuthSession,
+  categoryId: string,
+  input: Partial<SaveInventoryCategoryInput>,
+) {
+  return withSession(session, `/inventory/categories/${categoryId}`, {
+    method: "PATCH",
+    body: { ...input },
+  });
+}
+
+export function createInventorySupplierLive(
+  session: LiveAuthSession,
+  input: SaveInventorySupplierInput,
+) {
+  return withSession(session, "/inventory/suppliers", {
+    method: "POST",
+    body: { ...input },
+  });
+}
+
+export function updateInventorySupplierLive(
+  session: LiveAuthSession,
+  supplierId: string,
+  input: Partial<SaveInventorySupplierInput>,
+) {
+  return withSession(session, `/inventory/suppliers/${supplierId}`, {
+    method: "PATCH",
+    body: { ...input },
   });
 }
 

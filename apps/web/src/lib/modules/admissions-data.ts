@@ -95,6 +95,10 @@ export interface AdmissionsDocument {
   uploadedOn: string;
   verificationStatus: DocumentVerificationStatus;
   ownerType: "application" | "student";
+  applicationId?: string;
+  applicationNumber?: string;
+  studentId?: string;
+  admissionNumber?: string;
 }
 
 export interface ClassAllocation {

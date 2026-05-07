@@ -25,6 +25,8 @@ export class InventorySchemaService implements OnModuleInit {
         tenant_id text NOT NULL,
         code text NOT NULL,
         name text NOT NULL,
+        manager text,
+        storage_zones text,
         description text,
         created_at timestamptz NOT NULL DEFAULT NOW(),
         updated_at timestamptz NOT NULL DEFAULT NOW(),
@@ -39,6 +41,7 @@ export class InventorySchemaService implements OnModuleInit {
         contact_person text,
         email text,
         phone text,
+        county text,
         last_delivery_at timestamptz,
         status text NOT NULL DEFAULT 'active',
         metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -185,6 +188,10 @@ export class InventorySchemaService implements OnModuleInit {
       CREATE INDEX IF NOT EXISTS ix_inventory_items_status ON inventory_items (tenant_id, status, updated_at DESC);
       CREATE INDEX IF NOT EXISTS ix_inventory_items_low_stock ON inventory_items (tenant_id, quantity_on_hand, reorder_level);
       CREATE INDEX IF NOT EXISTS ix_inventory_movements_occurred_at ON inventory_stock_movements (tenant_id, occurred_at DESC);
+
+      ALTER TABLE inventory_categories ADD COLUMN IF NOT EXISTS manager text;
+      ALTER TABLE inventory_categories ADD COLUMN IF NOT EXISTS storage_zones text;
+      ALTER TABLE inventory_suppliers ADD COLUMN IF NOT EXISTS county text;
 
       ALTER TABLE inventory_categories ENABLE ROW LEVEL SECURITY;
       ALTER TABLE inventory_categories FORCE ROW LEVEL SECURITY;

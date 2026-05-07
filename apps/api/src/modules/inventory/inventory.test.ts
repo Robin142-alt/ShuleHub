@@ -231,3 +231,92 @@ test('InventoryService completes a transfer and records transfer movements for t
   assert.equal(createdMovements[0]?.quantity, 6);
   assert.equal(createdMovements[0]?.reference, 'TRF-2026-008');
 });
+
+test('InventoryService creates a category with operational ownership fields', async () => {
+  const requestContext = new RequestContextService();
+
+  const service = new InventoryService(
+    requestContext,
+    {} as never,
+    {
+      createCategory: async (input: Record<string, unknown>) => ({
+        id: '00000000-0000-0000-0000-000000000931',
+        ...input,
+      }),
+    } as never,
+  );
+
+  const response = await requestContext.run(
+    {
+      request_id: 'req-inventory-category-1',
+      tenant_id: 'tenant-a',
+      user_id: '00000000-0000-0000-0000-000000000001',
+      role: 'storekeeper',
+      session_id: 'session-1',
+      permissions: ['inventory:*'],
+      is_authenticated: true,
+      client_ip: '127.0.0.1',
+      user_agent: 'test-suite',
+      method: 'POST',
+      path: '/inventory/categories',
+      started_at: '2026-05-04T00:00:00.000Z',
+    },
+    () =>
+      service.createCategory({
+        code: 'stat',
+        name: 'Stationery',
+        manager: 'Academic Office',
+        storage_zones: 'Admin Store, Block A',
+        description: 'Daily issue to class teachers and exams office.',
+      }),
+  );
+
+  assert.equal(response.code, 'STAT');
+  assert.equal(response.manager, 'Academic Office');
+  assert.equal(response.storage_zones, 'Admin Store, Block A');
+});
+
+test('InventoryService updates a supplier and preserves procurement status fields', async () => {
+  const requestContext = new RequestContextService();
+
+  const service = new InventoryService(
+    requestContext,
+    {} as never,
+    {
+      updateSupplier: async (_tenantId: string, _supplierId: string, input: Record<string, unknown>) => ({
+        id: '00000000-0000-0000-0000-000000000941',
+        ...input,
+      }),
+    } as never,
+  );
+
+  const response = await requestContext.run(
+    {
+      request_id: 'req-inventory-supplier-1',
+      tenant_id: 'tenant-a',
+      user_id: '00000000-0000-0000-0000-000000000001',
+      role: 'storekeeper',
+      session_id: 'session-1',
+      permissions: ['procurement:*'],
+      is_authenticated: true,
+      client_ip: '127.0.0.1',
+      user_agent: 'test-suite',
+      method: 'PATCH',
+      path: '/inventory/suppliers/00000000-0000-0000-0000-000000000941',
+      started_at: '2026-05-04T00:00:00.000Z',
+    },
+    () =>
+      service.updateSupplier('00000000-0000-0000-0000-000000000941', {
+        supplier_name: 'Crown Office Supplies',
+        contact_person: 'Lucy Njeri',
+        email: 'orders@crownoffice.co.ke',
+        phone: '+254722441885',
+        county: 'Nairobi',
+        status: 'on_hold',
+      }),
+  );
+
+  assert.equal(response.supplier_name, 'Crown Office Supplies');
+  assert.equal(response.county, 'Nairobi');
+  assert.equal(response.status, 'on_hold');
+});

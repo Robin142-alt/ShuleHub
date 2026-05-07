@@ -66,6 +66,7 @@ export class AdmissionsRepository {
       this.databaseService.query(
         `
           SELECT
+            application.id::text AS application_id,
             application.application_number,
             application.full_name,
             COUNT(document.id)::int AS uploaded_documents
@@ -425,7 +426,14 @@ export class AdmissionsRepository {
           uploaded_by_user_id
         )
         VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10::uuid)
-        RETURNING id, document_type, original_file_name, verification_status
+        RETURNING
+          id,
+          application_id::text,
+          student_id::text,
+          document_type,
+          original_file_name,
+          verification_status,
+          created_at
       `,
       [
         input.tenant_id,
@@ -444,17 +452,42 @@ export class AdmissionsRepository {
     return result.rows[0];
   }
 
+  async attachApplicationDocumentsToStudent(
+    tenantId: string,
+    applicationId: string,
+    studentId: string,
+  ) {
+    const result = await this.databaseService.query(
+      `
+        UPDATE admission_documents
+        SET student_id = $3::uuid,
+            updated_at = NOW()
+        WHERE tenant_id = $1
+          AND application_id = $2::uuid
+          AND student_id IS NULL
+        RETURNING id
+      `,
+      [tenantId, applicationId, studentId],
+    );
+
+    return result.rows;
+  }
+
   async listDocuments(tenantId: string) {
     const result = await this.databaseService.query(
       `
         SELECT
           document.id,
+          document.application_id::text,
+          document.student_id::text,
           document.document_type,
           document.original_file_name,
           document.verification_status,
           document.created_at,
+          application.application_number,
           application.full_name AS applicant_name,
-          student.admission_number
+          student.admission_number,
+          CONCAT(student.first_name, ' ', student.last_name) AS student_name
         FROM admission_documents document
         LEFT JOIN admission_applications application
           ON application.tenant_id = document.tenant_id
@@ -483,7 +516,14 @@ export class AdmissionsRepository {
             updated_at = NOW()
         WHERE tenant_id = $1
           AND id = $2::uuid
-        RETURNING id, document_type, original_file_name, verification_status, created_at
+        RETURNING
+          id,
+          application_id::text,
+          student_id::text,
+          document_type,
+          original_file_name,
+          verification_status,
+          created_at
       `,
       [tenantId, documentId, verificationStatus],
     );

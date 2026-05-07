@@ -38,6 +38,7 @@ export type IncidentType = "broken" | "lost" | "expired";
 
 export interface InventoryCategory {
   id: string;
+  code: string;
   name: string;
   manager: string;
   storageZones: string;
@@ -148,6 +149,7 @@ export interface InventoryDataset {
 const baseCategories: InventoryCategory[] = [
   {
     id: "cat-stationery",
+    code: "STAT",
     name: "Stationery",
     manager: "Academic Office",
     storageZones: "Admin Store, Block A",
@@ -155,6 +157,7 @@ const baseCategories: InventoryCategory[] = [
   },
   {
     id: "cat-food",
+    code: "FOOD",
     name: "Food Stores",
     manager: "Kitchen Department",
     storageZones: "Dry Store, Boarding Wing",
@@ -162,6 +165,7 @@ const baseCategories: InventoryCategory[] = [
   },
   {
     id: "cat-lab",
+    code: "LAB",
     name: "Laboratory",
     manager: "Science Department",
     storageZones: "Science Prep Room",
@@ -169,6 +173,7 @@ const baseCategories: InventoryCategory[] = [
   },
   {
     id: "cat-ict",
+    code: "ICT",
     name: "ICT Equipment",
     manager: "ICT Office",
     storageZones: "ICT Lab Cage Store",
@@ -176,6 +181,7 @@ const baseCategories: InventoryCategory[] = [
   },
   {
     id: "cat-boarding",
+    code: "BRD",
     name: "Boarding Supplies",
     manager: "Boarding Office",
     storageZones: "Dorm Store",
@@ -183,6 +189,7 @@ const baseCategories: InventoryCategory[] = [
   },
   {
     id: "cat-cleaning",
+    code: "CLN",
     name: "Cleaning",
     manager: "Operations",
     storageZones: "Maintenance Store",
@@ -937,6 +944,7 @@ export function buildInventoryCategoryBreakdown(data: InventoryDataset) {
 
     return {
       id: category.id,
+      code: category.code,
       name: category.name,
       manager: category.manager,
       itemCount: items.length,

@@ -54,6 +54,27 @@ export interface InventoryPurchaseOrderRecord {
   notes: string | null;
 }
 
+export interface InventoryCategoryRecord {
+  id: string;
+  tenant_id: string;
+  code: string;
+  name: string;
+  manager: string | null;
+  storage_zones: string | null;
+  description: string | null;
+}
+
+export interface InventorySupplierRecord {
+  id: string;
+  supplier_name: string;
+  contact_person: string | null;
+  email: string | null;
+  phone: string | null;
+  county: string | null;
+  last_delivery_at: string | null;
+  status: string;
+}
+
 export interface InventoryTransferRecord {
   id: string;
   transfer_number: string;
@@ -555,7 +576,14 @@ export class InventoryRepository {
   async listCategories(tenantId: string) {
     const result = await this.databaseService.query(
       `
-        SELECT id, code, name, description
+        SELECT
+          id,
+          tenant_id,
+          code,
+          name,
+          COALESCE(manager, 'Stores Office') AS manager,
+          COALESCE(storage_zones, 'Main Store') AS storage_zones,
+          description
         FROM inventory_categories
         WHERE tenant_id = $1
         ORDER BY name ASC
@@ -564,6 +592,102 @@ export class InventoryRepository {
     );
 
     return result.rows;
+  }
+
+  async createCategory(input: {
+    tenant_id: string;
+    code: string;
+    name: string;
+    manager: string;
+    storage_zones: string;
+    description: string | null;
+  }) {
+    const result = await this.databaseService.query<InventoryCategoryRecord>(
+      `
+        INSERT INTO inventory_categories (
+          tenant_id,
+          code,
+          name,
+          manager,
+          storage_zones,
+          description
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING
+          id,
+          tenant_id,
+          code,
+          name,
+          manager,
+          storage_zones,
+          description
+      `,
+      [
+        input.tenant_id,
+        input.code,
+        input.name,
+        input.manager,
+        input.storage_zones,
+        input.description,
+      ],
+    );
+
+    return result.rows[0];
+  }
+
+  async updateCategory(
+    tenantId: string,
+    categoryId: string,
+    input: Partial<{
+      code: string;
+      name: string;
+      manager: string | null;
+      storage_zones: string | null;
+      description: string | null;
+    }>,
+  ) {
+    const assignments: string[] = [];
+    const values: unknown[] = [tenantId, categoryId];
+    let parameterIndex = 3;
+
+    const setField = (column: string, value: unknown) => {
+      assignments.push(`${column} = $${parameterIndex}`);
+      values.push(value);
+      parameterIndex += 1;
+    };
+
+    if (input.code !== undefined) setField('code', input.code);
+    if (input.name !== undefined) setField('name', input.name);
+    if (input.manager !== undefined) setField('manager', input.manager);
+    if (input.storage_zones !== undefined) setField('storage_zones', input.storage_zones);
+    if (input.description !== undefined) setField('description', input.description);
+
+    if (assignments.length === 0) {
+      const categories = await this.listCategories(tenantId);
+      return categories.find((category) => category.id === categoryId) ?? null;
+    }
+
+    assignments.push('updated_at = NOW()');
+
+    const result = await this.databaseService.query<InventoryCategoryRecord>(
+      `
+        UPDATE inventory_categories
+        SET ${assignments.join(', ')}
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+        RETURNING
+          id,
+          tenant_id,
+          code,
+          name,
+          COALESCE(manager, 'Stores Office') AS manager,
+          COALESCE(storage_zones, 'Main Store') AS storage_zones,
+          description
+      `,
+      values,
+    );
+
+    return result.rows[0] ?? null;
   }
 
   async listStockMovements(tenantId: string, limit: number) {
@@ -598,7 +722,15 @@ export class InventoryRepository {
   async listSuppliers(tenantId: string) {
     const result = await this.databaseService.query(
       `
-        SELECT id, supplier_name, contact_person, email, phone, last_delivery_at, status
+        SELECT
+          id,
+          supplier_name,
+          contact_person,
+          email,
+          phone,
+          COALESCE(county, metadata->>'county', 'Nairobi') AS county,
+          last_delivery_at::text,
+          status
         FROM inventory_suppliers
         WHERE tenant_id = $1
         ORDER BY supplier_name ASC
@@ -607,6 +739,113 @@ export class InventoryRepository {
     );
 
     return result.rows;
+  }
+
+  async createSupplier(input: {
+    tenant_id: string;
+    supplier_name: string;
+    contact_person: string | null;
+    email: string | null;
+    phone: string | null;
+    county: string;
+    status: string;
+  }) {
+    const result = await this.databaseService.query<InventorySupplierRecord>(
+      `
+        INSERT INTO inventory_suppliers (
+          tenant_id,
+          supplier_name,
+          contact_person,
+          email,
+          phone,
+          county,
+          status,
+          metadata
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, jsonb_build_object('county', $6))
+        RETURNING
+          id,
+          supplier_name,
+          contact_person,
+          email,
+          phone,
+          county,
+          last_delivery_at::text,
+          status
+      `,
+      [
+        input.tenant_id,
+        input.supplier_name,
+        input.contact_person,
+        input.email,
+        input.phone,
+        input.county,
+        input.status,
+      ],
+    );
+
+    return result.rows[0];
+  }
+
+  async updateSupplier(
+    tenantId: string,
+    supplierId: string,
+    input: Partial<{
+      supplier_name: string;
+      contact_person: string | null;
+      email: string | null;
+      phone: string | null;
+      county: string | null;
+      status: string;
+    }>,
+  ) {
+    const assignments: string[] = [];
+    const values: unknown[] = [tenantId, supplierId];
+    let parameterIndex = 3;
+
+    const setField = (column: string, value: unknown) => {
+      assignments.push(`${column} = $${parameterIndex}`);
+      values.push(value);
+      parameterIndex += 1;
+    };
+
+    if (input.supplier_name !== undefined) setField('supplier_name', input.supplier_name);
+    if (input.contact_person !== undefined) setField('contact_person', input.contact_person);
+    if (input.email !== undefined) setField('email', input.email);
+    if (input.phone !== undefined) setField('phone', input.phone);
+    if (input.county !== undefined) {
+      setField('county', input.county);
+      assignments.push(`metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{county}', to_jsonb($${parameterIndex - 1}::text), true)`);
+    }
+    if (input.status !== undefined) setField('status', input.status);
+
+    if (assignments.length === 0) {
+      const suppliers = await this.listSuppliers(tenantId);
+      return suppliers.find((supplier) => supplier.id === supplierId) ?? null;
+    }
+
+    assignments.push('updated_at = NOW()');
+
+    const result = await this.databaseService.query<InventorySupplierRecord>(
+      `
+        UPDATE inventory_suppliers
+        SET ${assignments.join(', ')}
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+        RETURNING
+          id,
+          supplier_name,
+          contact_person,
+          email,
+          phone,
+          COALESCE(county, metadata->>'county', 'Nairobi') AS county,
+          last_delivery_at::text,
+          status
+      `,
+      values,
+    );
+
+    return result.rows[0] ?? null;
   }
 
   async createPurchaseOrder(input: {

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { InventoryLineItemsEditor } from "@/components/modules/inventory/inventory-line-items-editor";
 import { ModuleShell } from "@/components/modules/shared/module-shell";
 import { OpsTable, type OpsTableColumn } from "@/components/modules/shared/ops-table";
 import { StatStrip } from "@/components/modules/shared/stat-strip";
@@ -44,6 +45,7 @@ import {
   getRequestTone,
   getTransferTone,
   type DepartmentRequest,
+  type InventoryCategory,
   type InventoryDataset,
   type InventoryIncident,
   type InventoryItem,
@@ -53,19 +55,32 @@ import {
   type PurchaseOrder,
   type StockTransfer,
 } from "@/lib/modules/inventory-data";
+import {
+  buildInventoryWorkflowLines,
+  calculateInventoryWorkflowDraftTotal,
+  countInventoryWorkflowDraftUnits,
+  createInventoryWorkflowLineDraft,
+  summarizeInventoryWorkflowLineDrafts,
+  validateInventoryWorkflowLineDrafts,
+  type InventoryWorkflowLineDraft,
+} from "@/lib/modules/inventory-workflow";
 import { formatCurrency } from "@/lib/dashboard/format";
 import {
   adjustInventoryItemStockLive,
   createInventoryIncidentLive,
   createInventoryItemLive,
+  createInventoryCategoryLive,
   createInventoryPurchaseOrderLive,
   createInventoryRequestLive,
+  createInventorySupplierLive,
   createInventoryTransferLive,
   fetchInventoryDatasetLive,
   fetchInventoryReportsLive,
+  updateInventoryCategoryLive,
   updateInventoryItemLive,
   updateInventoryPurchaseOrderStatusLive,
   updateInventoryRequestStatusLive,
+  updateInventorySupplierLive,
   updateInventoryTransferStatusLive,
 } from "@/lib/modules/inventory-live";
 
@@ -105,32 +120,47 @@ type StockAdjustmentFormState = {
   notes: string;
 };
 
+type CategoryFormState = {
+  code: string;
+  name: string;
+  manager: string;
+  storageZones: string;
+  notes: string;
+};
+
+type SupplierFormState = {
+  name: string;
+  contact: string;
+  email: string;
+  phone: string;
+  county: string;
+  status: "active" | "on_hold";
+};
+
 type PurchaseOrderFormState = {
   supplier: string;
   requestedBy: string;
   expectedDelivery: string;
-  lineSummary: string;
-  totalAmount: string;
+  notes: string;
+  lineItems: InventoryWorkflowLineDraft[];
 };
 
 type RequestFormState = {
   department: string;
-  itemGroup: string;
   requestedBy: string;
-  quantity: string;
   purpose: string;
+  lineItems: InventoryWorkflowLineDraft[];
 };
 
 type TransferFormState = {
-  item: string;
   fromLocation: string;
   toLocation: string;
-  quantity: string;
   requestedBy: string;
+  lineItems: InventoryWorkflowLineDraft[];
 };
 
 type IncidentFormState = {
-  item: string;
+  itemId: string;
   type: "broken" | "lost" | "expired";
   quantity: string;
   department: string;
@@ -183,39 +213,58 @@ function createEmptyAdjustmentForm(): StockAdjustmentFormState {
   };
 }
 
+function createEmptyCategoryForm(): CategoryFormState {
+  return {
+    code: "",
+    name: "",
+    manager: "",
+    storageZones: "",
+    notes: "",
+  };
+}
+
+function createEmptySupplierForm(): SupplierFormState {
+  return {
+    name: "",
+    contact: "",
+    email: "",
+    phone: "",
+    county: "",
+    status: "active",
+  };
+}
+
 function createEmptyPurchaseOrderForm(): PurchaseOrderFormState {
   return {
     supplier: "",
     requestedBy: "",
     expectedDelivery: "",
-    lineSummary: "",
-    totalAmount: "",
+    notes: "",
+    lineItems: [createInventoryWorkflowLineDraft()],
   };
 }
 
 function createEmptyRequestForm(): RequestFormState {
   return {
     department: "",
-    itemGroup: "",
     requestedBy: "",
-    quantity: "",
     purpose: "",
+    lineItems: [createInventoryWorkflowLineDraft()],
   };
 }
 
 function createEmptyTransferForm(): TransferFormState {
   return {
-    item: "",
     fromLocation: "",
     toLocation: "",
-    quantity: "",
     requestedBy: "",
+    lineItems: [createInventoryWorkflowLineDraft()],
   };
 }
 
 function createEmptyIncidentForm(): IncidentFormState {
   return {
-    item: "",
+    itemId: "",
     type: "broken",
     quantity: "",
     department: "",
@@ -261,12 +310,29 @@ export function InventoryModuleScreen({
   const [itemStatusFilter, setItemStatusFilter] = useState("all");
   const [itemSort, setItemSort] = useState("name-asc");
   const [itemPage, setItemPage] = useState(1);
+  const [categorySearch, setCategorySearch] = useState("");
   const [activitySearch, setActivitySearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
   const [requestStatusFilter, setRequestStatusFilter] = useState("all");
   const [purchaseOrderStatusFilter, setPurchaseOrderStatusFilter] = useState("all");
   const [transferStatusFilter, setTransferStatusFilter] = useState("all");
   const [incidentTypeFilter, setIncidentTypeFilter] = useState("all");
+  const [categoryModalMode, setCategoryModalMode] = useState<"add" | "edit">("add");
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [categoryForm, setCategoryForm] = useState<CategoryFormState>(createEmptyCategoryForm);
+  const [categoryFormErrors, setCategoryFormErrors] = useState<
+    Partial<Record<keyof CategoryFormState, string>>
+  >({});
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [supplierModalMode, setSupplierModalMode] = useState<"add" | "edit">("add");
+  const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
+  const [supplierForm, setSupplierForm] = useState<SupplierFormState>(createEmptySupplierForm);
+  const [supplierFormErrors, setSupplierFormErrors] = useState<
+    Partial<Record<keyof SupplierFormState, string>>
+  >({});
+  const [supplierModalOpen, setSupplierModalOpen] = useState(false);
+  const [isSavingSupplier, setIsSavingSupplier] = useState(false);
   const [itemModalMode, setItemModalMode] = useState<"add" | "edit">("add");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [itemForm, setItemForm] = useState<ItemFormState>(createEmptyItemForm);
@@ -414,6 +480,25 @@ export function InventoryModuleScreen({
   const filteredIncidents = dataset.incidents.filter(
     (incident) => incidentTypeFilter === "all" || incident.type === incidentTypeFilter,
   );
+  const categoryRows = buildInventoryCategoryBreakdown(dataset);
+  const filteredCategoryRows = categoryRows.filter((category) => {
+    const term = categorySearch.trim().toLowerCase();
+    if (!term) {
+      return true;
+    }
+
+    return [
+      category.name,
+      category.code,
+      category.manager,
+      category.storageZones,
+      category.notes,
+    ].some((value) => value.toLowerCase().includes(term));
+  });
+  const purchaseOrderDraftTotal = calculateInventoryWorkflowDraftTotal(purchaseOrderForm.lineItems);
+  const requestDraftUnits = countInventoryWorkflowDraftUnits(requestForm.lineItems);
+  const transferDraftUnits = countInventoryWorkflowDraftUnits(transferForm.lineItems);
+  const selectedIncidentItem = dataset.items.find((item) => item.id === incidentForm.itemId) ?? null;
 
   const lowStockItems = dataset.items.filter((item) => {
     const status = getInventoryItemStatus(item);
@@ -439,7 +524,6 @@ export function InventoryModuleScreen({
         tone: getPurchaseOrderTone(purchaseOrder.status),
       })),
   ].slice(0, 5);
-  const categoryBreakdown = buildInventoryCategoryBreakdown(dataset);
   const reports = isLiveMode
     ? (liveInventoryReportsQuery.data ?? buildInventoryReports(dataset))
     : buildInventoryReports(dataset);
@@ -452,6 +536,223 @@ export function InventoryModuleScreen({
     startTransition(() => {
       router.replace(`${pathname}?${next.toString()}`, { scroll: false });
     });
+  }
+
+  function openAddCategoryModal() {
+    setCategoryModalMode("add");
+    setEditingCategoryId(null);
+    setCategoryForm(createEmptyCategoryForm());
+    setCategoryFormErrors({});
+    setCategoryModalOpen(true);
+  }
+
+  function openEditCategoryModal(category: InventoryCategory) {
+    setCategoryModalMode("edit");
+    setEditingCategoryId(category.id);
+    setCategoryForm({
+      code: category.code,
+      name: category.name,
+      manager: category.manager,
+      storageZones: category.storageZones,
+      notes: category.notes,
+    });
+    setCategoryFormErrors({});
+    setCategoryModalOpen(true);
+  }
+
+  function validateCategoryForm() {
+    const errors: Partial<Record<keyof CategoryFormState, string>> = {};
+
+    if (!categoryForm.code.trim()) errors.code = "Category code is required.";
+    if (!categoryForm.name.trim()) errors.name = "Category name is required.";
+    if (!categoryForm.manager.trim()) errors.manager = "Category owner is required.";
+    if (!categoryForm.storageZones.trim()) errors.storageZones = "Storage zone is required.";
+
+    setCategoryFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  async function submitCategoryForm() {
+    if (!validateCategoryForm()) {
+      return;
+    }
+
+    setIsSavingCategory(true);
+    setModuleError(null);
+
+    try {
+      if (isLiveMode && liveSession.session) {
+        const payload = {
+          code: categoryForm.code.trim().toUpperCase(),
+          name: categoryForm.name.trim(),
+          manager: categoryForm.manager.trim(),
+          storage_zones: categoryForm.storageZones.trim(),
+          description: categoryForm.notes.trim(),
+        };
+
+        if (categoryModalMode === "add") {
+          await createInventoryCategoryLive(liveSession.session, payload);
+        } else if (editingCategoryId) {
+          await updateInventoryCategoryLive(liveSession.session, editingCategoryId, payload);
+        }
+
+        await refreshLiveInventoryData();
+      } else {
+        await new Promise((resolve) => window.setTimeout(resolve, 300));
+
+        const previousCategory = dataset.categories.find((category) => category.id === editingCategoryId);
+        const nextCategory: InventoryCategory = {
+          id: editingCategoryId ?? `cat-${Date.now()}`,
+          code: categoryForm.code.trim().toUpperCase(),
+          name: categoryForm.name.trim(),
+          manager: categoryForm.manager.trim(),
+          storageZones: categoryForm.storageZones.trim(),
+          notes: categoryForm.notes.trim(),
+        };
+
+        setLocalDataset((current) => ({
+          ...current,
+          categories:
+            categoryModalMode === "add"
+              ? [nextCategory, ...current.categories]
+              : current.categories.map((category) =>
+                  category.id === nextCategory.id ? nextCategory : category,
+                ),
+          items:
+            categoryModalMode === "edit" && previousCategory
+              ? current.items.map((item) =>
+                  item.category === previousCategory.name
+                    ? { ...item, category: nextCategory.name }
+                    : item,
+                )
+              : current.items,
+        }));
+      }
+
+      setCategoryModalOpen(false);
+      setCategoryForm(createEmptyCategoryForm());
+    } catch (error) {
+      setModuleError(error instanceof Error ? error.message : "Unable to save the category.");
+    } finally {
+      setIsSavingCategory(false);
+    }
+  }
+
+  function openAddSupplierModal() {
+    setSupplierModalMode("add");
+    setEditingSupplierId(null);
+    setSupplierForm(createEmptySupplierForm());
+    setSupplierFormErrors({});
+    setSupplierModalOpen(true);
+  }
+
+  function openEditSupplierModal(supplier: InventorySupplier) {
+    setSupplierModalMode("edit");
+    setEditingSupplierId(supplier.id);
+    setSupplierForm({
+      name: supplier.name,
+      contact: supplier.contact,
+      email: supplier.email,
+      phone: supplier.phone,
+      county: supplier.county,
+      status: supplier.status,
+    });
+    setSupplierFormErrors({});
+    setSupplierModalOpen(true);
+  }
+
+  function validateSupplierForm() {
+    const errors: Partial<Record<keyof SupplierFormState, string>> = {};
+
+    if (!supplierForm.name.trim()) errors.name = "Supplier name is required.";
+    if (!supplierForm.contact.trim()) errors.contact = "Contact person is required.";
+    if (!supplierForm.email.trim()) {
+      errors.email = "Email is required.";
+    } else if (!supplierForm.email.includes("@")) {
+      errors.email = "Enter a valid email address.";
+    }
+    if (!supplierForm.phone.trim()) errors.phone = "Phone number is required.";
+    if (!supplierForm.county.trim()) errors.county = "County is required.";
+
+    setSupplierFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  async function submitSupplierForm() {
+    if (!validateSupplierForm()) {
+      return;
+    }
+
+    setIsSavingSupplier(true);
+    setModuleError(null);
+
+    try {
+      if (isLiveMode && liveSession.session) {
+        const payload = {
+          supplier_name: supplierForm.name.trim(),
+          contact_person: supplierForm.contact.trim(),
+          email: supplierForm.email.trim(),
+          phone: supplierForm.phone.trim(),
+          county: supplierForm.county.trim(),
+          status: supplierForm.status,
+        } as const;
+
+        if (supplierModalMode === "add") {
+          await createInventorySupplierLive(liveSession.session, payload);
+        } else if (editingSupplierId) {
+          await updateInventorySupplierLive(liveSession.session, editingSupplierId, payload);
+        }
+
+        await refreshLiveInventoryData();
+      } else {
+        await new Promise((resolve) => window.setTimeout(resolve, 300));
+
+        const previousSupplier = dataset.suppliers.find((supplier) => supplier.id === editingSupplierId);
+        const nextSupplier: InventorySupplier = {
+          id: editingSupplierId ?? `sup-${Date.now()}`,
+          name: supplierForm.name.trim(),
+          contact: supplierForm.contact.trim(),
+          email: supplierForm.email.trim(),
+          phone: supplierForm.phone.trim(),
+          county: supplierForm.county.trim(),
+          status: supplierForm.status,
+          lastDelivery: previousSupplier?.lastDelivery ?? "-",
+        };
+
+        setLocalDataset((current) => ({
+          ...current,
+          suppliers:
+            supplierModalMode === "add"
+              ? [nextSupplier, ...current.suppliers]
+              : current.suppliers.map((supplier) =>
+                  supplier.id === nextSupplier.id ? nextSupplier : supplier,
+                ),
+          items:
+            supplierModalMode === "edit" && previousSupplier
+              ? current.items.map((item) =>
+                  item.supplier === previousSupplier.name
+                    ? { ...item, supplier: nextSupplier.name }
+                    : item,
+                )
+              : current.items,
+          purchaseOrders:
+            supplierModalMode === "edit" && previousSupplier
+              ? current.purchaseOrders.map((purchaseOrder) =>
+                  purchaseOrder.supplier === previousSupplier.name
+                    ? { ...purchaseOrder, supplier: nextSupplier.name }
+                    : purchaseOrder,
+                )
+              : current.purchaseOrders,
+        }));
+      }
+
+      setSupplierModalOpen(false);
+      setSupplierForm(createEmptySupplierForm());
+    } catch (error) {
+      setModuleError(error instanceof Error ? error.message : "Unable to save the supplier.");
+    } finally {
+      setIsSavingSupplier(false);
+    }
   }
 
   function openAddItemModal() {
@@ -707,10 +1008,11 @@ export function InventoryModuleScreen({
     if (!purchaseOrderForm.expectedDelivery.trim()) {
       errors.expectedDelivery = "Expected delivery date is required.";
     }
-    if (!purchaseOrderForm.lineSummary.trim()) errors.lineSummary = "Line summary is required.";
-    if (!purchaseOrderForm.totalAmount.trim() || Number(purchaseOrderForm.totalAmount) <= 0) {
-      errors.totalAmount = "Total amount must be above zero.";
-    }
+    const lineItemsError = validateInventoryWorkflowLineDrafts(
+      purchaseOrderForm.lineItems,
+      dataset.items,
+    );
+    if (lineItemsError) errors.lineItems = lineItemsError;
 
     setPurchaseOrderErrors(errors);
     return Object.keys(errors).length === 0;
@@ -725,35 +1027,35 @@ export function InventoryModuleScreen({
     setModuleError(null);
 
     try {
+      const purchaseOrderLines = buildInventoryWorkflowLines(
+        purchaseOrderForm.lineItems,
+        dataset.items,
+      );
+      const purchaseOrderSummary = summarizeInventoryWorkflowLineDrafts(
+        purchaseOrderForm.lineItems,
+        dataset.items,
+      );
+      const purchaseOrderNotes = [
+        purchaseOrderForm.requestedBy.trim(),
+        purchaseOrderForm.notes.trim(),
+      ]
+        .filter(Boolean)
+        .join(" :: ");
+
       if (isLiveMode && liveSession.session) {
         const supplierId = dataset.suppliers.find(
           (supplier) => supplier.name === purchaseOrderForm.supplier.trim(),
         )?.id;
-        const matchedItem = dataset.items.find((item) =>
-          purchaseOrderForm.lineSummary.toLowerCase().includes(item.name.toLowerCase()),
-        );
 
-        if (!supplierId || !matchedItem) {
-          throw new Error("Select an existing supplier and reference an existing item in the line summary.");
+        if (!supplierId) {
+          throw new Error("Select an existing supplier before creating a purchase order.");
         }
-
-        const estimatedQuantity = Math.max(
-          1,
-          Math.round(Number(purchaseOrderForm.totalAmount) / Math.max(matchedItem.unitPrice, 1)),
-        );
 
         await createInventoryPurchaseOrderLive(liveSession.session, {
           supplier_id: supplierId,
           expected_delivery_date: purchaseOrderForm.expectedDelivery,
-          lines: [
-            {
-              item_id: matchedItem.id,
-              item_name: matchedItem.name,
-              quantity: estimatedQuantity,
-              unit_price: matchedItem.unitPrice,
-            },
-          ],
-          notes: `${purchaseOrderForm.requestedBy.trim()} :: ${purchaseOrderForm.lineSummary.trim()}`,
+          lines: purchaseOrderLines,
+          notes: purchaseOrderNotes || undefined,
         });
         await refreshLiveInventoryData();
       } else {
@@ -768,8 +1070,8 @@ export function InventoryModuleScreen({
               requestedBy: purchaseOrderForm.requestedBy.trim(),
               orderDate: "2026-05-04",
               expectedDelivery: purchaseOrderForm.expectedDelivery,
-              lineSummary: purchaseOrderForm.lineSummary.trim(),
-              totalAmount: Number(purchaseOrderForm.totalAmount),
+              lineSummary: purchaseOrderSummary,
+              totalAmount: purchaseOrderDraftTotal,
               status: "draft",
             },
             ...current.purchaseOrders,
@@ -833,10 +1135,10 @@ export function InventoryModuleScreen({
     const errors: Partial<Record<keyof RequestFormState, string>> = {};
 
     if (!requestForm.department.trim()) errors.department = "Department is required.";
-    if (!requestForm.itemGroup.trim()) errors.itemGroup = "Item group is required.";
     if (!requestForm.requestedBy.trim()) errors.requestedBy = "Request owner is required.";
-    if (!requestForm.quantity.trim()) errors.quantity = "Requested quantity is required.";
     if (!requestForm.purpose.trim()) errors.purpose = "Purpose is required.";
+    const lineItemsError = validateInventoryWorkflowLineDrafts(requestForm.lineItems, dataset.items);
+    if (lineItemsError) errors.lineItems = lineItemsError;
 
     setRequestErrors(errors);
     return Object.keys(errors).length === 0;
@@ -851,26 +1153,14 @@ export function InventoryModuleScreen({
     setModuleError(null);
 
     try {
+      const requestLines = buildInventoryWorkflowLines(requestForm.lineItems, dataset.items);
+      const requestSummary = summarizeInventoryWorkflowLineDrafts(requestForm.lineItems, dataset.items);
+
       if (isLiveMode && liveSession.session) {
-        const matchedItem = dataset.items.find((item) =>
-          requestForm.itemGroup.toLowerCase().includes(item.name.toLowerCase()),
-        );
-
-        if (!matchedItem) {
-          throw new Error("Reference an existing inventory item in the request item group.");
-        }
-
         await createInventoryRequestLive(liveSession.session, {
           department: requestForm.department.trim(),
           requested_by: requestForm.requestedBy.trim(),
-          lines: [
-            {
-              item_id: matchedItem.id,
-              item_name: matchedItem.name,
-              quantity: Number(requestForm.quantity),
-              unit_price: matchedItem.unitPrice,
-            },
-          ],
+          lines: requestLines,
           notes: requestForm.purpose.trim(),
         });
         await refreshLiveInventoryData();
@@ -882,10 +1172,10 @@ export function InventoryModuleScreen({
             {
               id: `req-${Date.now()}`,
               department: requestForm.department.trim(),
-              itemGroup: requestForm.itemGroup.trim(),
+              itemGroup: requestSummary,
               requestedBy: requestForm.requestedBy.trim(),
               requestDate: "2026-05-04",
-              quantity: requestForm.quantity.trim(),
+              quantity: `${requestDraftUnits} units`,
               purpose: requestForm.purpose.trim(),
               status: "pending",
             },
@@ -932,13 +1222,11 @@ export function InventoryModuleScreen({
   function validateTransferForm() {
     const errors: Partial<Record<keyof TransferFormState, string>> = {};
 
-    if (!transferForm.item.trim()) errors.item = "Item is required.";
     if (!transferForm.fromLocation.trim()) errors.fromLocation = "From location is required.";
     if (!transferForm.toLocation.trim()) errors.toLocation = "To location is required.";
     if (!transferForm.requestedBy.trim()) errors.requestedBy = "Request owner is required.";
-    if (!transferForm.quantity.trim() || Number(transferForm.quantity) <= 0) {
-      errors.quantity = "Quantity must be above zero.";
-    }
+    const lineItemsError = validateInventoryWorkflowLineDrafts(transferForm.lineItems, dataset.items);
+    if (lineItemsError) errors.lineItems = lineItemsError;
 
     setTransferErrors(errors);
     return Object.keys(errors).length === 0;
@@ -953,28 +1241,16 @@ export function InventoryModuleScreen({
     setModuleError(null);
 
     try {
+      const transferLines = buildInventoryWorkflowLines(transferForm.lineItems, dataset.items);
+      const transferSummary = summarizeInventoryWorkflowLineDrafts(transferForm.lineItems, dataset.items);
+
       if (isLiveMode && liveSession.session) {
-        const matchedItem = dataset.items.find((item) =>
-          transferForm.item.toLowerCase().includes(item.name.toLowerCase()),
-        );
-
-        if (!matchedItem) {
-          throw new Error("Reference an existing inventory item before creating a transfer.");
-        }
-
         await createInventoryTransferLive(liveSession.session, {
           from_location: transferForm.fromLocation.trim(),
           to_location: transferForm.toLocation.trim(),
           requested_by: transferForm.requestedBy.trim(),
-          lines: [
-            {
-              item_id: matchedItem.id,
-              item_name: matchedItem.name,
-              quantity: Number(transferForm.quantity),
-              unit_price: matchedItem.unitPrice,
-            },
-          ],
-          notes: `${transferForm.item.trim()} transfer request`,
+          lines: transferLines,
+          notes: `${transferSummary} transfer request`,
         });
         await refreshLiveInventoryData();
       } else {
@@ -984,10 +1260,10 @@ export function InventoryModuleScreen({
           transfers: [
             {
               id: `trf-${Date.now()}`,
-              item: transferForm.item.trim(),
+              item: transferSummary,
               fromLocation: transferForm.fromLocation.trim(),
               toLocation: transferForm.toLocation.trim(),
-              quantity: Number(transferForm.quantity),
+              quantity: transferDraftUnits,
               requestedBy: transferForm.requestedBy.trim(),
               date: "2026-05-04",
               status: "requested",
@@ -1036,7 +1312,7 @@ export function InventoryModuleScreen({
   function validateIncidentForm() {
     const errors: Partial<Record<keyof IncidentFormState, string>> = {};
 
-    if (!incidentForm.item.trim()) errors.item = "Item is required.";
+    if (!incidentForm.itemId.trim()) errors.itemId = "Item is required.";
     if (!incidentForm.department.trim()) errors.department = "Department is required.";
     if (!incidentForm.reason.trim()) errors.reason = "Reason is required.";
     if (!incidentForm.quantity.trim() || Number(incidentForm.quantity) <= 0) {
@@ -1059,17 +1335,15 @@ export function InventoryModuleScreen({
     setModuleError(null);
 
     try {
+      const incidentItem = dataset.items.find((item) => item.id === incidentForm.itemId) ?? null;
+
+      if (!incidentItem) {
+        throw new Error("Select an inventory item before logging damage or loss.");
+      }
+
       if (isLiveMode && liveSession.session) {
-        const matchedItem = dataset.items.find((item) =>
-          incidentForm.item.toLowerCase().includes(item.name.toLowerCase()),
-        );
-
-        if (!matchedItem) {
-          throw new Error("Reference an existing inventory item before logging damage or loss.");
-        }
-
         await createInventoryIncidentLive(liveSession.session, {
-          item_id: matchedItem.id,
+          item_id: incidentItem.id,
           incident_type: incidentForm.type,
           quantity: Number(incidentForm.quantity),
           reason: incidentForm.reason.trim(),
@@ -1084,7 +1358,7 @@ export function InventoryModuleScreen({
           incidents: [
             {
               id: `inc-${Date.now()}`,
-              item: incidentForm.item.trim(),
+              item: incidentItem.name,
               type: incidentForm.type,
               quantity: Number(incidentForm.quantity),
               department: incidentForm.department.trim(),
@@ -1215,6 +1489,16 @@ export function InventoryModuleScreen({
           label={supplier.status === "active" ? "Active" : "On hold"}
           tone={supplier.status === "active" ? "ok" : "warning"}
         />
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      render: (supplier) => (
+        <Button variant="ghost" size="sm" onClick={() => openEditSupplierModal(supplier)}>
+          <PencilLine className="h-4 w-4" />
+          Edit
+        </Button>
       ),
     },
   ];
@@ -1368,14 +1652,16 @@ export function InventoryModuleScreen({
     },
   ];
 
-  const categoryColumns: OpsTableColumn<(typeof categoryBreakdown)[number]>[] = [
+  const categoryColumns: OpsTableColumn<(typeof categoryRows)[number]>[] = [
     {
       id: "name",
       header: "Category",
       render: (category) => (
         <div>
           <p className="font-semibold text-foreground">{category.name}</p>
-          <p className="mt-1 text-sm text-muted">{category.notes}</p>
+          <p className="mt-1 text-sm text-muted">
+            {category.code} · {category.notes}
+          </p>
         </div>
       ),
     },
@@ -1388,6 +1674,29 @@ export function InventoryModuleScreen({
       className: "text-right font-semibold",
       headerClassName: "text-right",
       render: (category) => category.totalValue,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      render: (category) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            openEditCategoryModal({
+              id: category.id,
+              code: category.code,
+              name: category.name,
+              manager: category.manager,
+              storageZones: category.storageZones,
+              notes: category.notes,
+            })
+          }
+        >
+          <PencilLine className="h-4 w-4" />
+          Edit
+        </Button>
+      ),
     },
   ];
 
@@ -1514,12 +1823,12 @@ export function InventoryModuleScreen({
             <OpsTable
               title="Inventory category breakdown"
               subtitle="Category ownership, storage zone, and valuation kept in the same operational report."
-              rows={categoryBreakdown}
+              rows={categoryRows}
               columns={categoryColumns}
               getRowId={(row) => row.id}
-              totalRows={categoryBreakdown.length}
+              totalRows={categoryRows.length}
               page={1}
-              pageSize={categoryBreakdown.length || 1}
+              pageSize={categoryRows.length || 1}
               onPageChange={() => undefined}
               searchPlaceholder="Search categories"
               loading={isDatasetLoading}
@@ -1638,19 +1947,23 @@ export function InventoryModuleScreen({
           <OpsTable
             title="Category control"
             subtitle="Category ownership, zone planning, and stock-value concentration by school function."
-            rows={categoryBreakdown}
+            rows={filteredCategoryRows}
             columns={categoryColumns}
             getRowId={(row) => row.id}
-            totalRows={categoryBreakdown.length}
+            searchValue={categorySearch}
+            onSearchValueChange={setCategorySearch}
+            searchPlaceholder="Search category, code, owner, or storage zone"
+            totalRows={filteredCategoryRows.length}
             page={1}
-            pageSize={categoryBreakdown.length || 1}
+            pageSize={filteredCategoryRows.length || 1}
             onPageChange={() => undefined}
             loading={isDatasetLoading}
             loadingLabel="Loading live category controls..."
             exportConfig={{
               filename: "inventory-categories.csv",
-              headers: ["Category", "Owner", "Items", "Storage", "Value"],
-              rows: categoryBreakdown.map((category) => [
+              headers: ["Code", "Category", "Owner", "Items", "Storage", "Value"],
+              rows: filteredCategoryRows.map((category) => [
+                category.code,
                 category.name,
                 category.manager,
                 `${category.itemCount}`,
@@ -1658,6 +1971,12 @@ export function InventoryModuleScreen({
                 category.totalValue,
               ]),
             }}
+            actions={
+              <Button onClick={openAddCategoryModal}>
+                <Boxes className="h-4 w-4" />
+                Add category
+              </Button>
+            }
           />
         ) : null}
 
@@ -1708,6 +2027,12 @@ export function InventoryModuleScreen({
             onPageChange={() => undefined}
             loading={isDatasetLoading}
             loadingLabel="Loading live suppliers..."
+            actions={
+              <Button onClick={openAddSupplierModal}>
+                <ShoppingCart className="h-4 w-4" />
+                Add supplier
+              </Button>
+            }
           />
         ) : null}
 
@@ -1998,6 +2323,174 @@ export function InventoryModuleScreen({
       </ModuleShell>
 
       <Modal
+        open={categoryModalOpen}
+        title={categoryModalMode === "add" ? "Add inventory category" : "Edit inventory category"}
+        description="Keep store ownership, valuation grouping, and stock zoning aligned across the school."
+        onClose={() => setCategoryModalOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setCategoryModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitCategoryForm} disabled={isSavingCategory}>
+              {isSavingCategory
+                ? "Saving..."
+                : categoryModalMode === "add"
+                  ? "Add category"
+                  : "Save changes"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <FieldWrapper label="Category code" error={categoryFormErrors.code}>
+            <input
+              className={fieldClassName}
+              value={categoryForm.code}
+              onChange={(event) =>
+                setCategoryForm((current) => ({
+                  ...current,
+                  code: event.target.value.toUpperCase(),
+                }))
+              }
+              placeholder="STAT"
+            />
+          </FieldWrapper>
+          <FieldWrapper label="Category name" error={categoryFormErrors.name}>
+            <input
+              className={fieldClassName}
+              value={categoryForm.name}
+              onChange={(event) =>
+                setCategoryForm((current) => ({ ...current, name: event.target.value }))
+              }
+              placeholder="Stationery"
+            />
+          </FieldWrapper>
+          <FieldWrapper label="Category owner" error={categoryFormErrors.manager}>
+            <input
+              className={fieldClassName}
+              value={categoryForm.manager}
+              onChange={(event) =>
+                setCategoryForm((current) => ({ ...current, manager: event.target.value }))
+              }
+              placeholder="Academic Office"
+            />
+          </FieldWrapper>
+          <FieldWrapper label="Storage zones" error={categoryFormErrors.storageZones}>
+            <input
+              className={fieldClassName}
+              value={categoryForm.storageZones}
+              onChange={(event) =>
+                setCategoryForm((current) => ({ ...current, storageZones: event.target.value }))
+              }
+              placeholder="Admin Store, Block A"
+            />
+          </FieldWrapper>
+          <div className="md:col-span-2">
+            <FieldWrapper label="Operational notes">
+              <textarea
+                className={textAreaClassName}
+                value={categoryForm.notes}
+                onChange={(event) =>
+                  setCategoryForm((current) => ({ ...current, notes: event.target.value }))
+                }
+                placeholder="Daily issue to class teachers and exams office."
+              />
+            </FieldWrapper>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={supplierModalOpen}
+        title={supplierModalMode === "add" ? "Add supplier" : "Edit supplier"}
+        description="Maintain approved vendor contacts, county coverage, and procurement status in one controlled register."
+        onClose={() => setSupplierModalOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setSupplierModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitSupplierForm} disabled={isSavingSupplier}>
+              {isSavingSupplier
+                ? "Saving..."
+                : supplierModalMode === "add"
+                  ? "Add supplier"
+                  : "Save changes"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <FieldWrapper label="Supplier name" error={supplierFormErrors.name}>
+            <input
+              className={fieldClassName}
+              value={supplierForm.name}
+              onChange={(event) =>
+                setSupplierForm((current) => ({ ...current, name: event.target.value }))
+              }
+              placeholder="Crown Office Supplies"
+            />
+          </FieldWrapper>
+          <FieldWrapper label="Contact person" error={supplierFormErrors.contact}>
+            <input
+              className={fieldClassName}
+              value={supplierForm.contact}
+              onChange={(event) =>
+                setSupplierForm((current) => ({ ...current, contact: event.target.value }))
+              }
+              placeholder="Lucy Njeri"
+            />
+          </FieldWrapper>
+          <FieldWrapper label="Email" error={supplierFormErrors.email}>
+            <input
+              className={fieldClassName}
+              value={supplierForm.email}
+              onChange={(event) =>
+                setSupplierForm((current) => ({ ...current, email: event.target.value }))
+              }
+              placeholder="orders@crownoffice.co.ke"
+            />
+          </FieldWrapper>
+          <FieldWrapper label="Phone" error={supplierFormErrors.phone}>
+            <input
+              className={fieldClassName}
+              value={supplierForm.phone}
+              onChange={(event) =>
+                setSupplierForm((current) => ({ ...current, phone: event.target.value }))
+              }
+              placeholder="+254 722 441 885"
+            />
+          </FieldWrapper>
+          <FieldWrapper label="County" error={supplierFormErrors.county}>
+            <input
+              className={fieldClassName}
+              value={supplierForm.county}
+              onChange={(event) =>
+                setSupplierForm((current) => ({ ...current, county: event.target.value }))
+              }
+              placeholder="Nairobi"
+            />
+          </FieldWrapper>
+          <FieldWrapper label="Status">
+            <select
+              className={fieldClassName}
+              value={supplierForm.status}
+              onChange={(event) =>
+                setSupplierForm((current) => ({
+                  ...current,
+                  status: event.target.value as SupplierFormState["status"],
+                }))
+              }
+            >
+              <option value="active">Active</option>
+              <option value="on_hold">On hold</option>
+            </select>
+          </FieldWrapper>
+        </div>
+      </Modal>
+
+      <Modal
         open={itemModalOpen}
         title={itemModalMode === "add" ? "Add inventory item" : "Edit inventory item"}
         description="Capture school store details clearly so valuation, reorder alerts, and supplier references remain reliable."
@@ -2225,27 +2718,39 @@ export function InventoryModuleScreen({
               }
             />
           </FieldWrapper>
-          <FieldWrapper label="Total amount" error={purchaseOrderErrors.totalAmount}>
-            <input
-              className={fieldClassName}
-              value={purchaseOrderForm.totalAmount}
-              onChange={(event) =>
-                setPurchaseOrderForm((current) => ({ ...current, totalAmount: event.target.value }))
-              }
-              placeholder="86250"
-            />
-          </FieldWrapper>
           <div className="md:col-span-2">
-            <FieldWrapper label="Line summary" error={purchaseOrderErrors.lineSummary}>
+            <InventoryLineItemsEditor
+              label="Order lines"
+              description="Build the supplier order from real inventory items so approvals, receipts, and valuation stay aligned."
+              lines={purchaseOrderForm.lineItems}
+              items={dataset.items}
+              onChange={(lineItems) =>
+                setPurchaseOrderForm((current) => ({ ...current, lineItems }))
+              }
+              error={purchaseOrderErrors.lineItems}
+              allowUnitPriceEdit
+              addButtonLabel="Add PO line"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <FieldWrapper label="Procurement notes">
               <textarea
                 className={textAreaClassName}
-                value={purchaseOrderForm.lineSummary}
+                value={purchaseOrderForm.notes}
                 onChange={(event) =>
-                  setPurchaseOrderForm((current) => ({ ...current, lineSummary: event.target.value }))
+                  setPurchaseOrderForm((current) => ({ ...current, notes: event.target.value }))
                 }
-                placeholder="A4 paper, markers, exam ledger books"
+                placeholder="Urgent before assessment week, confirm delivery at main gate receiving desk."
               />
             </FieldWrapper>
+          </div>
+          <div className="md:col-span-2 rounded-xl border border-border bg-surface-muted px-4 py-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-muted">Purchase order estimate</p>
+            <p className="mt-2 text-lg font-semibold text-foreground">
+              {purchaseOrderDraftTotal > 0
+                ? formatCurrency(purchaseOrderDraftTotal, false)
+                : "Add order lines to calculate value"}
+            </p>
           </div>
         </div>
       </Modal>
@@ -2277,16 +2782,6 @@ export function InventoryModuleScreen({
               placeholder="Science Lab"
             />
           </FieldWrapper>
-          <FieldWrapper label="Item group" error={requestErrors.itemGroup}>
-            <input
-              className={fieldClassName}
-              value={requestForm.itemGroup}
-              onChange={(event) =>
-                setRequestForm((current) => ({ ...current, itemGroup: event.target.value }))
-              }
-              placeholder="Laboratory"
-            />
-          </FieldWrapper>
           <FieldWrapper label="Requested by" error={requestErrors.requestedBy}>
             <input
               className={fieldClassName}
@@ -2297,16 +2792,17 @@ export function InventoryModuleScreen({
               placeholder="Moses Otieno"
             />
           </FieldWrapper>
-          <FieldWrapper label="Quantity" error={requestErrors.quantity}>
-            <input
-              className={fieldClassName}
-              value={requestForm.quantity}
-              onChange={(event) =>
-                setRequestForm((current) => ({ ...current, quantity: event.target.value }))
-              }
-              placeholder="12 boxes gloves"
+          <div className="md:col-span-2">
+            <InventoryLineItemsEditor
+              label="Requested lines"
+              description="Choose the exact stock lines needed by the department before approval or fulfillment."
+              lines={requestForm.lineItems}
+              items={dataset.items}
+              onChange={(lineItems) => setRequestForm((current) => ({ ...current, lineItems }))}
+              error={requestErrors.lineItems}
+              addButtonLabel="Add request line"
             />
-          </FieldWrapper>
+          </div>
           <div className="md:col-span-2">
             <FieldWrapper label="Purpose" error={requestErrors.purpose}>
               <textarea
@@ -2318,6 +2814,12 @@ export function InventoryModuleScreen({
                 placeholder="Grade 8 practical set-up for acids and indicators."
               />
             </FieldWrapper>
+          </div>
+          <div className="md:col-span-2 rounded-xl border border-border bg-surface-muted px-4 py-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-muted">Requested units</p>
+            <p className="mt-2 text-lg font-semibold text-foreground">
+              {requestDraftUnits > 0 ? `${requestDraftUnits} units requested` : "Add request lines to total units"}
+            </p>
           </div>
         </div>
       </Modal>
@@ -2339,26 +2841,6 @@ export function InventoryModuleScreen({
         }
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <FieldWrapper label="Item" error={transferErrors.item}>
-            <input
-              className={fieldClassName}
-              value={transferForm.item}
-              onChange={(event) =>
-                setTransferForm((current) => ({ ...current, item: event.target.value }))
-              }
-              placeholder="Mattress Protector"
-            />
-          </FieldWrapper>
-          <FieldWrapper label="Quantity" error={transferErrors.quantity}>
-            <input
-              className={fieldClassName}
-              value={transferForm.quantity}
-              onChange={(event) =>
-                setTransferForm((current) => ({ ...current, quantity: event.target.value }))
-              }
-              placeholder="6"
-            />
-          </FieldWrapper>
           <FieldWrapper label="From location" error={transferErrors.fromLocation}>
             <input
               className={fieldClassName}
@@ -2391,6 +2873,23 @@ export function InventoryModuleScreen({
               />
             </FieldWrapper>
           </div>
+          <div className="md:col-span-2">
+            <InventoryLineItemsEditor
+              label="Transfer lines"
+              description="Select the exact items and quantities moving between operational locations."
+              lines={transferForm.lineItems}
+              items={dataset.items}
+              onChange={(lineItems) => setTransferForm((current) => ({ ...current, lineItems }))}
+              error={transferErrors.lineItems}
+              addButtonLabel="Add transfer line"
+            />
+          </div>
+          <div className="md:col-span-2 rounded-xl border border-border bg-surface-muted px-4 py-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-muted">Transfer quantity</p>
+            <p className="mt-2 text-lg font-semibold text-foreground">
+              {transferDraftUnits > 0 ? `${transferDraftUnits} units in transfer` : "Add transfer lines to total units"}
+            </p>
+          </div>
         </div>
       </Modal>
 
@@ -2411,15 +2910,23 @@ export function InventoryModuleScreen({
         }
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <FieldWrapper label="Item" error={incidentErrors.item}>
-            <input
+          <FieldWrapper label="Item" error={incidentErrors.itemId}>
+            <select
               className={fieldClassName}
-              value={incidentForm.item}
+              value={incidentForm.itemId}
               onChange={(event) =>
-                setIncidentForm((current) => ({ ...current, item: event.target.value }))
+                setIncidentForm((current) => ({ ...current, itemId: event.target.value }))
               }
-              placeholder="Beakers 250ml"
-            />
+            >
+              <option value="">Select inventory item</option>
+              {dataset.items
+                .filter((item) => !item.archived)
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} ({item.sku})
+                  </option>
+                ))}
+            </select>
           </FieldWrapper>
           <FieldWrapper label="Type">
             <select
@@ -2464,9 +2971,17 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setIncidentForm((current) => ({ ...current, costImpact: event.target.value }))
               }
-              placeholder="3600"
-            />
-          </FieldWrapper>
+                placeholder="3600"
+              />
+            </FieldWrapper>
+          {selectedIncidentItem ? (
+            <div className="md:col-span-2 rounded-xl border border-border bg-surface-muted px-4 py-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted">Current stock context</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">
+                {`${selectedIncidentItem.name} · ${selectedIncidentItem.quantity} ${selectedIncidentItem.unit} on hand · ${formatCurrency(selectedIncidentItem.unitPrice, false)} per unit`}
+              </p>
+            </div>
+          ) : null}
           <div className="md:col-span-2">
             <FieldWrapper label="Reason" error={incidentErrors.reason}>
               <textarea

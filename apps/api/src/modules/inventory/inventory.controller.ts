@@ -3,6 +3,12 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from 
 import { Permissions } from '../../auth/decorators/permissions.decorator';
 import { AdjustStockDto, CreateInventoryItemDto, UpdateInventoryItemDto } from './dto/create-inventory-item.dto';
 import {
+  CreateInventoryCategoryDto,
+  CreateInventorySupplierDto,
+  UpdateInventoryCategoryDto,
+  UpdateInventorySupplierDto,
+} from './dto/inventory-master-data.dto';
+import {
   CreateIncidentDto,
   CreateInventoryRequestDto,
   CreatePurchaseOrderDto,
@@ -58,6 +64,21 @@ export class InventoryController {
     return this.inventoryService.listCategories();
   }
 
+  @Post('categories')
+  @Permissions('inventory:write')
+  createCategory(@Body() dto: CreateInventoryCategoryDto) {
+    return this.inventoryService.createCategory(dto);
+  }
+
+  @Patch('categories/:categoryId')
+  @Permissions('inventory:write')
+  updateCategory(
+    @Param('categoryId', new ParseUUIDPipe()) categoryId: string,
+    @Body() dto: UpdateInventoryCategoryDto,
+  ) {
+    return this.inventoryService.updateCategory(categoryId, dto);
+  }
+
   @Get('stock-movements')
   @Permissions('inventory:read')
   listStockMovements(@Query() query: ListInventoryQueryDto) {
@@ -68,6 +89,21 @@ export class InventoryController {
   @Permissions('procurement:read')
   listSuppliers() {
     return this.inventoryService.listSuppliers();
+  }
+
+  @Post('suppliers')
+  @Permissions('procurement:write')
+  createSupplier(@Body() dto: CreateInventorySupplierDto) {
+    return this.inventoryService.createSupplier(dto);
+  }
+
+  @Patch('suppliers/:supplierId')
+  @Permissions('procurement:write')
+  updateSupplier(
+    @Param('supplierId', new ParseUUIDPipe()) supplierId: string,
+    @Body() dto: UpdateInventorySupplierDto,
+  ) {
+    return this.inventoryService.updateSupplier(supplierId, dto);
   }
 
   @Get('purchase-orders')

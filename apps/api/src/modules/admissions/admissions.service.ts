@@ -100,6 +100,12 @@ export class AdmissionsService {
     }
 
     const tenantId = this.requireTenantId();
+    const application = await this.admissionsRepository.findApplicationById(tenantId, applicationId);
+
+    if (!application) {
+      throw new NotFoundException(`Admission application "${applicationId}" was not found`);
+    }
+
     const persistedFile = await this.documentStorage.save({
       tenantId,
       scope: 'admissions',
@@ -169,6 +175,11 @@ export class AdmissionsService {
       });
 
       await this.admissionsRepository.markApplicationRegistered(tenantId, applicationId, student.id);
+      await this.admissionsRepository.attachApplicationDocumentsToStudent(
+        tenantId,
+        applicationId,
+        student.id,
+      );
       const allocation = await this.admissionsRepository.createAllocation({
         tenant_id: tenantId,
         student_id: student.id,

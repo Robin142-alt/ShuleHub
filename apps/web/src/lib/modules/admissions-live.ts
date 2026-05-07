@@ -67,6 +67,7 @@ export interface LiveAdmissionsSummary {
   recent_applications: Array<Record<string, unknown>>;
   pending_approvals: Array<Record<string, unknown>>;
   missing_documents: Array<{
+    application_id?: string;
     application_number: string;
     full_name: string;
     uploaded_documents: number;
@@ -127,12 +128,16 @@ export interface LiveAdmissionsParent {
 
 export interface LiveAdmissionsDocument {
   id: string;
+  application_id?: string | null;
+  student_id?: string | null;
   document_type: string;
   original_file_name: string;
   verification_status: "pending" | "verified" | "rejected";
   created_at?: string | null;
+  application_number?: string | null;
   applicant_name?: string | null;
   admission_number?: string | null;
+  student_name?: string | null;
 }
 
 export interface LiveAdmissionsAllocation {
@@ -217,7 +222,7 @@ function buildFullName(input: {
 }
 
 function getDocumentOwnerType(document: LiveAdmissionsDocument): "application" | "student" {
-  return document.admission_number ? "student" : "application";
+  return document.student_id || document.admission_number ? "student" : "application";
 }
 
 function getAdmissionsMetadata(metadata?: Record<string, unknown> | null) {
@@ -272,6 +277,9 @@ function buildLearnerMap(
   const applicationsById = new Map(
     applications.map((application) => [application.id, application]),
   );
+  const applicationsByNumber = new Map(
+    applications.map((application) => [application.application_number, application]),
+  );
 
   students.forEach((student) => {
     const fullName = buildFullName(student);
@@ -300,6 +308,7 @@ function buildLearnerMap(
     studentsById,
     studentsByAdmission,
     applicationsById,
+    applicationsByNumber,
   };
 }
 
@@ -505,7 +514,10 @@ export function mapAdmissionsDatasetFromLive(input: {
       const matchedStudent = document.admission_number
         ? lookup.studentsByAdmission.get(document.admission_number)
         : undefined;
-      const learnerName = document.applicant_name ?? buildFullName(matchedStudent ?? {});
+      const learnerName =
+        document.applicant_name
+        ?? document.student_name
+        ?? buildFullName(matchedStudent ?? {});
 
       return {
         id: document.id,
@@ -515,17 +527,27 @@ export function mapAdmissionsDatasetFromLive(input: {
         uploadedOn: formatDate(document.created_at, true),
         verificationStatus: document.verification_status,
         ownerType: getDocumentOwnerType(document),
+        applicationId: document.application_id ?? undefined,
+        applicationNumber: document.application_number ?? undefined,
+        studentId: document.student_id ?? matchedStudent?.id,
+        admissionNumber: document.admission_number ?? matchedStudent?.admission_number,
       };
     }),
-    ...input.summary.missing_documents.map((document) => ({
-      id: `missing-${document.application_number}`,
-      learnerName: document.full_name,
-      documentType: "Required admissions documents",
-      fileName: `${document.uploaded_documents}/2 uploaded`,
-      uploadedOn: "-",
-      verificationStatus: "missing" as const,
-      ownerType: "application" as const,
-    })),
+    ...input.summary.missing_documents.map((document) => {
+      const application = lookup.applicationsByNumber.get(document.application_number);
+
+      return {
+        id: `missing-${document.application_number}`,
+        learnerName: document.full_name,
+        documentType: "Required admissions documents",
+        fileName: `${document.uploaded_documents}/3 uploaded`,
+        uploadedOn: "-",
+        verificationStatus: "missing" as const,
+        ownerType: "application" as const,
+        applicationId: document.application_id ?? application?.id,
+        applicationNumber: document.application_number,
+      };
+    }),
   ];
 
   const allocations: ClassAllocation[] = input.allocations.map((allocation) => ({

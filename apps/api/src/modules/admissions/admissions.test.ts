@@ -34,6 +34,7 @@ test('AdmissionsService registers an approved application into the student direc
           status: 'registered',
         };
       },
+      attachApplicationDocumentsToStudent: async () => [],
       createAllocation: async () => ({
         id: '00000000-0000-0000-0000-000000000703',
         class_name: 'Grade 7',
@@ -105,8 +106,15 @@ test('AdmissionsService stores uploaded document metadata with pending verificat
       withRequestTransaction: async <T>(callback: () => Promise<T>): Promise<T> => callback(),
     } as never,
     {
+      findApplicationById: async () => ({
+        id: '00000000-0000-0000-0000-000000000701',
+        tenant_id: 'tenant-a',
+        status: 'pending',
+      }),
       saveDocumentRecord: async () => ({
         id: '00000000-0000-0000-0000-000000000801',
+        application_id: '00000000-0000-0000-0000-000000000701',
+        student_id: null,
         verification_status: 'pending',
         document_type: 'birth_certificate',
         original_file_name: 'birth-cert-brenda.pdf',

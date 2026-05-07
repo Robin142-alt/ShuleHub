@@ -4,6 +4,7 @@ import { startTransition, useDeferredValue, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCheck,
+  FileUp,
   GraduationCap,
   RefreshCcw,
   UserPlus,
@@ -121,6 +122,23 @@ type TransferFormState = {
   reason: string;
 };
 
+type DocumentUploadFormState = {
+  applicationId: string;
+  documentType: string;
+  fileName: string;
+  file: File | null;
+  sourceDocumentId: string;
+};
+
+const admissionsDocumentTypes = [
+  "Birth certificate",
+  "Passport photo",
+  "Previous report forms",
+  "Transfer letter",
+  "Medical form",
+  "Parent/guardian ID",
+];
+
 function isAdmissionsSectionId(value: string | null): value is AdmissionsSectionId {
   return admissionsSectionIds.includes((value ?? "") as AdmissionsSectionId);
 }
@@ -191,6 +209,16 @@ function createEmptyTransferForm(): TransferFormState {
   };
 }
 
+function createEmptyDocumentUploadForm(): DocumentUploadFormState {
+  return {
+    applicationId: "",
+    documentType: "",
+    fileName: "",
+    file: null,
+    sourceDocumentId: "",
+  };
+}
+
 function createEmptyAdmissionsDataset(): AdmissionsDataset {
   return {
     applications: [],
@@ -238,8 +266,17 @@ export function AdmissionsModuleScreen({
   const [applicationSearch, setApplicationSearch] = useState("");
   const [applicationStatusFilter, setApplicationStatusFilter] = useState("all");
   const [directorySearch, setDirectorySearch] = useState("");
+  const [documentSearch, setDocumentSearch] = useState("");
   const [documentStatusFilter, setDocumentStatusFilter] = useState("all");
   const [parentSearch, setParentSearch] = useState("");
+  const [documentUploadModalOpen, setDocumentUploadModalOpen] = useState(false);
+  const [documentUploadForm, setDocumentUploadForm] = useState<DocumentUploadFormState>(
+    createEmptyDocumentUploadForm,
+  );
+  const [documentUploadErrors, setDocumentUploadErrors] = useState<
+    Partial<Record<keyof DocumentUploadFormState, string>>
+  >({});
+  const [isSavingDocumentUpload, setIsSavingDocumentUpload] = useState(false);
   const [allocationModalOpen, setAllocationModalOpen] = useState(false);
   const [allocationForm, setAllocationForm] = useState<AllocationFormState>(createEmptyAllocationForm);
   const [allocationErrors, setAllocationErrors] = useState<
@@ -314,9 +351,23 @@ export function AdmissionsModuleScreen({
     );
   });
 
-  const filteredDocuments = dataset.documents.filter(
-    (document) => documentStatusFilter === "all" || document.verificationStatus === documentStatusFilter,
-  );
+  const deferredDocumentSearch = useDeferredValue(documentSearch);
+  const filteredDocuments = dataset.documents
+    .filter((document) => {
+      const term = deferredDocumentSearch.trim().toLowerCase();
+      if (!term) {
+        return true;
+      }
+
+      return [
+        document.learnerName,
+        document.documentType,
+        document.fileName,
+        document.applicationNumber ?? "",
+        document.admissionNumber ?? "",
+      ].some((value) => value.toLowerCase().includes(term));
+    })
+    .filter((document) => documentStatusFilter === "all" || document.verificationStatus === documentStatusFilter);
 
   const selectedStudentKey = selectedStudentId ?? dataset.students[0]?.id ?? null;
   const selectedStudentProfileQuery = useQuery({
@@ -602,6 +653,158 @@ export function AdmissionsModuleScreen({
       setModuleError(error instanceof Error ? error.message : "Unable to update the document verification status.");
     } finally {
       setActiveActionId(null);
+    }
+  }
+
+  function findDocumentApplication(document?: AdmissionsDocument) {
+    if (!document) {
+      return undefined;
+    }
+
+    return (
+      dataset.applications.find((application) => application.id === document.applicationId)
+      ?? dataset.applications.find(
+        (application) => application.applicationNumber === document.applicationNumber,
+      )
+      ?? dataset.applications.find(
+        (application) =>
+          document.admissionNumber
+          && application.admissionNumber === document.admissionNumber,
+      )
+      ?? dataset.applications.find(
+        (application) => application.applicantName === document.learnerName,
+      )
+    );
+  }
+
+  function openDocumentUploadModal(document?: AdmissionsDocument) {
+    const application = findDocumentApplication(document);
+    const documentType =
+      document?.documentType && document.documentType !== "Required admissions documents"
+        ? document.documentType
+        : "";
+
+    setDocumentUploadErrors({});
+    setDocumentUploadForm({
+      applicationId: application?.id ?? "",
+      documentType,
+      fileName: "",
+      file: null,
+      sourceDocumentId: document?.id ?? "",
+    });
+    setDocumentUploadModalOpen(true);
+
+    if (document && !application) {
+      setModuleError("Select the applicant manually before uploading this document.");
+    } else {
+      setModuleError(null);
+    }
+  }
+
+  function validateDocumentUploadForm() {
+    const errors: Partial<Record<keyof DocumentUploadFormState, string>> = {};
+
+    if (!documentUploadForm.applicationId.trim()) {
+      errors.applicationId = "Applicant is required.";
+    }
+    if (!documentUploadForm.documentType.trim()) {
+      errors.documentType = "Document type is required.";
+    }
+    if (!documentUploadForm.fileName.trim() || !documentUploadForm.file) {
+      errors.fileName = "A PDF, image, or scanned document is required.";
+    }
+
+    setDocumentUploadErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  async function submitDocumentUpload() {
+    if (!validateDocumentUploadForm()) {
+      return;
+    }
+
+    const application = dataset.applications.find(
+      (item) => item.id === documentUploadForm.applicationId,
+    );
+
+    if (!application || !documentUploadForm.file) {
+      setDocumentUploadErrors((current) => ({
+        ...current,
+        applicationId: "Select a valid applicant before uploading.",
+      }));
+      return;
+    }
+
+    setIsSavingDocumentUpload(true);
+    setModuleError(null);
+
+    try {
+      const documentType = documentUploadForm.documentType.trim();
+      const fileName = documentUploadForm.fileName.trim();
+
+      if (isLiveMode && liveSession.session) {
+        await uploadAdmissionDocumentLive(liveSession.session, application.id, {
+          document_type: documentType,
+          file: documentUploadForm.file,
+          file_name: fileName,
+        });
+        await refreshLiveAdmissionsData();
+      } else {
+        await new Promise((resolve) => window.setTimeout(resolve, 350));
+
+        const uploadedDocument: AdmissionsDocument = {
+          id: `doc-${Date.now()}`,
+          learnerName: application.applicantName,
+          documentType,
+          fileName,
+          uploadedOn: "2026-05-04",
+          verificationStatus: "pending",
+          ownerType: application.status === "registered" ? "student" : "application",
+          applicationId: application.id,
+          applicationNumber: application.applicationNumber,
+          admissionNumber:
+            application.admissionNumber === "PENDING" || application.admissionNumber === "N/A"
+              ? undefined
+              : application.admissionNumber,
+        };
+
+        setLocalDataset((current) => ({
+          ...current,
+          documents: [
+            uploadedDocument,
+            ...current.documents.filter(
+              (document) => document.id !== documentUploadForm.sourceDocumentId,
+            ),
+          ],
+          studentProfiles: current.studentProfiles.map((profile) =>
+            profile.admissionNumber === application.admissionNumber
+            || profile.fullName === application.applicantName
+              ? {
+                  ...profile,
+                  documents: [
+                    {
+                      id: uploadedDocument.id,
+                      documentType: uploadedDocument.documentType,
+                      fileName: uploadedDocument.fileName,
+                      uploadedOn: uploadedDocument.uploadedOn,
+                      verificationStatus: uploadedDocument.verificationStatus,
+                    },
+                    ...profile.documents.filter(
+                      (document) => document.id !== documentUploadForm.sourceDocumentId,
+                    ),
+                  ],
+                }
+              : profile,
+          ),
+        }));
+      }
+
+      setDocumentUploadModalOpen(false);
+      setDocumentUploadForm(createEmptyDocumentUploadForm());
+    } catch (error) {
+      setModuleError(error instanceof Error ? error.message : "Unable to upload the admissions document.");
+    } finally {
+      setIsSavingDocumentUpload(false);
     }
   }
 
@@ -1173,6 +1376,15 @@ export function AdmissionsModuleScreen({
       header: "Actions",
       render: (document) => (
         <div className="flex flex-wrap gap-2">
+          {document.verificationStatus === "missing" ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => openDocumentUploadModal(document)}
+            >
+              Upload
+            </Button>
+          ) : null}
           {document.verificationStatus === "pending" ? (
             <>
               <Button
@@ -1192,6 +1404,15 @@ export function AdmissionsModuleScreen({
                 Reject
               </Button>
             </>
+          ) : null}
+          {document.verificationStatus === "rejected" ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => openDocumentUploadModal(document)}
+            >
+              Replace
+            </Button>
           ) : null}
         </div>
       ),
@@ -1241,6 +1462,10 @@ export function AdmissionsModuleScreen({
       ),
     },
   ];
+
+  const selectedDocumentUploadApplication = dataset.applications.find(
+    (application) => application.id === documentUploadForm.applicationId,
+  );
 
   return (
     <>
@@ -2026,6 +2251,9 @@ export function AdmissionsModuleScreen({
             rows={filteredDocuments}
             columns={documentColumns}
             getRowId={(row) => row.id}
+            searchValue={documentSearch}
+            onSearchValueChange={setDocumentSearch}
+            searchPlaceholder="Search learner, file, application, or admission number"
             filters={[
               {
                 id: "document-status",
@@ -2047,6 +2275,31 @@ export function AdmissionsModuleScreen({
             onPageChange={() => undefined}
             loading={isDatasetLoading}
             loadingLabel="Loading live document register..."
+            emptyTitle="No document records match this view"
+            emptyDescription="Adjust the search or upload a document against an applicant file."
+            emptyAction={
+              <Button onClick={() => openDocumentUploadModal()}>
+                <FileUp className="h-4 w-4" />
+                Upload document
+              </Button>
+            }
+            exportConfig={{
+              filename: "admissions-documents.csv",
+              headers: ["Learner", "Document", "File", "Uploaded On", "Verification"],
+              rows: filteredDocuments.map((document) => [
+                document.learnerName,
+                document.documentType,
+                document.fileName,
+                document.uploadedOn,
+                formatDocumentStatus(document.verificationStatus),
+              ]),
+            }}
+            actions={
+              <Button onClick={() => openDocumentUploadModal()}>
+                <FileUp className="h-4 w-4" />
+                Upload document
+              </Button>
+            }
           />
         ) : null}
 
@@ -2143,6 +2396,118 @@ export function AdmissionsModuleScreen({
           </div>
         ) : null}
       </ModuleShell>
+
+      <Modal
+        open={documentUploadModalOpen}
+        title="Upload admissions document"
+        description="Attach a scanned file to an applicant record. New uploads enter pending verification before approval."
+        onClose={() => setDocumentUploadModalOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDocumentUploadModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitDocumentUpload} disabled={isSavingDocumentUpload}>
+              {isSavingDocumentUpload ? "Uploading..." : "Upload document"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <FieldWrapper label="Applicant" error={documentUploadErrors.applicationId}>
+            <select
+              className={fieldClassName}
+              value={documentUploadForm.applicationId}
+              onChange={(event) =>
+                setDocumentUploadForm((current) => ({
+                  ...current,
+                  applicationId: event.target.value,
+                }))
+              }
+            >
+              <option value="">Select applicant file</option>
+              {dataset.applications.map((application) => (
+                <option key={application.id} value={application.id}>
+                  {application.applicantName} ({application.applicationNumber})
+                </option>
+              ))}
+            </select>
+          </FieldWrapper>
+
+          <FieldWrapper label="Document type" error={documentUploadErrors.documentType}>
+            <select
+              className={fieldClassName}
+              value={documentUploadForm.documentType}
+              onChange={(event) =>
+                setDocumentUploadForm((current) => ({
+                  ...current,
+                  documentType: event.target.value,
+                }))
+              }
+            >
+              <option value="">Select document type</option>
+              {admissionsDocumentTypes.map((documentType) => (
+                <option key={documentType} value={documentType}>
+                  {documentType}
+                </option>
+              ))}
+            </select>
+          </FieldWrapper>
+
+          <div className="md:col-span-2">
+            <FieldWrapper label="Document file" error={documentUploadErrors.fileName}>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                className={fieldClassName}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  setDocumentUploadForm((current) => ({
+                    ...current,
+                    file,
+                    fileName: file?.name ?? "",
+                  }));
+                }}
+              />
+            </FieldWrapper>
+          </div>
+
+          <div className="md:col-span-2">
+            <Card className="p-4">
+              {selectedDocumentUploadApplication ? (
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted">Class</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {selectedDocumentUploadApplication.classApplying}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted">Parent contact</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {selectedDocumentUploadApplication.parentPhone}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted">Application status</p>
+                    <div className="mt-1">
+                      <StatusPill
+                        label={formatApplicationStatus(selectedDocumentUploadApplication.status)}
+                        tone={getApplicationTone(selectedDocumentUploadApplication.status)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm leading-6 text-muted">
+                  Select an applicant file to show the class, parent contact, and approval state
+                  before uploading.
+                </p>
+              )}
+            </Card>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={allocationModalOpen}

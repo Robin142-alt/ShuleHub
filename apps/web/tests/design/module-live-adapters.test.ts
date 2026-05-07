@@ -146,12 +146,17 @@ describe("module live adapters", () => {
     });
 
     expect(dataset.categories[0]).toMatchObject({
+      code: "STAT",
       name: "Stationery",
       manager: "Academic Office",
+      storageZones: "Admin Store, Block A",
     });
     expect(dataset.items[0]).toMatchObject({
       name: "A4 Printing Paper",
       supplier: "Crown Office Supplies",
+    });
+    expect(dataset.suppliers[0]).toMatchObject({
+      county: "Nairobi",
     });
     expect(dataset.movements[0]).toMatchObject({
       user: "Linet Auma",
@@ -180,6 +185,7 @@ describe("module live adapters", () => {
         pending_approvals: [],
         missing_documents: [
           {
+            application_id: "app-1",
             application_number: "APP-20260504-118",
             full_name: "Ian Mwangi",
             uploaded_documents: 1,
@@ -252,12 +258,16 @@ describe("module live adapters", () => {
       documents: [
         {
           id: "doc-1",
+          application_id: "app-1",
+          student_id: "stu-1",
           document_type: "Birth certificate",
           original_file_name: "ian-bc.pdf",
           verification_status: "pending",
           created_at: "2026-05-04T09:00:00.000Z",
+          application_number: "APP-20260504-118",
           applicant_name: "Ian Mwangi",
           admission_number: "ADM-G4-051",
+          student_name: "Ian Mwangi",
         },
       ],
       allocations: [
@@ -309,11 +319,15 @@ describe("module live adapters", () => {
           learnerName: "Ian Mwangi",
           fileName: "ian-bc.pdf",
           verificationStatus: "pending",
+          applicationId: "app-1",
+          studentId: "stu-1",
         }),
         expect.objectContaining({
           learnerName: "Ian Mwangi",
           documentType: "Required admissions documents",
           verificationStatus: "missing",
+          applicationId: "app-1",
+          applicationNumber: "APP-20260504-118",
         }),
       ]),
     );
