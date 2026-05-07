@@ -141,6 +141,10 @@ function getHomePath(
   return session?.homePath ?? getLoginPath();
 }
 
+function isStorekeeperInventoryPath(pathname: string) {
+  return pathname === "/inventory" || pathname.startsWith("/inventory/");
+}
+
 function getInternalPrefix(experience: Exclude<PlatformExperience, "public">) {
   switch (experience) {
     case "superadmin":
@@ -456,6 +460,29 @@ export function evaluateExperienceRouting(input: {
     return {
       action: "redirect",
       location: getHomePath(session),
+      headers,
+    };
+  }
+
+  if (experience === "school" && isStorekeeperInventoryPath(input.pathname)) {
+    if (!session) {
+      return {
+        action: "redirect",
+        location: getLoginPath(),
+        headers,
+      };
+    }
+
+    if (session.experience !== "school" || session.role !== "storekeeper") {
+      return {
+        action: "redirect",
+        location: "/forbidden",
+        headers,
+      };
+    }
+
+    return {
+      action: "next",
       headers,
     };
   }

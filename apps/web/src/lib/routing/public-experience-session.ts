@@ -41,6 +41,24 @@ export async function readPublicSchoolSession(expectedRole?: SchoolExperienceRol
   return session;
 }
 
+export async function readStorekeeperInventorySession() {
+  const cookieStore = await cookies();
+  const session = parseExperienceSession(
+    "school",
+    cookieStore.get(SCHOOL_SESSION_COOKIE)?.value,
+  );
+
+  if (!session || session.experience !== "school") {
+    redirect("/school/login");
+  }
+
+  if (session.role !== "storekeeper") {
+    redirect("/forbidden");
+  }
+
+  return session;
+}
+
 export async function readPublicPortalSession(expectedViewer?: PortalViewer) {
   const cookieStore = await cookies();
   const session = parseExperienceSession(

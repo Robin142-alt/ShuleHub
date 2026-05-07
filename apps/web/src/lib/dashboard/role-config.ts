@@ -266,7 +266,7 @@ const roleWidgetOrder: Record<DashboardRole, DashboardWidgetKey[]> = {
   bursar: ["finance", "attendance"],
   teacher: ["attendance", "academics"],
   parent: ["attendance", "finance", "academics"],
-  storekeeper: ["inventory", "finance"],
+  storekeeper: ["inventory"],
   admissions: ["admissions", "students"],
 };
 

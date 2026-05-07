@@ -1,0 +1,1041 @@
+import { formatCurrency } from "@/lib/dashboard/format";
+import type { StatusTone } from "@/lib/dashboard/types";
+
+export type StorekeeperPermission =
+  | "inventory.view"
+  | "inventory.issue"
+  | "inventory.receive"
+  | "inventory.adjust"
+  | "inventory.transfer"
+  | "inventory.reports";
+
+export const storekeeperPermissions: StorekeeperPermission[] = [
+  "inventory.view",
+  "inventory.issue",
+  "inventory.receive",
+  "inventory.adjust",
+  "inventory.transfer",
+  "inventory.reports",
+];
+
+export type StorekeeperSectionId =
+  | "dashboard"
+  | "items"
+  | "receiving"
+  | "issuing"
+  | "transfers"
+  | "suppliers"
+  | "reorder-alerts"
+  | "reports"
+  | "activity-log";
+
+export const storekeeperSections: StorekeeperSectionId[] = [
+  "dashboard",
+  "items",
+  "receiving",
+  "issuing",
+  "transfers",
+  "suppliers",
+  "reorder-alerts",
+  "reports",
+  "activity-log",
+];
+
+export const storekeeperSidebarItems: Array<{
+  id: StorekeeperSectionId;
+  label: string;
+  href: string;
+}> = [
+  { id: "dashboard", label: "Dashboard", href: "/inventory/dashboard" },
+  { id: "items", label: "Inventory", href: "/inventory/items" },
+  { id: "receiving", label: "Stock Receiving", href: "/inventory/receiving" },
+  { id: "issuing", label: "Stock Issuing", href: "/inventory/issuing" },
+  { id: "transfers", label: "Transfers", href: "/inventory/transfers" },
+  { id: "suppliers", label: "Suppliers", href: "/inventory/suppliers" },
+  { id: "reorder-alerts", label: "Reorder Alerts", href: "/inventory/reorder-alerts" },
+  { id: "reports", label: "Reports", href: "/inventory/reports" },
+  { id: "activity-log", label: "Activity Log", href: "/inventory/activity-log" },
+];
+
+export type StoreItemStatus = "healthy" | "low" | "critical";
+export type StoreMovementType = "issue" | "receipt" | "adjustment" | "transfer" | "return";
+
+export interface StorekeeperItem {
+  id: string;
+  code: string;
+  barcode: string;
+  name: string;
+  category: string;
+  quantityAvailable: number;
+  reorderLevel: number;
+  unit: string;
+  location: string;
+  unitCost: number;
+  supplier: string;
+  batchNumber?: string;
+  expiryDate?: string;
+  lastIssuedAt?: string;
+  averageWeeklyIssue: number;
+}
+
+export interface StorekeeperSupplier {
+  id: string;
+  name: string;
+  contact: string;
+  phone: string;
+  email: string;
+  lastDelivery: string;
+  activeOrders: number;
+  status: "active" | "watch" | "on_hold";
+}
+
+export interface StorekeeperRequest {
+  id: string;
+  department: string;
+  requestedBy: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  status: "pending" | "approved" | "fulfilled";
+  neededBy: string;
+}
+
+export interface StorekeeperTransfer {
+  id: string;
+  itemName: string;
+  fromLocation: string;
+  toLocation: string;
+  quantity: number;
+  requestedBy: string;
+  status: "requested" | "in_transit" | "completed";
+  date: string;
+}
+
+export interface StorekeeperMovement {
+  id: string;
+  reference: string;
+  actionType: StoreMovementType;
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  category: string;
+  beforeQuantity: number;
+  quantity: number;
+  afterQuantity: number;
+  unit: string;
+  department?: string;
+  supplier?: string;
+  user: string;
+  counterparty: string;
+  timestamp: string;
+  location: string;
+  batchNumber?: string;
+  expiryDate?: string;
+  notes: string;
+}
+
+export interface StorekeeperAlert {
+  id: string;
+  title: string;
+  detail: string;
+  tone: StatusTone;
+  actionLabel: string;
+  section: StorekeeperSectionId;
+}
+
+export interface StorekeeperDataset {
+  items: StorekeeperItem[];
+  suppliers: StorekeeperSupplier[];
+  requests: StorekeeperRequest[];
+  transfers: StorekeeperTransfer[];
+  movements: StorekeeperMovement[];
+  processedSubmissionIds: string[];
+}
+
+export interface StorekeeperIssueInput {
+  department: string;
+  recipient: string;
+  issuedBy: string;
+  lines: Array<{ itemId: string; quantity: number }>;
+  submissionId?: string;
+}
+
+export interface StorekeeperReceiveInput {
+  supplier: string;
+  purchaseReference: string;
+  receivedBy: string;
+  lines: Array<{
+    itemId: string;
+    quantity: number;
+    unitCost: number;
+    batchNumber: string;
+    expiryDate: string;
+  }>;
+  submissionId?: string;
+}
+
+export interface StorekeeperIssueNote {
+  reference: string;
+  department: string;
+  recipient: string;
+  issuedBy: string;
+  timestamp: string;
+  lines: Array<{
+    itemCode: string;
+    itemName: string;
+    quantity: number;
+    unit: string;
+  }>;
+}
+
+export interface StorekeeperReceiveNote {
+  reference: string;
+  supplier: string;
+  purchaseReference: string;
+  receivedBy: string;
+  timestamp: string;
+  lines: Array<{
+    itemCode: string;
+    itemName: string;
+    quantity: number;
+    unit: string;
+    unitCost: number;
+    batchNumber: string;
+    expiryDate: string;
+  }>;
+}
+
+export interface StorekeeperReport {
+  id: string;
+  title: string;
+  description: string;
+  filename: string;
+  headers: string[];
+  rows: string[][];
+}
+
+const movementTimestamp = "2026-05-07 09:15";
+
+const baseItems: StorekeeperItem[] = [
+  {
+    id: "item-paper",
+    code: "STAT-A4-001",
+    barcode: "616110001001",
+    name: "A4 Printing Paper",
+    category: "stationery",
+    quantityAvailable: 18,
+    reorderLevel: 25,
+    unit: "ream",
+    location: "Main Store - Shelf A2",
+    unitCost: 650,
+    supplier: "Crown Office Supplies",
+    batchNumber: "COS-A4-0426",
+    averageWeeklyIssue: 22,
+    lastIssuedAt: "2026-05-07 08:05",
+  },
+  {
+    id: "item-lab-gloves",
+    code: "LAB-GLV-100",
+    barcode: "616110003104",
+    name: "Lab Gloves",
+    category: "lab equipment",
+    quantityAvailable: 4,
+    reorderLevel: 10,
+    unit: "box",
+    location: "Science Prep Room - Locker 4",
+    unitCost: 780,
+    supplier: "LabTech East Africa",
+    batchNumber: "LTE-GLV-0526",
+    expiryDate: "2026-08-30",
+    averageWeeklyIssue: 7,
+    lastIssuedAt: "2026-05-06 14:20",
+  },
+  {
+    id: "item-whiteboard-markers",
+    code: "STAT-WBM-012",
+    barcode: "616110001012",
+    name: "Whiteboard Markers",
+    category: "stationery",
+    quantityAvailable: 0,
+    reorderLevel: 24,
+    unit: "box",
+    location: "Main Store - Shelf A3",
+    unitCost: 120,
+    supplier: "Crown Office Supplies",
+    averageWeeklyIssue: 16,
+    lastIssuedAt: "2026-05-07 07:50",
+  },
+  {
+    id: "item-maize-flour",
+    code: "FOOD-MF-2KG",
+    barcode: "616110002201",
+    name: "Maize Flour 2kg",
+    category: "food supplies",
+    quantityAvailable: 140,
+    reorderLevel: 90,
+    unit: "bag",
+    location: "Kitchen Dry Store - Row 1",
+    unitCost: 168,
+    supplier: "Ruiru Fresh Grains",
+    batchNumber: "RFG-MF-0507",
+    expiryDate: "2026-06-12",
+    averageWeeklyIssue: 95,
+    lastIssuedAt: "2026-05-07 06:45",
+  },
+  {
+    id: "item-cleaner",
+    code: "CLN-DIS-20L",
+    barcode: "616110006020",
+    name: "Disinfectant 20L",
+    category: "cleaning supplies",
+    quantityAvailable: 7,
+    reorderLevel: 8,
+    unit: "jerrycan",
+    location: "Maintenance Store - Rack C1",
+    unitCost: 1900,
+    supplier: "Apex Hygiene Solutions",
+    batchNumber: "APX-DIS-0426",
+    expiryDate: "2026-05-25",
+    averageWeeklyIssue: 4,
+    lastIssuedAt: "2026-05-06 09:10",
+  },
+  {
+    id: "item-textbooks",
+    code: "TXT-MATH-G7",
+    barcode: "616110004701",
+    name: "Grade 7 Mathematics Textbook",
+    category: "textbooks",
+    quantityAvailable: 62,
+    reorderLevel: 30,
+    unit: "copy",
+    location: "Book Store - Bay B4",
+    unitCost: 740,
+    supplier: "Longhorn Publishers",
+    averageWeeklyIssue: 12,
+    lastIssuedAt: "2026-05-05 11:30",
+  },
+  {
+    id: "item-uniform-shirts",
+    code: "UNI-SHIRT-32",
+    barcode: "616110005032",
+    name: "School Shirt Size 32",
+    category: "uniforms",
+    quantityAvailable: 28,
+    reorderLevel: 20,
+    unit: "piece",
+    location: "Uniform Store - Rack U2",
+    unitCost: 620,
+    supplier: "Rift Uniforms",
+    averageWeeklyIssue: 11,
+    lastIssuedAt: "2026-05-04 10:25",
+  },
+  {
+    id: "item-footballs",
+    code: "SPT-FTB-05",
+    barcode: "616110007005",
+    name: "Training Footballs",
+    category: "sports items",
+    quantityAvailable: 9,
+    reorderLevel: 10,
+    unit: "ball",
+    location: "Games Cage - Bin 2",
+    unitCost: 1850,
+    supplier: "Boarding Essentials Limited",
+    averageWeeklyIssue: 6,
+    lastIssuedAt: "2026-05-06 16:05",
+  },
+];
+
+const baseSuppliers: StorekeeperSupplier[] = [
+  {
+    id: "sup-crown",
+    name: "Crown Office Supplies",
+    contact: "Lucy Njeri",
+    phone: "+254 722 441 885",
+    email: "orders@crownoffice.co.ke",
+    lastDelivery: "2026-05-07",
+    activeOrders: 2,
+    status: "active",
+  },
+  {
+    id: "sup-ruiru",
+    name: "Ruiru Fresh Grains",
+    contact: "Peter Mwangi",
+    phone: "+254 733 112 904",
+    email: "stores@ruirufresh.co.ke",
+    lastDelivery: "2026-05-07",
+    activeOrders: 1,
+    status: "active",
+  },
+  {
+    id: "sup-labtech",
+    name: "LabTech East Africa",
+    contact: "Miriam Akinyi",
+    phone: "+254 711 683 204",
+    email: "service@labtech-ea.com",
+    lastDelivery: "2026-05-03",
+    activeOrders: 1,
+    status: "watch",
+  },
+  {
+    id: "sup-apex",
+    name: "Apex Hygiene Solutions",
+    contact: "Sophie Muthoni",
+    phone: "+254 720 001 446",
+    email: "sales@apexhygiene.co.ke",
+    lastDelivery: "2026-04-30",
+    activeOrders: 0,
+    status: "on_hold",
+  },
+];
+
+const baseRequests: StorekeeperRequest[] = [
+  {
+    id: "req-science",
+    department: "Science Lab",
+    requestedBy: "Moses Otieno",
+    itemName: "Lab Gloves",
+    quantity: 12,
+    unit: "box",
+    status: "pending",
+    neededBy: "Today 14:00",
+  },
+  {
+    id: "req-lower-school",
+    department: "Lower School",
+    requestedBy: "Lucy Wambui",
+    itemName: "Whiteboard Markers",
+    quantity: 24,
+    unit: "box",
+    status: "approved",
+    neededBy: "Today 11:00",
+  },
+  {
+    id: "req-kitchen",
+    department: "Kitchen",
+    requestedBy: "Chef Ruth Nduta",
+    itemName: "Maize Flour 2kg",
+    quantity: 45,
+    unit: "bag",
+    status: "fulfilled",
+    neededBy: "Issued 06:45",
+  },
+];
+
+const baseTransfers: StorekeeperTransfer[] = [
+  {
+    id: "trf-kitchen",
+    itemName: "Maize Flour 2kg",
+    fromLocation: "Kitchen Dry Store - Row 1",
+    toLocation: "Boarding Kitchen",
+    quantity: 45,
+    requestedBy: "Chef Ruth Nduta",
+    status: "completed",
+    date: "2026-05-07",
+  },
+  {
+    id: "trf-games",
+    itemName: "Training Footballs",
+    fromLocation: "Games Cage - Bin 2",
+    toLocation: "Sports Field Store",
+    quantity: 4,
+    requestedBy: "Games Master",
+    status: "in_transit",
+    date: "2026-05-07",
+  },
+];
+
+const baseMovements: StorekeeperMovement[] = [
+  {
+    id: "mov-issue-kitchen",
+    reference: "ISS-20260507-001",
+    actionType: "issue",
+    itemId: "item-maize-flour",
+    itemCode: "FOOD-MF-2KG",
+    itemName: "Maize Flour 2kg",
+    category: "food supplies",
+    beforeQuantity: 185,
+    quantity: 45,
+    afterQuantity: 140,
+    unit: "bag",
+    department: "Kitchen",
+    user: "Storekeeper Amani Prep",
+    counterparty: "Chef Ruth Nduta",
+    timestamp: "2026-05-07 06:45",
+    location: "Kitchen Dry Store - Row 1",
+    notes: "Weekly boarding meal plan issue.",
+  },
+  {
+    id: "mov-receipt-paper",
+    reference: "RCV-20260507-001",
+    actionType: "receipt",
+    itemId: "item-paper",
+    itemCode: "STAT-A4-001",
+    itemName: "A4 Printing Paper",
+    category: "stationery",
+    beforeQuantity: 6,
+    quantity: 12,
+    afterQuantity: 18,
+    unit: "ream",
+    supplier: "Crown Office Supplies",
+    user: "Storekeeper Amani Prep",
+    counterparty: "Lucy Njeri",
+    timestamp: "2026-05-07 08:30",
+    location: "Main Store - Shelf A2",
+    batchNumber: "COS-A4-0426",
+    notes: "Received against PO-2026-029.",
+  },
+];
+
+function cloneDataset(dataset: StorekeeperDataset): StorekeeperDataset {
+  return {
+    items: dataset.items.map((item) => ({ ...item })),
+    suppliers: dataset.suppliers.map((supplier) => ({ ...supplier })),
+    requests: dataset.requests.map((request) => ({ ...request })),
+    transfers: dataset.transfers.map((transfer) => ({ ...transfer })),
+    movements: dataset.movements.map((movement) => ({ ...movement })),
+    processedSubmissionIds: [...dataset.processedSubmissionIds],
+  };
+}
+
+function nextReference(prefix: "ISS" | "RCV", existingCount: number) {
+  return `${prefix}-20260507-${String(existingCount + 1).padStart(3, "0")}`;
+}
+
+function requirePositiveQuantity(quantity: number) {
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new Error("Quantity must be greater than zero.");
+  }
+}
+
+function assertSubmissionIsNew(dataset: StorekeeperDataset, submissionId?: string) {
+  if (submissionId && dataset.processedSubmissionIds.includes(submissionId)) {
+    throw new Error("This stock transaction has already been submitted.");
+  }
+}
+
+function pluralizeUnit(unit: string, quantity: number) {
+  if (quantity === 1) {
+    return unit;
+  }
+
+  if (unit === "box") {
+    return "boxes";
+  }
+
+  if (unit.endsWith("y")) {
+    return `${unit.slice(0, -1)}ies`;
+  }
+
+  return `${unit}s`;
+}
+
+export function formatStoreQuantity(quantity: number, unit: string) {
+  return `${quantity} ${pluralizeUnit(unit, quantity)}`;
+}
+
+export function createStorekeeperInventoryDataset(): StorekeeperDataset {
+  return cloneDataset({
+    items: baseItems,
+    suppliers: baseSuppliers,
+    requests: baseRequests,
+    transfers: baseTransfers,
+    movements: baseMovements,
+    processedSubmissionIds: [],
+  });
+}
+
+export function isStorekeeperSection(value: string): value is StorekeeperSectionId {
+  return storekeeperSections.includes(value as StorekeeperSectionId);
+}
+
+export function getStoreItemStatus(item: StorekeeperItem): StoreItemStatus {
+  if (item.quantityAvailable <= 0 || item.quantityAvailable <= Math.ceil(item.reorderLevel / 2)) {
+    return "critical";
+  }
+
+  if (item.quantityAvailable <= item.reorderLevel) {
+    return "low";
+  }
+
+  return "healthy";
+}
+
+export function getStoreItemTone(status: StoreItemStatus): StatusTone {
+  if (status === "critical") {
+    return "critical";
+  }
+
+  if (status === "low") {
+    return "warning";
+  }
+
+  return "ok";
+}
+
+export function formatStoreItemStatus(status: StoreItemStatus) {
+  if (status === "critical") {
+    return "Critical stock";
+  }
+
+  if (status === "low") {
+    return "Low stock";
+  }
+
+  return "Healthy";
+}
+
+export function getMovementTone(type: StoreMovementType): StatusTone {
+  if (type === "issue") {
+    return "warning";
+  }
+
+  if (type === "adjustment") {
+    return "critical";
+  }
+
+  return "ok";
+}
+
+export function formatMovementType(type: StoreMovementType) {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+export function issueStoreStock(dataset: StorekeeperDataset, input: StorekeeperIssueInput) {
+  assertSubmissionIsNew(dataset, input.submissionId);
+
+  if (!input.department.trim()) {
+    throw new Error("Select the department receiving stock.");
+  }
+
+  if (!input.recipient.trim()) {
+    throw new Error("Enter the receiving staff member.");
+  }
+
+  if (input.lines.length === 0) {
+    throw new Error("Add at least one item to issue.");
+  }
+
+  const nextDataset = cloneDataset(dataset);
+  const reference = nextReference("ISS", nextDataset.movements.filter((item) => item.actionType === "issue").length);
+  const noteLines: StorekeeperIssueNote["lines"] = [];
+  const movements: StorekeeperMovement[] = [];
+
+  for (const line of input.lines) {
+    requirePositiveQuantity(line.quantity);
+    const itemIndex = nextDataset.items.findIndex((item) => item.id === line.itemId);
+    const item = nextDataset.items[itemIndex];
+
+    if (!item) {
+      throw new Error("Select a valid inventory item.");
+    }
+
+    if (line.quantity > item.quantityAvailable) {
+      throw new Error(
+        `Only ${item.quantityAvailable} ${item.name} ${pluralizeUnit(item.unit, item.quantityAvailable)} are available.`,
+      );
+    }
+
+    const beforeQuantity = item.quantityAvailable;
+    const afterQuantity = beforeQuantity - line.quantity;
+    nextDataset.items[itemIndex] = {
+      ...item,
+      quantityAvailable: afterQuantity,
+      lastIssuedAt: movementTimestamp,
+    };
+
+    noteLines.push({
+      itemCode: item.code,
+      itemName: item.name,
+      quantity: line.quantity,
+      unit: item.unit,
+    });
+
+    movements.push({
+      id: `${reference}-${item.id}`,
+      reference,
+      actionType: "issue",
+      itemId: item.id,
+      itemCode: item.code,
+      itemName: item.name,
+      category: item.category,
+      beforeQuantity,
+      quantity: line.quantity,
+      afterQuantity,
+      unit: item.unit,
+      department: input.department,
+      user: input.issuedBy,
+      counterparty: input.recipient,
+      timestamp: movementTimestamp,
+      location: item.location,
+      notes: `Issued to ${input.department}.`,
+    });
+  }
+
+  nextDataset.movements = [...movements, ...nextDataset.movements];
+
+  if (input.submissionId) {
+    nextDataset.processedSubmissionIds = [...nextDataset.processedSubmissionIds, input.submissionId];
+  }
+
+  return {
+    dataset: nextDataset,
+    issueNote: {
+      reference,
+      department: input.department,
+      recipient: input.recipient,
+      issuedBy: input.issuedBy,
+      timestamp: movementTimestamp,
+      lines: noteLines,
+    } satisfies StorekeeperIssueNote,
+  };
+}
+
+export function receiveStoreStock(dataset: StorekeeperDataset, input: StorekeeperReceiveInput) {
+  assertSubmissionIsNew(dataset, input.submissionId);
+
+  if (!input.supplier.trim()) {
+    throw new Error("Select the supplier delivering stock.");
+  }
+
+  if (!input.purchaseReference.trim()) {
+    throw new Error("Enter the purchase reference.");
+  }
+
+  if (input.lines.length === 0) {
+    throw new Error("Add at least one received item.");
+  }
+
+  const nextDataset = cloneDataset(dataset);
+  const reference = nextReference("RCV", nextDataset.movements.filter((item) => item.actionType === "receipt").length);
+  const noteLines: StorekeeperReceiveNote["lines"] = [];
+  const movements: StorekeeperMovement[] = [];
+
+  for (const line of input.lines) {
+    requirePositiveQuantity(line.quantity);
+    requirePositiveQuantity(line.unitCost);
+    const itemIndex = nextDataset.items.findIndex((item) => item.id === line.itemId);
+    const item = nextDataset.items[itemIndex];
+
+    if (!item) {
+      throw new Error("Select a valid inventory item.");
+    }
+
+    const beforeQuantity = item.quantityAvailable;
+    const afterQuantity = beforeQuantity + line.quantity;
+    nextDataset.items[itemIndex] = {
+      ...item,
+      quantityAvailable: afterQuantity,
+      unitCost: line.unitCost,
+      supplier: input.supplier,
+      batchNumber: line.batchNumber.trim() || item.batchNumber,
+      expiryDate: line.expiryDate.trim() || item.expiryDate,
+    };
+
+    noteLines.push({
+      itemCode: item.code,
+      itemName: item.name,
+      quantity: line.quantity,
+      unit: item.unit,
+      unitCost: line.unitCost,
+      batchNumber: line.batchNumber,
+      expiryDate: line.expiryDate,
+    });
+
+    movements.push({
+      id: `${reference}-${item.id}`,
+      reference: input.purchaseReference,
+      actionType: "receipt",
+      itemId: item.id,
+      itemCode: item.code,
+      itemName: item.name,
+      category: item.category,
+      beforeQuantity,
+      quantity: line.quantity,
+      afterQuantity,
+      unit: item.unit,
+      supplier: input.supplier,
+      user: input.receivedBy,
+      counterparty: input.supplier,
+      timestamp: movementTimestamp,
+      location: item.location,
+      batchNumber: line.batchNumber,
+      expiryDate: line.expiryDate,
+      notes: `Received against ${input.purchaseReference}.`,
+    });
+  }
+
+  nextDataset.movements = [...movements, ...nextDataset.movements];
+
+  if (input.submissionId) {
+    nextDataset.processedSubmissionIds = [...nextDataset.processedSubmissionIds, input.submissionId];
+  }
+
+  return {
+    dataset: nextDataset,
+    receiveNote: {
+      reference,
+      supplier: input.supplier,
+      purchaseReference: input.purchaseReference,
+      receivedBy: input.receivedBy,
+      timestamp: movementTimestamp,
+      lines: noteLines,
+    } satisfies StorekeeperReceiveNote,
+  };
+}
+
+export function buildStorekeeperDashboard(dataset: StorekeeperDataset) {
+  const lowStockItems = dataset.items.filter((item) => getStoreItemStatus(item) !== "healthy");
+  const pendingRequests = dataset.requests.filter((request) => request.status !== "fulfilled");
+  const recentlyIssuedItems = dataset.movements.filter((movement) => movement.actionType === "issue").slice(0, 5);
+  const todayMovements = dataset.movements.filter((movement) => movement.timestamp.startsWith("2026-05-07"));
+  const receivedToday = dataset.movements.filter(
+    (movement) => movement.actionType === "receipt" && movement.timestamp.startsWith("2026-05-07"),
+  );
+  const expiringItems = dataset.items.filter((item) => item.expiryDate && item.expiryDate <= "2026-06-15");
+  const fastMovingItems = [...dataset.items]
+    .sort((first, second) => second.averageWeeklyIssue - first.averageWeeklyIssue)
+    .slice(0, 5);
+
+  return {
+    lowStockItems,
+    pendingRequests,
+    recentlyIssuedItems,
+    todayMovements,
+    receivedToday,
+    expiringItems,
+    fastMovingItems,
+  };
+}
+
+export function buildStorekeeperAlerts(dataset: StorekeeperDataset): StorekeeperAlert[] {
+  const dashboard = buildStorekeeperDashboard(dataset);
+  const criticalItem = dashboard.lowStockItems.find((item) => getStoreItemStatus(item) === "critical");
+  const expiringItem = dashboard.expiringItems[0];
+  const unusualMovement = dashboard.todayMovements.find((movement) => movement.quantity >= 40);
+
+  return [
+    criticalItem
+      ? {
+          id: "critical-stock",
+          title: `${criticalItem.name} needs action`,
+          detail: `${formatStoreQuantity(criticalItem.quantityAvailable, criticalItem.unit)} available against reorder level ${criticalItem.reorderLevel}.`,
+          tone: "critical",
+          actionLabel: "Open reorder alerts",
+          section: "reorder-alerts",
+        }
+      : null,
+    expiringItem
+      ? {
+          id: "expiry",
+          title: `${expiringItem.name} nearing expiry`,
+          detail: `Batch ${expiringItem.batchNumber ?? "unbatched"} expires on ${expiringItem.expiryDate}.`,
+          tone: "warning",
+          actionLabel: "Review expiry report",
+          section: "reports",
+        }
+      : null,
+    unusualMovement
+      ? {
+          id: "unusual-movement",
+          title: "Large stock movement today",
+          detail: `${formatStoreQuantity(unusualMovement.quantity, unusualMovement.unit)} moved for ${unusualMovement.itemName}.`,
+          tone: "warning",
+          actionLabel: "Open activity log",
+          section: "activity-log",
+        }
+      : null,
+  ].filter((alert): alert is StorekeeperAlert => Boolean(alert));
+}
+
+export function buildStorekeeperStats(dataset: StorekeeperDataset) {
+  const totalValue = dataset.items.reduce(
+    (sum, item) => sum + item.quantityAvailable * item.unitCost,
+    0,
+  );
+  const dashboard = buildStorekeeperDashboard(dataset);
+
+  return [
+    {
+      id: "valuation",
+      label: "Stock valuation",
+      value: formatCurrency(totalValue, false),
+      helper: "Current stores value",
+      tone: "ok" as StatusTone,
+    },
+    {
+      id: "low-stock",
+      label: "Low stock items",
+      value: `${dashboard.lowStockItems.length}`,
+      helper: "Needs reorder action",
+      tone: (dashboard.lowStockItems.length > 0 ? "critical" : "ok") as StatusTone,
+    },
+    {
+      id: "requests",
+      label: "Pending requests",
+      value: `${dashboard.pendingRequests.length}`,
+      helper: "Awaiting issue",
+      tone: (dashboard.pendingRequests.length > 0 ? "warning" : "ok") as StatusTone,
+    },
+    {
+      id: "movement",
+      label: "Movements today",
+      value: `${dashboard.todayMovements.length}`,
+      helper: "Receipts and issues",
+      tone: "ok" as StatusTone,
+    },
+  ];
+}
+
+export function buildStorekeeperReports(dataset: StorekeeperDataset): StorekeeperReport[] {
+  const issueRows = dataset.movements
+    .filter((movement) => movement.actionType === "issue")
+    .map((movement) => [
+      movement.reference,
+      movement.timestamp,
+      movement.department ?? "",
+      movement.itemCode,
+      movement.itemName,
+      `${movement.quantity}`,
+      movement.unit,
+      movement.user,
+      movement.counterparty,
+    ]);
+  const receiptRows = dataset.movements
+    .filter((movement) => movement.actionType === "receipt")
+    .map((movement) => [
+      movement.reference,
+      movement.timestamp,
+      movement.supplier ?? "",
+      movement.itemCode,
+      movement.itemName,
+      `${movement.quantity}`,
+      movement.unit,
+      movement.batchNumber ?? "",
+      movement.expiryDate ?? "",
+    ]);
+  const valuationRows = dataset.items.map((item) => [
+    item.code,
+    item.name,
+    item.category,
+    `${item.quantityAvailable}`,
+    item.unit,
+    formatCurrency(item.unitCost, false),
+    formatCurrency(item.quantityAvailable * item.unitCost, false),
+    item.location,
+  ]);
+  const lowStockRows = dataset.items
+    .filter((item) => getStoreItemStatus(item) !== "healthy")
+    .map((item) => [
+      item.code,
+      item.name,
+      item.category,
+      `${item.quantityAvailable}`,
+      `${item.reorderLevel}`,
+      formatStoreItemStatus(getStoreItemStatus(item)),
+    ]);
+  const expiryRows = dataset.items
+    .filter((item) => item.expiryDate)
+    .map((item) => [
+      item.code,
+      item.name,
+      item.batchNumber ?? "",
+      item.expiryDate ?? "",
+      `${item.quantityAvailable}`,
+      item.location,
+    ]);
+  const fastMovingRows = [...dataset.items]
+    .sort((first, second) => second.averageWeeklyIssue - first.averageWeeklyIssue)
+    .map((item) => [
+      item.code,
+      item.name,
+      item.category,
+      `${item.averageWeeklyIssue}`,
+      `${item.quantityAvailable}`,
+      item.unit,
+    ]);
+  const deadStockRows = dataset.items
+    .filter((item) => item.averageWeeklyIssue <= 4)
+    .map((item) => [
+      item.code,
+      item.name,
+      item.category,
+      `${item.quantityAvailable}`,
+      item.location,
+    ]);
+  const supplierRows = dataset.suppliers.map((supplier) => [
+    supplier.name,
+    supplier.contact,
+    supplier.phone,
+    supplier.lastDelivery,
+    `${supplier.activeOrders}`,
+    supplier.status,
+  ]);
+
+  return [
+    {
+      id: "stock-issue",
+      title: "Stock issue report",
+      description: "Department issues with issuer, receiver, and timestamp.",
+      filename: "stock-issue-report.csv",
+      headers: ["Reference", "Timestamp", "Department", "Item Code", "Item", "Qty", "Unit", "Issued By", "Received By"],
+      rows: issueRows,
+    },
+    {
+      id: "stock-received",
+      title: "Stock received report",
+      description: "Supplier receipts with batch and expiry tracking.",
+      filename: "stock-received-report.csv",
+      headers: ["Reference", "Timestamp", "Supplier", "Item Code", "Item", "Qty", "Unit", "Batch", "Expiry"],
+      rows: receiptRows,
+    },
+    {
+      id: "valuation",
+      title: "Current stock valuation",
+      description: "Quantity on hand multiplied by latest unit cost.",
+      filename: "current-stock-valuation.csv",
+      headers: ["Item Code", "Item", "Category", "Qty", "Unit", "Unit Cost", "Total Value", "Location"],
+      rows: valuationRows,
+    },
+    {
+      id: "low-stock",
+      title: "Low stock report",
+      description: "Amber and red stock lines requiring replenishment.",
+      filename: "low-stock-report.csv",
+      headers: ["Item Code", "Item", "Category", "Qty", "Reorder Level", "Status"],
+      rows: lowStockRows,
+    },
+    {
+      id: "expiry",
+      title: "Expiry report",
+      description: "Batched items with expiry visibility.",
+      filename: "expiry-report.csv",
+      headers: ["Item Code", "Item", "Batch", "Expiry", "Qty", "Location"],
+      rows: expiryRows,
+    },
+    {
+      id: "fast-moving",
+      title: "Fast-moving inventory",
+      description: "Items with highest average weekly issue volume.",
+      filename: "fast-moving-inventory.csv",
+      headers: ["Item Code", "Item", "Category", "Weekly Issue", "Qty", "Unit"],
+      rows: fastMovingRows,
+    },
+    {
+      id: "dead-stock",
+      title: "Dead stock report",
+      description: "Slow moving items tying up storage and value.",
+      filename: "dead-stock-report.csv",
+      headers: ["Item Code", "Item", "Category", "Qty", "Location"],
+      rows: deadStockRows,
+    },
+    {
+      id: "supplier-activity",
+      title: "Supplier activity report",
+      description: "Delivery recency, contacts, and active order exposure.",
+      filename: "supplier-activity-report.csv",
+      headers: ["Supplier", "Contact", "Phone", "Last Delivery", "Active Orders", "Status"],
+      rows: supplierRows,
+    },
+  ];
+}

@@ -12,6 +12,7 @@ export const POLICY_KEY = 'policy';
 export const DEFAULT_ROLE_OWNER = 'owner';
 export const DEFAULT_ROLE_ADMIN = 'admin';
 export const DEFAULT_ROLE_MEMBER = 'member';
+export const DEFAULT_ROLE_STOREKEEPER = 'storekeeper';
 
 export const DEFAULT_PERMISSION_CATALOG = [
   { resource: '*', action: '*', description: 'Full tenant access' },
@@ -86,5 +87,19 @@ export const DEFAULT_ROLE_CATALOG = [
     name: 'Member',
     description: 'Standard tenant access',
     permissions: ['auth:read', 'users:read', 'students:read', 'attendance:read'],
+  },
+  {
+    code: DEFAULT_ROLE_STOREKEEPER,
+    name: 'Storekeeper',
+    description: 'Inventory-only stock receiving, issuing, transfers, and reports',
+    permissions: [
+      'auth:read',
+      'inventory:read',
+      'inventory:write',
+      'procurement:read',
+      'procurement:write',
+      'transfers:read',
+      'transfers:write',
+    ],
   },
 ] as const;

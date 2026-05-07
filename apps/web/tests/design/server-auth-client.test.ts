@@ -62,7 +62,7 @@ describe("server auth client redirect targets", () => {
     expect(session.redirectTo).toBe("/school/bursar");
   });
 
-  it("accepts seeded school staff accounts when live auth is unavailable", async () => {
+  it("routes seeded storekeeper accounts to the dedicated inventory workspace", async () => {
     const client = createServerAuthClient(buildRequest("shule-hub-erp.vercel.app"));
 
     const session = await client.login({
@@ -72,11 +72,19 @@ describe("server auth client redirect targets", () => {
       tenantSlug: "amani-prep",
     });
 
-    expect(session.homePath).toBe("/school/storekeeper");
-    expect(session.redirectTo).toBe("/school/storekeeper");
+    expect(session.homePath).toBe("/inventory/dashboard");
+    expect(session.redirectTo).toBe("/inventory/dashboard");
     expect(session.role).toBe("storekeeper");
     expect(session.tenantSlug).toBe("amani-prep");
     expect(session.user.display_name).toBe("Storekeeper Amani Prep");
+    expect(session.user.permissions).toEqual([
+      "inventory.view",
+      "inventory.issue",
+      "inventory.receive",
+      "inventory.adjust",
+      "inventory.transfer",
+      "inventory.reports",
+    ]);
   });
 
   it("keeps seeded school staff accounts scoped to their tenant code", async () => {

@@ -105,6 +105,55 @@ describe("experience routing", () => {
     });
   });
 
+  test("allows authenticated storekeeper sessions to open dedicated inventory routes", () => {
+    expect(
+      evaluateExperienceRouting({
+        host: "amani-prep.shulehub.test",
+        pathname: "/inventory/dashboard",
+        cookies: {
+          [SCHOOL_SESSION_COOKIE]: serializeExperienceSession({
+            experience: "school",
+            homePath: "/inventory/dashboard",
+            role: "storekeeper",
+            tenantSlug: "amani-prep",
+            userLabel: "Storekeeper Amani Prep",
+          }),
+        },
+      }),
+    ).toEqual({
+      action: "next",
+      headers: {
+        "x-platform-experience": "school",
+        "x-tenant-slug": "amani-prep",
+      },
+    });
+  });
+
+  test("denies dedicated inventory routes to non-storekeeper school sessions", () => {
+    expect(
+      evaluateExperienceRouting({
+        host: "amani-prep.shulehub.test",
+        pathname: "/inventory/dashboard",
+        cookies: {
+          [SCHOOL_SESSION_COOKIE]: serializeExperienceSession({
+            experience: "school",
+            homePath: "/school/bursar",
+            role: "bursar",
+            tenantSlug: "amani-prep",
+            userLabel: "Bursar",
+          }),
+        },
+      }),
+    ).toEqual({
+      action: "redirect",
+      location: "/forbidden",
+      headers: {
+        "x-platform-experience": "school",
+        "x-tenant-slug": "amani-prep",
+      },
+    });
+  });
+
   test("redirects authenticated school sessions away from the login page to their role home", () => {
     expect(
       evaluateExperienceRouting({

@@ -17,6 +17,7 @@ import {
   readTenantCookie,
   type ExperienceGatewaySession,
 } from "@/lib/auth/server-session";
+import { storekeeperPermissions } from "@/lib/storekeeper/storekeeper-data";
 
 type LoginInput = {
   audience: ExperienceAudience;
@@ -75,7 +76,7 @@ function buildDemoUser(input: {
     role: input.role,
     email: isEmailLike(input.identifier) ? input.identifier : `${input.role}@demo.local`,
     display_name: input.displayName,
-    permissions: [],
+    permissions: input.role === "storekeeper" ? storekeeperPermissions : [],
     session_id: `demo-session-${input.audience}-${input.role}`,
   } satisfies LiveAuthUser;
 }
@@ -90,6 +91,10 @@ function buildExperienceHomePath(input: {
   }
 
   if (input.audience === "school") {
+    if (input.role === "storekeeper") {
+      return "/inventory/dashboard";
+    }
+
     return `/school/${input.role ?? "admin"}`;
   }
 

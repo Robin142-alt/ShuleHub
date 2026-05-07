@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { SchoolPages } from "@/components/school/school-pages";
 import type { SchoolExperienceRole } from "@/lib/experiences/types";
@@ -23,5 +23,10 @@ export default async function SchoolSectionPage({
   }
 
   const session = await readPublicSchoolSession(role as SchoolExperienceRole);
+
+  if (session.role === "storekeeper") {
+    redirect("/inventory/dashboard");
+  }
+
   return <SchoolPages role={session.role} section={section} tenantSlug={session.tenantSlug} routeMode="public" />;
 }
