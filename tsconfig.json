@@ -22,7 +22,7 @@
     "esModuleInterop": true
   },
   "include": [
-    "apps/**/*.ts",
+    "apps/api/**/*.ts",
     "api/**/*.ts"
   ],
   "exclude": [

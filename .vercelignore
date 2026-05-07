@@ -1,4 +1,5 @@
 .git
+.npm-cache
 artifacts
 dist
 mpesa-official.pdf
