@@ -88,6 +88,13 @@ export class InventorySchemaService implements OnModuleInit {
         quantity integer NOT NULL,
         unit_cost numeric(12,2),
         reference text,
+        before_quantity integer,
+        after_quantity integer,
+        department text,
+        counterparty text,
+        batch_number text,
+        expiry_date date,
+        submission_id text,
         actor_user_id uuid,
         notes text,
         occurred_at timestamptz NOT NULL DEFAULT NOW(),
@@ -192,6 +199,14 @@ export class InventorySchemaService implements OnModuleInit {
       ALTER TABLE inventory_categories ADD COLUMN IF NOT EXISTS manager text;
       ALTER TABLE inventory_categories ADD COLUMN IF NOT EXISTS storage_zones text;
       ALTER TABLE inventory_suppliers ADD COLUMN IF NOT EXISTS county text;
+      ALTER TABLE inventory_stock_movements ADD COLUMN IF NOT EXISTS before_quantity integer;
+      ALTER TABLE inventory_stock_movements ADD COLUMN IF NOT EXISTS after_quantity integer;
+      ALTER TABLE inventory_stock_movements ADD COLUMN IF NOT EXISTS department text;
+      ALTER TABLE inventory_stock_movements ADD COLUMN IF NOT EXISTS counterparty text;
+      ALTER TABLE inventory_stock_movements ADD COLUMN IF NOT EXISTS batch_number text;
+      ALTER TABLE inventory_stock_movements ADD COLUMN IF NOT EXISTS expiry_date date;
+      ALTER TABLE inventory_stock_movements ADD COLUMN IF NOT EXISTS submission_id text;
+      CREATE INDEX IF NOT EXISTS ix_inventory_movements_submission_id ON inventory_stock_movements (tenant_id, submission_id) WHERE submission_id IS NOT NULL;
 
       ALTER TABLE inventory_categories ENABLE ROW LEVEL SECURITY;
       ALTER TABLE inventory_categories FORCE ROW LEVEL SECURITY;

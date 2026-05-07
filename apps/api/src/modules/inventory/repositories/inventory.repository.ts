@@ -32,6 +32,13 @@ export interface InventoryStockMovementRecord {
   quantity: number;
   unit_cost?: number | null;
   reference?: string | null;
+  before_quantity?: number | null;
+  after_quantity?: number | null;
+  department?: string | null;
+  counterparty?: string | null;
+  batch_number?: string | null;
+  expiry_date?: string | null;
+  submission_id?: string | null;
   actor_user_id?: string | null;
   notes?: string | null;
   occurred_at?: Date;
@@ -540,6 +547,68 @@ export class InventoryRepository {
     );
   }
 
+  async applyStockReceiptWithCost(
+    tenantId: string,
+    itemId: string,
+    quantity: number,
+    unitCost: number,
+    supplierId: string | null,
+  ): Promise<void> {
+    await this.databaseService.query(
+      `
+        UPDATE inventory_items
+        SET quantity_on_hand = quantity_on_hand + $3,
+            unit_price = $4,
+            supplier_id = COALESCE($5::uuid, supplier_id),
+            updated_at = NOW()
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+      `,
+      [tenantId, itemId, quantity, unitCost, supplierId],
+    );
+  }
+
+  async findStockMovementsBySubmissionId(
+    tenantId: string,
+    submissionId: string,
+  ): Promise<InventoryStockMovementRecord[]> {
+    const result = await this.databaseService.query<InventoryStockMovementRecord>(
+      `
+        SELECT
+          movement.id,
+          movement.tenant_id,
+          movement.item_id,
+          item.item_name,
+          movement.movement_type,
+          movement.quantity,
+          movement.unit_cost,
+          movement.reference,
+          movement.before_quantity,
+          movement.after_quantity,
+          movement.department,
+          movement.counterparty,
+          movement.batch_number,
+          movement.expiry_date::text,
+          movement.submission_id,
+          movement.actor_user_id,
+          movement.notes,
+          movement.occurred_at,
+          movement.created_at,
+          movement.updated_at
+        FROM inventory_stock_movements movement
+        LEFT JOIN inventory_items item
+          ON item.tenant_id = movement.tenant_id
+         AND item.id = movement.item_id
+        WHERE movement.tenant_id = $1
+          AND movement.submission_id = $2
+        ORDER BY movement.occurred_at ASC, movement.created_at ASC
+      `,
+      [tenantId, submissionId],
+    );
+
+    return result.rows;
+  }
+
   async recordStockMovement(input: InventoryStockMovementRecord) {
     const result = await this.databaseService.query(
       `
@@ -550,11 +619,18 @@ export class InventoryRepository {
           quantity,
           unit_cost,
           reference,
+          before_quantity,
+          after_quantity,
+          department,
+          counterparty,
+          batch_number,
+          expiry_date,
+          submission_id,
           actor_user_id,
           notes,
           occurred_at
         )
-        VALUES ($1, $2::uuid, $3, $4, $5, $6, $7::uuid, $8, COALESCE($9::timestamptz, NOW()))
+        VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::date, $13, $14::uuid, $15, COALESCE($16::timestamptz, NOW()))
         RETURNING id, movement_type, quantity, reference, notes, occurred_at, created_at
       `,
       [
@@ -564,6 +640,13 @@ export class InventoryRepository {
         input.quantity,
         input.unit_cost ?? null,
         input.reference ?? null,
+        input.before_quantity ?? null,
+        input.after_quantity ?? null,
+        input.department ?? null,
+        input.counterparty ?? null,
+        input.batch_number ?? null,
+        input.expiry_date ?? null,
+        input.submission_id ?? null,
         input.actor_user_id ?? null,
         input.notes ?? null,
         input.occurred_at ?? null,
@@ -699,6 +782,13 @@ export class InventoryRepository {
           movement.movement_type,
           movement.quantity,
           movement.reference,
+          movement.before_quantity,
+          movement.after_quantity,
+          movement.department,
+          movement.counterparty,
+          movement.batch_number,
+          movement.expiry_date::text,
+          movement.submission_id,
           movement.notes,
           actor.display_name AS actor_display_name,
           movement.occurred_at

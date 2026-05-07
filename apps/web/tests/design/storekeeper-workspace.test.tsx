@@ -10,6 +10,10 @@ import {
   storekeeperPermissions,
   storekeeperSidebarItems,
 } from "@/lib/storekeeper/storekeeper-data";
+import {
+  buildStockIssueSyncPayload,
+  buildStockReceiptSyncPayload,
+} from "@/lib/storekeeper/storekeeper-sync";
 
 import { renderWithProviders } from "./test-utils";
 
@@ -113,6 +117,56 @@ describe("storekeeper inventory workspace", () => {
       supplier: "Crown Office Supplies",
       reference: "PO-2026-031",
       batchNumber: "COS-A4-0526",
+    });
+  });
+
+  it("maps local storekeeper issue and receipt workflows to backend sync payloads", () => {
+    expect(
+      buildStockIssueSyncPayload({
+        department: "Exams Office",
+        recipient: "Lucy Wambui",
+        issuedBy: "Storekeeper Amani Prep",
+        submissionId: "issue-001",
+        lines: [{ itemId: "00000000-0000-0000-0000-000000000401", quantity: 4 }],
+      }),
+    ).toEqual({
+      department: "Exams Office",
+      received_by: "Lucy Wambui",
+      submission_id: "issue-001",
+      lines: [{ item_id: "00000000-0000-0000-0000-000000000401", quantity: 4 }],
+      notes: "Issued by Storekeeper Amani Prep",
+    });
+
+    expect(
+      buildStockReceiptSyncPayload({
+        supplier: "Crown Office Supplies",
+        purchaseReference: "PO-2026-031",
+        receivedBy: "Storekeeper Amani Prep",
+        submissionId: "receipt-001",
+        lines: [
+          {
+            itemId: "00000000-0000-0000-0000-000000000401",
+            quantity: 12,
+            unitCost: 690,
+            batchNumber: "COS-A4-0526",
+            expiryDate: "2026-12-31",
+          },
+        ],
+      }),
+    ).toEqual({
+      supplier_name: "Crown Office Supplies",
+      purchase_reference: "PO-2026-031",
+      submission_id: "receipt-001",
+      lines: [
+        {
+          item_id: "00000000-0000-0000-0000-000000000401",
+          quantity: 12,
+          unit_cost: 690,
+          batch_number: "COS-A4-0526",
+          expiry_date: "2026-12-31",
+        },
+      ],
+      notes: "Received by Storekeeper Amani Prep",
     });
   });
 

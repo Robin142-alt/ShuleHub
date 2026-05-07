@@ -7,6 +7,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -78,6 +79,91 @@ export class CreateInventoryRequestDto {
   @ValidateNested({ each: true })
   @Type(() => InventoryLineDto)
   lines!: InventoryLineDto[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+class StockIssueLineDto {
+  @IsUUID()
+  item_id!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class CreateStockIssueDto {
+  @IsString()
+  department!: string;
+
+  @IsString()
+  received_by!: string;
+
+  @IsOptional()
+  @IsString()
+  submission_id?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => StockIssueLineDto)
+  lines!: StockIssueLineDto[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+class StockReceiptLineDto {
+  @IsUUID()
+  item_id!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  unit_cost!: number;
+
+  @IsOptional()
+  @IsString()
+  batch_number?: string;
+
+  @IsOptional()
+  @IsString()
+  expiry_date?: string;
+}
+
+export class CreateStockReceiptDto {
+  @IsOptional()
+  @IsUUID()
+  supplier_id?: string;
+
+  @IsString()
+  supplier_name!: string;
+
+  @IsString()
+  purchase_reference!: string;
+
+  @IsOptional()
+  @IsString()
+  submission_id?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => StockReceiptLineDto)
+  lines!: StockReceiptLineDto[];
 
   @IsOptional()
   @IsString()

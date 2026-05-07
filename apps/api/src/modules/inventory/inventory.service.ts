@@ -19,6 +19,8 @@ import {
   CreateIncidentDto,
   CreateInventoryRequestDto,
   CreatePurchaseOrderDto,
+  CreateStockIssueDto,
+  CreateStockReceiptDto,
   CreateTransferDto,
   UpdateWorkflowStatusDto,
 } from './dto/inventory-workflow.dto';
@@ -28,6 +30,25 @@ import {
   InventoryPurchaseOrderRecord,
   InventoryRepository,
 } from './repositories/inventory.repository';
+
+interface StockTransactionLine {
+  item_id: string;
+  item_name: string;
+  quantity: number;
+  before_quantity: number;
+  after_quantity: number;
+}
+
+interface StockTransactionResponse {
+  reference: string;
+  idempotent: boolean;
+  transaction_type: string;
+  department?: string;
+  counterparty?: string;
+  supplier_name?: string;
+  purchase_reference?: string;
+  lines: StockTransactionLine[];
+}
 
 @Injectable()
 export class InventoryService {
@@ -192,6 +213,179 @@ export class InventoryService {
 
   async listStockMovements(query: ListInventoryQueryDto) {
     return this.inventoryRepository.listStockMovements(this.requireTenantId(), query.limit ?? 50);
+  }
+
+  async issueDepartmentStock(dto: CreateStockIssueDto) {
+    return this.databaseService.withRequestTransaction(async () => {
+      const tenantId = this.requireTenantId();
+      const submissionId = dto.submission_id?.trim() || null;
+      const existingResponse = await this.getIdempotentStockTransaction(tenantId, submissionId);
+
+      if (existingResponse) {
+        return existingResponse;
+      }
+
+      const department = dto.department.trim();
+      const receivedBy = dto.received_by.trim();
+
+      if (!department) {
+        throw new BadRequestException('Department is required for stock issue');
+      }
+
+      if (!receivedBy) {
+        throw new BadRequestException('Receiver is required for stock issue');
+      }
+
+      const reference = this.buildNumber('ISS');
+      const responseLines: StockTransactionLine[] = [];
+
+      for (const line of dto.lines) {
+        this.assertPositiveQuantity(line.quantity);
+        const item = await this.inventoryRepository.findItemById(tenantId, line.item_id);
+
+        if (!item) {
+          throw new NotFoundException(`Inventory item "${line.item_id}" was not found`);
+        }
+
+        if (item.quantity_on_hand < line.quantity) {
+          throw new BadRequestException('Stock issue quantity exceeds quantity on hand');
+        }
+
+        const beforeQuantity = item.quantity_on_hand;
+        const afterQuantity = beforeQuantity - line.quantity;
+        const updatedItem = await this.inventoryRepository.updateItemStock(
+          tenantId,
+          line.item_id,
+          afterQuantity,
+        );
+
+        if (!updatedItem) {
+          throw new NotFoundException(`Inventory item "${line.item_id}" was not found`);
+        }
+
+        await this.inventoryRepository.recordStockMovement({
+          tenant_id: tenantId,
+          item_id: line.item_id,
+          item_name: item.item_name,
+          movement_type: 'stock_issue',
+          quantity: line.quantity,
+          unit_cost: item.unit_price,
+          reference,
+          before_quantity: beforeQuantity,
+          after_quantity: afterQuantity,
+          department,
+          counterparty: receivedBy,
+          submission_id: submissionId,
+          actor_user_id: this.requestContext.getStore()?.user_id ?? null,
+          notes: line.notes?.trim() || dto.notes?.trim() || `Issued to ${department}`,
+        });
+
+        responseLines.push(
+          this.buildStockTransactionLine({
+            item,
+            quantity: line.quantity,
+            beforeQuantity,
+            afterQuantity,
+          }),
+        );
+      }
+
+      return {
+        reference,
+        idempotent: false,
+        transaction_type: 'stock_issue',
+        department,
+        counterparty: receivedBy,
+        lines: responseLines,
+      };
+    });
+  }
+
+  async receiveSupplierStock(dto: CreateStockReceiptDto) {
+    return this.databaseService.withRequestTransaction(async () => {
+      const tenantId = this.requireTenantId();
+      const submissionId = dto.submission_id?.trim() || null;
+      const existingResponse = await this.getIdempotentStockTransaction(tenantId, submissionId);
+
+      if (existingResponse) {
+        return existingResponse;
+      }
+
+      const supplierName = dto.supplier_name.trim();
+      const purchaseReference = dto.purchase_reference.trim();
+      const supplierId = dto.supplier_id?.trim() || null;
+
+      if (!supplierName) {
+        throw new BadRequestException('Supplier name is required for stock receipt');
+      }
+
+      if (!purchaseReference) {
+        throw new BadRequestException('Purchase reference is required for stock receipt');
+      }
+
+      const receiptReference = this.buildNumber('RCV');
+      const responseLines: StockTransactionLine[] = [];
+
+      for (const line of dto.lines) {
+        this.assertPositiveQuantity(line.quantity);
+
+        if (!Number.isFinite(line.unit_cost) || line.unit_cost < 0) {
+          throw new BadRequestException('Unit cost must be zero or greater');
+        }
+
+        const item = await this.inventoryRepository.findItemById(tenantId, line.item_id);
+
+        if (!item) {
+          throw new NotFoundException(`Inventory item "${line.item_id}" was not found`);
+        }
+
+        const beforeQuantity = item.quantity_on_hand;
+        const afterQuantity = beforeQuantity + line.quantity;
+        await this.inventoryRepository.applyStockReceiptWithCost(
+          tenantId,
+          line.item_id,
+          line.quantity,
+          line.unit_cost,
+          supplierId,
+        );
+
+        await this.inventoryRepository.recordStockMovement({
+          tenant_id: tenantId,
+          item_id: line.item_id,
+          item_name: item.item_name,
+          movement_type: 'stock_receipt',
+          quantity: line.quantity,
+          unit_cost: line.unit_cost,
+          reference: purchaseReference,
+          before_quantity: beforeQuantity,
+          after_quantity: afterQuantity,
+          counterparty: supplierName,
+          batch_number: line.batch_number?.trim() || null,
+          expiry_date: line.expiry_date?.trim() || null,
+          submission_id: submissionId,
+          actor_user_id: this.requestContext.getStore()?.user_id ?? null,
+          notes: dto.notes?.trim() || `Received against ${purchaseReference}`,
+        });
+
+        responseLines.push(
+          this.buildStockTransactionLine({
+            item,
+            quantity: line.quantity,
+            beforeQuantity,
+            afterQuantity,
+          }),
+        );
+      }
+
+      return {
+        reference: receiptReference,
+        idempotent: false,
+        transaction_type: 'stock_receipt',
+        supplier_name: supplierName,
+        purchase_reference: purchaseReference,
+        lines: responseLines,
+      };
+    });
   }
 
   async listSuppliers() {
@@ -532,6 +726,68 @@ export class InventoryService {
     }
 
     return dto.quantity;
+  }
+
+  private assertPositiveQuantity(quantity: number): void {
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new BadRequestException('Quantity must be greater than zero');
+    }
+  }
+
+  private async getIdempotentStockTransaction(
+    tenantId: string,
+    submissionId: string | null,
+  ): Promise<StockTransactionResponse | null> {
+    if (!submissionId) {
+      return null;
+    }
+
+    const existingMovements = await this.inventoryRepository.findStockMovementsBySubmissionId(
+      tenantId,
+      submissionId,
+    );
+
+    if (existingMovements.length === 0) {
+      return null;
+    }
+
+    const firstMovement = existingMovements[0];
+
+    return {
+      reference: firstMovement.reference ?? submissionId,
+      idempotent: true,
+      transaction_type: firstMovement.movement_type,
+      department: firstMovement.department ?? undefined,
+      counterparty: firstMovement.counterparty ?? undefined,
+      supplier_name: firstMovement.movement_type === 'stock_receipt'
+        ? firstMovement.counterparty ?? undefined
+        : undefined,
+      purchase_reference: firstMovement.movement_type === 'stock_receipt'
+        ? firstMovement.reference ?? undefined
+        : undefined,
+      lines: existingMovements.map((movement) => ({
+        item_id: movement.item_id,
+        item_name: movement.item_name ?? '',
+        quantity: movement.quantity,
+        before_quantity: movement.before_quantity ?? 0,
+        after_quantity: movement.after_quantity ?? 0,
+      })),
+    };
+  }
+
+  private buildStockTransactionLine(input: {
+    item: InventoryItemRecord;
+    quantity: number;
+    beforeQuantity: number;
+    afterQuantity: number;
+  }): StockTransactionLine {
+    return {
+      item_id: input.item.id,
+      item_name: input.item.item_name,
+      quantity: input.quantity,
+      before_quantity: input.beforeQuantity,
+      after_quantity: input.afterQuantity,
+    };
   }
 
   private buildNumber(prefix: string): string {

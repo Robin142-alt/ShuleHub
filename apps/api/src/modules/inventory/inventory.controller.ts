@@ -12,6 +12,8 @@ import {
   CreateIncidentDto,
   CreateInventoryRequestDto,
   CreatePurchaseOrderDto,
+  CreateStockIssueDto,
+  CreateStockReceiptDto,
   CreateTransferDto,
   UpdateWorkflowStatusDto,
 } from './dto/inventory-workflow.dto';
@@ -83,6 +85,18 @@ export class InventoryController {
   @Permissions('inventory:read')
   listStockMovements(@Query() query: ListInventoryQueryDto) {
     return this.inventoryService.listStockMovements(query);
+  }
+
+  @Post('stock-issues')
+  @Permissions('inventory:write')
+  issueDepartmentStock(@Body() dto: CreateStockIssueDto) {
+    return this.inventoryService.issueDepartmentStock(dto);
+  }
+
+  @Post('stock-receipts')
+  @Permissions('inventory:write')
+  receiveSupplierStock(@Body() dto: CreateStockReceiptDto) {
+    return this.inventoryService.receiveSupplierStock(dto);
   }
 
   @Get('suppliers')

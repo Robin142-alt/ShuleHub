@@ -150,6 +150,347 @@ test('InventoryService receives an approved purchase order and creates stock-in 
   assert.equal(createdMovements[0]?.movement_type, 'stock_in');
 });
 
+test('InventoryService issues department stock with before and after audit quantities', async () => {
+  const requestContext = new RequestContextService();
+  const stockUpdates: Array<{ itemId: string; nextQuantity: number }> = [];
+  const createdMovements: Array<Record<string, unknown>> = [];
+
+  const service = new InventoryService(
+    requestContext,
+    {
+      withRequestTransaction: async <T>(callback: () => Promise<T>): Promise<T> => callback(),
+    } as never,
+    {
+      findStockMovementsBySubmissionId: async () => [],
+      findItemById: async () => ({
+        id: '00000000-0000-0000-0000-000000000401',
+        tenant_id: 'tenant-a',
+        item_name: 'A4 Printing Paper',
+        sku: 'STAT-A4-001',
+        quantity_on_hand: 18,
+        reorder_level: 25,
+        unit: 'ream',
+        unit_price: 650,
+        supplier_id: null,
+        category_id: null,
+        storage_location: 'Main Store - Shelf A2',
+        notes: null,
+        status: 'active',
+        is_archived: false,
+      }),
+      updateItemStock: async (_tenantId: string, itemId: string, nextQuantity: number) => {
+        stockUpdates.push({ itemId, nextQuantity });
+        return {
+          id: itemId,
+          quantity_on_hand: nextQuantity,
+        };
+      },
+      recordStockMovement: async (input: Record<string, unknown>) => {
+        createdMovements.push(input);
+        return {
+          id: '00000000-0000-0000-0000-000000000701',
+          ...input,
+          occurred_at: new Date('2026-05-07T09:15:00.000Z'),
+          created_at: new Date('2026-05-07T09:15:00.000Z'),
+        };
+      },
+    } as never,
+  );
+
+  const response = await requestContext.run(
+    {
+      request_id: 'req-stock-issue-1',
+      tenant_id: 'tenant-a',
+      user_id: '00000000-0000-0000-0000-000000000001',
+      role: 'storekeeper',
+      session_id: 'session-1',
+      permissions: ['inventory:*'],
+      is_authenticated: true,
+      client_ip: '127.0.0.1',
+      user_agent: 'test-suite',
+      method: 'POST',
+      path: '/inventory/stock-issues',
+      started_at: '2026-05-07T09:15:00.000Z',
+    },
+    () =>
+      service.issueDepartmentStock({
+        department: 'Exams Office',
+        received_by: 'Lucy Wambui',
+        submission_id: 'issue-submit-001',
+        lines: [
+          {
+            item_id: '00000000-0000-0000-0000-000000000401',
+            quantity: 4,
+          },
+        ],
+        notes: 'Exam printing paper issue',
+      }),
+  );
+
+  assert.match(response.reference, /^ISS-/);
+  assert.equal(response.idempotent, false);
+  assert.equal(response.lines[0]?.before_quantity, 18);
+  assert.equal(response.lines[0]?.after_quantity, 14);
+  assert.deepEqual(stockUpdates, [
+    {
+      itemId: '00000000-0000-0000-0000-000000000401',
+      nextQuantity: 14,
+    },
+  ]);
+  assert.equal(createdMovements.length, 1);
+  assert.equal(createdMovements[0]?.movement_type, 'stock_issue');
+  assert.equal(createdMovements[0]?.before_quantity, 18);
+  assert.equal(createdMovements[0]?.after_quantity, 14);
+  assert.equal(createdMovements[0]?.department, 'Exams Office');
+  assert.equal(createdMovements[0]?.counterparty, 'Lucy Wambui');
+  assert.equal(createdMovements[0]?.submission_id, 'issue-submit-001');
+});
+
+test('InventoryService blocks department stock issues that would create negative stock', async () => {
+  const requestContext = new RequestContextService();
+  let stockWasUpdated = false;
+
+  const service = new InventoryService(
+    requestContext,
+    {
+      withRequestTransaction: async <T>(callback: () => Promise<T>): Promise<T> => callback(),
+    } as never,
+    {
+      findStockMovementsBySubmissionId: async () => [],
+      findItemById: async () => ({
+        id: '00000000-0000-0000-0000-000000000402',
+        tenant_id: 'tenant-a',
+        item_name: 'Lab Gloves',
+        sku: 'LAB-GLV-100',
+        quantity_on_hand: 4,
+        reorder_level: 10,
+        unit: 'box',
+        unit_price: 780,
+        supplier_id: null,
+        category_id: null,
+        storage_location: 'Science Prep Room',
+        notes: null,
+        status: 'active',
+        is_archived: false,
+      }),
+      updateItemStock: async () => {
+        stockWasUpdated = true;
+        return null;
+      },
+      recordStockMovement: async () => {
+        throw new Error('movement should not be recorded');
+      },
+    } as never,
+  );
+
+  await assert.rejects(
+    () =>
+      requestContext.run(
+        {
+          request_id: 'req-stock-issue-negative',
+          tenant_id: 'tenant-a',
+          user_id: '00000000-0000-0000-0000-000000000001',
+          role: 'storekeeper',
+          session_id: 'session-1',
+          permissions: ['inventory:*'],
+          is_authenticated: true,
+          client_ip: '127.0.0.1',
+          user_agent: 'test-suite',
+          method: 'POST',
+          path: '/inventory/stock-issues',
+          started_at: '2026-05-07T09:20:00.000Z',
+        },
+        () =>
+          service.issueDepartmentStock({
+            department: 'Science Lab',
+            received_by: 'Moses Otieno',
+            lines: [
+              {
+                item_id: '00000000-0000-0000-0000-000000000402',
+                quantity: 99,
+              },
+            ],
+          }),
+      ),
+    /Stock issue quantity exceeds quantity on hand/,
+  );
+  assert.equal(stockWasUpdated, false);
+});
+
+test('InventoryService returns existing stock issue movements for duplicate submissions', async () => {
+  const requestContext = new RequestContextService();
+  let stockWasUpdated = false;
+
+  const service = new InventoryService(
+    requestContext,
+    {
+      withRequestTransaction: async <T>(callback: () => Promise<T>): Promise<T> => callback(),
+    } as never,
+    {
+      findStockMovementsBySubmissionId: async () => [
+        {
+          id: '00000000-0000-0000-0000-000000000703',
+          reference: 'ISS-20260507-00003',
+          item_id: '00000000-0000-0000-0000-000000000401',
+          item_name: 'A4 Printing Paper',
+          movement_type: 'stock_issue',
+          quantity: 4,
+          before_quantity: 18,
+          after_quantity: 14,
+          department: 'Exams Office',
+          counterparty: 'Lucy Wambui',
+          submission_id: 'issue-submit-duplicate',
+        },
+      ],
+      updateItemStock: async () => {
+        stockWasUpdated = true;
+        return null;
+      },
+      recordStockMovement: async () => {
+        throw new Error('duplicate movement should not be recorded');
+      },
+    } as never,
+  );
+
+  const response = await requestContext.run(
+    {
+      request_id: 'req-stock-issue-duplicate',
+      tenant_id: 'tenant-a',
+      user_id: '00000000-0000-0000-0000-000000000001',
+      role: 'storekeeper',
+      session_id: 'session-1',
+      permissions: ['inventory:*'],
+      is_authenticated: true,
+      client_ip: '127.0.0.1',
+      user_agent: 'test-suite',
+      method: 'POST',
+      path: '/inventory/stock-issues',
+      started_at: '2026-05-07T09:25:00.000Z',
+    },
+    () =>
+      service.issueDepartmentStock({
+        department: 'Exams Office',
+        received_by: 'Lucy Wambui',
+        submission_id: 'issue-submit-duplicate',
+        lines: [
+          {
+            item_id: '00000000-0000-0000-0000-000000000401',
+            quantity: 4,
+          },
+        ],
+      }),
+  );
+
+  assert.equal(response.reference, 'ISS-20260507-00003');
+  assert.equal(response.idempotent, true);
+  assert.equal(response.lines[0]?.after_quantity, 14);
+  assert.equal(stockWasUpdated, false);
+});
+
+test('InventoryService receives supplier stock with batch, expiry, and before-after audit quantities', async () => {
+  const requestContext = new RequestContextService();
+  const receivedLines: Array<Record<string, unknown>> = [];
+  const createdMovements: Array<Record<string, unknown>> = [];
+
+  const service = new InventoryService(
+    requestContext,
+    {
+      withRequestTransaction: async <T>(callback: () => Promise<T>): Promise<T> => callback(),
+    } as never,
+    {
+      findStockMovementsBySubmissionId: async () => [],
+      findItemById: async () => ({
+        id: '00000000-0000-0000-0000-000000000401',
+        tenant_id: 'tenant-a',
+        item_name: 'A4 Printing Paper',
+        sku: 'STAT-A4-001',
+        quantity_on_hand: 18,
+        reorder_level: 25,
+        unit: 'ream',
+        unit_price: 650,
+        supplier_id: '00000000-0000-0000-0000-000000000801',
+        category_id: null,
+        storage_location: 'Main Store - Shelf A2',
+        notes: null,
+        status: 'active',
+        is_archived: false,
+      }),
+      applyStockReceiptWithCost: async (
+        _tenantId: string,
+        itemId: string,
+        quantity: number,
+        unitCost: number,
+        supplierId: string | null,
+      ) => {
+        receivedLines.push({ itemId, quantity, unitCost, supplierId });
+      },
+      recordStockMovement: async (input: Record<string, unknown>) => {
+        createdMovements.push(input);
+        return {
+          id: '00000000-0000-0000-0000-000000000704',
+          ...input,
+          occurred_at: new Date('2026-05-07T10:15:00.000Z'),
+          created_at: new Date('2026-05-07T10:15:00.000Z'),
+        };
+      },
+    } as never,
+  );
+
+  const response = await requestContext.run(
+    {
+      request_id: 'req-stock-receipt-1',
+      tenant_id: 'tenant-a',
+      user_id: '00000000-0000-0000-0000-000000000001',
+      role: 'storekeeper',
+      session_id: 'session-1',
+      permissions: ['inventory:*'],
+      is_authenticated: true,
+      client_ip: '127.0.0.1',
+      user_agent: 'test-suite',
+      method: 'POST',
+      path: '/inventory/stock-receipts',
+      started_at: '2026-05-07T10:15:00.000Z',
+    },
+    () =>
+      service.receiveSupplierStock({
+        supplier_id: '00000000-0000-0000-0000-000000000801',
+        supplier_name: 'Crown Office Supplies',
+        purchase_reference: 'PO-2026-031',
+        submission_id: 'receipt-submit-001',
+        lines: [
+          {
+            item_id: '00000000-0000-0000-0000-000000000401',
+            quantity: 12,
+            unit_cost: 690,
+            batch_number: 'COS-A4-0526',
+            expiry_date: '2026-12-31',
+          },
+        ],
+      }),
+  );
+
+  assert.match(response.reference, /^RCV-/);
+  assert.equal(response.idempotent, false);
+  assert.deepEqual(receivedLines, [
+    {
+      itemId: '00000000-0000-0000-0000-000000000401',
+      quantity: 12,
+      unitCost: 690,
+      supplierId: '00000000-0000-0000-0000-000000000801',
+    },
+  ]);
+  assert.equal(response.lines[0]?.before_quantity, 18);
+  assert.equal(response.lines[0]?.after_quantity, 30);
+  assert.equal(createdMovements[0]?.movement_type, 'stock_receipt');
+  assert.equal(createdMovements[0]?.reference, 'PO-2026-031');
+  assert.equal(createdMovements[0]?.before_quantity, 18);
+  assert.equal(createdMovements[0]?.after_quantity, 30);
+  assert.equal(createdMovements[0]?.counterparty, 'Crown Office Supplies');
+  assert.equal(createdMovements[0]?.batch_number, 'COS-A4-0526');
+  assert.equal(createdMovements[0]?.expiry_date, '2026-12-31');
+  assert.equal(createdMovements[0]?.submission_id, 'receipt-submit-001');
+});
+
 test('InventoryService completes a transfer and records transfer movements for the audit trail', async () => {
   const requestContext = new RequestContextService();
   const createdMovements: Array<Record<string, unknown>> = [];

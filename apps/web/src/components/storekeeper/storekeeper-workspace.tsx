@@ -59,6 +59,10 @@ import {
   type StorekeeperSupplier,
   type StorekeeperTransfer,
 } from "@/lib/storekeeper/storekeeper-data";
+import {
+  syncStorekeeperStockIssue,
+  syncStorekeeperStockReceipt,
+} from "@/lib/storekeeper/storekeeper-sync";
 
 type SortKey = "name" | "quantity" | "value" | "status";
 
@@ -490,6 +494,7 @@ export function StorekeeperWorkspace({
   const [lastIssueNote, setLastIssueNote] = useState<StorekeeperIssueNote | null>(null);
   const [lastReceiveNote, setLastReceiveNote] = useState<StorekeeperReceiveNote | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [reportFilters, setReportFilters] = useState<ReportFilters>(reportFilterDefaults);
   const [isIssuePending, startIssueTransition] = useTransition();
   const [isReceivePending, startReceiveTransition] = useTransition();
@@ -514,24 +519,31 @@ export function StorekeeperWorkspace({
 
   function handleIssueSubmit() {
     setActionError(null);
+    const submissionId = `issue-${Date.now()}-${issueForm.itemId}`;
+    const issueInput = {
+      department: issueForm.department,
+      recipient: issueForm.recipient,
+      issuedBy: userLabel,
+      lines: [
+        {
+          itemId: issueForm.itemId,
+          quantity: Number(issueForm.quantity),
+        },
+      ],
+      submissionId,
+    };
+
     startIssueTransition(() => {
       try {
-        const result = issueStoreStock(dataset, {
-          department: issueForm.department,
-          recipient: issueForm.recipient,
-          issuedBy: userLabel,
-          lines: [
-            {
-              itemId: issueForm.itemId,
-              quantity: Number(issueForm.quantity),
-            },
-          ],
-          submissionId: `issue-${Date.now()}-${issueForm.itemId}`,
-        });
+        const result = issueStoreStock(dataset, issueInput);
 
         setDataset(result.dataset);
         setLastIssueNote(result.issueNote);
         setIssueModalOpen(false);
+        setSyncMessage("Issue saved locally. Syncing with live inventory API...");
+        void syncStorekeeperStockIssue(issueInput)
+          .then((syncResult) => setSyncMessage(syncResult.message))
+          .catch((error: unknown) => setSyncMessage(getErrorMessage(error)));
       } catch (error) {
         setActionError(getErrorMessage(error));
       }
@@ -540,27 +552,34 @@ export function StorekeeperWorkspace({
 
   function handleReceiveSubmit() {
     setActionError(null);
+    const submissionId = `receipt-${Date.now()}-${receiveForm.itemId}`;
+    const receiveInput = {
+      supplier: receiveForm.supplier,
+      purchaseReference: receiveForm.purchaseReference,
+      receivedBy: userLabel,
+      lines: [
+        {
+          itemId: receiveForm.itemId,
+          quantity: Number(receiveForm.quantity),
+          unitCost: Number(receiveForm.unitCost),
+          batchNumber: receiveForm.batchNumber,
+          expiryDate: receiveForm.expiryDate,
+        },
+      ],
+      submissionId,
+    };
+
     startReceiveTransition(() => {
       try {
-        const result = receiveStoreStock(dataset, {
-          supplier: receiveForm.supplier,
-          purchaseReference: receiveForm.purchaseReference,
-          receivedBy: userLabel,
-          lines: [
-            {
-              itemId: receiveForm.itemId,
-              quantity: Number(receiveForm.quantity),
-              unitCost: Number(receiveForm.unitCost),
-              batchNumber: receiveForm.batchNumber,
-              expiryDate: receiveForm.expiryDate,
-            },
-          ],
-          submissionId: `receive-${Date.now()}-${receiveForm.itemId}`,
-        });
+        const result = receiveStoreStock(dataset, receiveInput);
 
         setDataset(result.dataset);
         setLastReceiveNote(result.receiveNote);
         setReceiveModalOpen(false);
+        setSyncMessage("Receipt saved locally. Syncing with live inventory API...");
+        void syncStorekeeperStockReceipt(receiveInput)
+          .then((syncResult) => setSyncMessage(syncResult.message))
+          .catch((error: unknown) => setSyncMessage(getErrorMessage(error)));
       } catch (error) {
         setActionError(getErrorMessage(error));
       }
@@ -1641,7 +1660,17 @@ export function StorekeeperWorkspace({
             </div>
           </header>
 
-          <div className="px-4 py-4 md:px-6">{renderActiveSection()}</div>
+          <div className="space-y-4 px-4 py-4 md:px-6">
+            {syncMessage ? (
+              <Card className="border-emerald-200 bg-emerald-50 px-4 py-3">
+                <div className="flex items-center gap-2 text-[13px] font-semibold text-emerald-800">
+                  <ShieldCheck className="h-4 w-4" />
+                  {syncMessage}
+                </div>
+              </Card>
+            ) : null}
+            {renderActiveSection()}
+          </div>
         </section>
       </div>
 
