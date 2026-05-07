@@ -7,7 +7,15 @@ export type SystemDomain = "superadmin" | "school" | "portal";
 export type SuperAdminRole = "platform_owner" | "support_agent" | "finance_admin" | "operations";
 
 /** School ERP roles */
-export type SchoolRole = "principal" | "bursar" | "teacher" | "registrar" | "accountant" | "admin";
+export type SchoolRole =
+  | "principal"
+  | "bursar"
+  | "teacher"
+  | "registrar"
+  | "accountant"
+  | "admin"
+  | "storekeeper"
+  | "admissions";
 
 /** Portal roles */
 export type PortalRole = "parent" | "student";

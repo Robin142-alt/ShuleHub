@@ -4,6 +4,7 @@ import type { ExperienceAudience } from "@/lib/auth/experience-audience";
 import {
   portalDemoCredentials,
   resolvePortalDemoCredential,
+  resolveSeededSchoolDemoCredential,
   resolveSchoolDemoCredential,
   schoolDemoCredentials,
   superadminDemoCredentials,
@@ -162,6 +163,17 @@ async function requestBackendAuth<T>(
 async function loginSchoolAudience(input: LoginInput) {
   const tenantSlug = input.tenantSlug?.trim() || null;
   const matchedDemo = resolveSchoolDemoCredential(input.identifier, input.password);
+  const seededDemoForIdentifier = resolveSeededSchoolDemoCredential(input.identifier, input.password);
+  const matchedSeededDemo =
+    seededDemoForIdentifier &&
+    (!tenantSlug || seededDemoForIdentifier.tenantSlug === tenantSlug)
+      ? seededDemoForIdentifier
+      : undefined;
+  const matchedSchoolCredential = matchedDemo ?? matchedSeededDemo;
+
+  if (seededDemoForIdentifier && !matchedSeededDemo) {
+    throw unauthorized("Use one of the listed staff review accounts for this school workspace.");
+  }
 
   if (tenantSlug && isEmailLike(input.identifier)) {
     try {
@@ -185,34 +197,42 @@ async function loginSchoolAudience(input: LoginInput) {
         user: response.user,
       });
     } catch (error) {
-      if (!matchedDemo) {
+      if (!matchedSchoolCredential) {
         throw error;
       }
     }
   }
 
-  if (!matchedDemo) {
+  if (!matchedSchoolCredential) {
     throw unauthorized("Use one of the listed staff review accounts for this school workspace.");
   }
 
+  const resolvedTenantSlug = matchedSchoolCredential.tenantSlug ?? tenantSlug ?? "amani-prep";
+  const displayName =
+    matchedSchoolCredential.displayName ??
+    (matchedSchoolCredential.role === "principal"
+      ? "Principal"
+      : matchedSchoolCredential.role === "bursar"
+        ? "Bursar"
+        : matchedSchoolCredential.role === "teacher"
+          ? "Teacher"
+          : matchedSchoolCredential.role === "storekeeper"
+            ? "Storekeeper"
+            : matchedSchoolCredential.role === "admissions"
+              ? "Admissions officer"
+              : "Admin staff");
+
   return buildGatewaySession({
     audience: "school",
-    userLabel: matchedDemo.identifier,
-    tenantSlug: tenantSlug ?? "amani-prep",
-    role: matchedDemo.role,
+    userLabel: displayName,
+    tenantSlug: resolvedTenantSlug,
+    role: matchedSchoolCredential.role,
     user: buildDemoUser({
       audience: "school",
-      identifier: matchedDemo.identifier,
-      displayName:
-        matchedDemo.role === "principal"
-          ? "Principal"
-          : matchedDemo.role === "bursar"
-            ? "Bursar"
-            : matchedDemo.role === "teacher"
-              ? "Teacher"
-              : "Admin staff",
-      role: matchedDemo.role,
-      tenantSlug: tenantSlug ?? "amani-prep",
+      identifier: matchedSchoolCredential.identifier,
+      displayName,
+      role: matchedSchoolCredential.role,
+      tenantSlug: resolvedTenantSlug,
     }),
   });
 }
@@ -366,6 +386,8 @@ export function createServerAuthClient(request: Request) {
               ? schoolDemoCredentials.bursar.identifier
               : demoRole === "teacher"
                 ? schoolDemoCredentials.teacher.identifier
+                : demoRole === "storekeeper" || demoRole === "admissions"
+                  ? `${demoRole}@${session.tenantSlug ?? "amani-prep"}.demo.shulehub.ke`
                 : schoolDemoCredentials.admin.identifier;
 
         return buildGatewaySession({

@@ -4,7 +4,7 @@ import { SchoolPages } from "@/components/school/school-pages";
 import type { SchoolExperienceRole } from "@/lib/experiences/types";
 import { readPublicSchoolSession } from "@/lib/routing/public-experience-session";
 
-const allowedRoles = ["principal", "bursar", "teacher", "admin"] as const;
+const allowedRoles = ["principal", "bursar", "teacher", "admin", "storekeeper", "admissions"] as const;
 
 export default async function SchoolRoleHomePage({
   params,

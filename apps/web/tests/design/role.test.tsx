@@ -64,4 +64,24 @@ describe("STEP 4: Role tests", () => {
     expect(screen.getByRole("heading", { name: /mpesa transactions/i })).toBeVisible();
     expect(screen.queryByText(/tenant control/i)).not.toBeInTheDocument();
   });
+
+  it("opens a public storekeeper school workspace with inventory navigation", () => {
+    renderWithProviders(createElement(SchoolPages, { role: "storekeeper" }));
+
+    expect(screen.getByText(/Storekeeper/i)).toBeVisible();
+    expect(screen.getByRole("link", { name: /Inventory/i })).toHaveAttribute(
+      "href",
+      "/inventory",
+    );
+  });
+
+  it("opens a public admissions school workspace with admissions navigation", () => {
+    renderWithProviders(createElement(SchoolPages, { role: "admissions" }));
+
+    expect(screen.getByText(/Admissions officer/i)).toBeVisible();
+    expect(screen.getByRole("link", { name: /Admissions/i })).toHaveAttribute(
+      "href",
+      "/admissions",
+    );
+  });
 });

@@ -5,7 +5,7 @@ import type { SchoolExperienceRole } from "@/lib/experiences/types";
 import { readPublicSchoolSession } from "@/lib/routing/public-experience-session";
 import { isSchoolSection } from "@/lib/routing/experience-routes";
 
-const allowedRoles = ["principal", "bursar", "teacher", "admin"] as const;
+const allowedRoles = ["principal", "bursar", "teacher", "admin", "storekeeper", "admissions"] as const;
 
 export default async function SchoolSectionPage({
   params,

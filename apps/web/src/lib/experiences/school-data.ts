@@ -3,6 +3,7 @@ import {
   Boxes,
   CalendarDays,
   ClipboardCheck,
+  ClipboardList,
   CircleDollarSign,
   FileSpreadsheet,
   GraduationCap,
@@ -104,6 +105,19 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
     { id: "inventory", label: "Inventory", href: toSchoolPath("inventory"), icon: Boxes, group: "Administration" },
     { id: "settings", label: "Settings", href: toSchoolPath("settings"), icon: Settings, group: "Administration" },
   ],
+  storekeeper: [
+    { id: "dashboard", label: "Dashboard", href: toSchoolPath("dashboard"), icon: LayoutGrid, group: "Overview" },
+    { id: "inventory", label: "Inventory", href: toSchoolPath("inventory"), icon: Boxes, group: "Store operations" },
+    { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Store operations" },
+    { id: "communication", label: "Communication", href: toSchoolPath("communication"), icon: MessageSquareText, group: "Operations" },
+  ],
+  admissions: [
+    { id: "dashboard", label: "Dashboard", href: toSchoolPath("dashboard"), icon: LayoutGrid, group: "Overview" },
+    { id: "admissions", label: "Admissions", href: toSchoolPath("admissions"), icon: ClipboardList, group: "Admissions" },
+    { id: "students", label: "Students", href: toSchoolPath("students"), icon: Users, group: "Admissions" },
+    { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Admissions" },
+    { id: "communication", label: "Communication", href: toSchoolPath("communication"), icon: MessageSquareText, group: "Operations" },
+  ],
 };
 
 const roleToDashboardRole: Record<SchoolExperienceRole, DashboardRole> = {
@@ -111,6 +125,8 @@ const roleToDashboardRole: Record<SchoolExperienceRole, DashboardRole> = {
   bursar: "bursar",
   teacher: "teacher",
   admin: "admin",
+  storekeeper: "storekeeper",
+  admissions: "admissions",
 };
 
 export const schoolSectionLabels: Record<string, string> = {
@@ -149,6 +165,16 @@ function buildSchoolProfile(role: SchoolExperienceRole, schoolName: string): Exp
     admin: {
       name: "Daniel Ouma",
       roleLabel: "School admin",
+      contextLabel: schoolName,
+    },
+    storekeeper: {
+      name: "Mercy Wambui",
+      roleLabel: "Storekeeper",
+      contextLabel: schoolName,
+    },
+    admissions: {
+      name: "Naomi Achieng",
+      roleLabel: "Admissions officer",
       contextLabel: schoolName,
     },
   };

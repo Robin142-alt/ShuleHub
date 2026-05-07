@@ -2,7 +2,13 @@ import type { LucideIcon } from "lucide-react";
 
 export type ExperienceIcon = LucideIcon;
 
-export type SchoolExperienceRole = "principal" | "bursar" | "teacher" | "admin";
+export type SchoolExperienceRole =
+  | "principal"
+  | "bursar"
+  | "teacher"
+  | "admin"
+  | "storekeeper"
+  | "admissions";
 export type PortalViewer = "parent" | "student";
 
 export interface ExperienceNavItem {

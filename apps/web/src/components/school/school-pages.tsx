@@ -7,6 +7,8 @@ import { ArrowRight, FileSpreadsheet, Printer, Send, UserPlus } from "lucide-rea
 import { ActivityListCard, SimpleListCard } from "@/components/experience/activity-list-card";
 import { MetricGrid } from "@/components/experience/metric-grid";
 import { QuickActionBar } from "@/components/experience/quick-action-bar";
+import { AdmissionsModuleScreen } from "@/components/modules/admissions/admissions-module-screen";
+import { InventoryModuleScreen } from "@/components/modules/inventory/inventory-module-screen";
 import { ErpShell } from "@/components/school/erp-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1686,17 +1688,11 @@ export function SchoolPages({
           ]}
         />
       ) : null}
+      {!studentId && section === "admissions" ? (
+        <AdmissionsModuleScreen role={workspace.dashboardRole} snapshot={workspace.snapshot} online />
+      ) : null}
       {!studentId && section === "inventory" ? (
-        <SchoolBasicCardPage
-          eyebrow="Inventory"
-          title="Inventory control"
-          description="Simple operational inventory for books, lab items, and consumables."
-          items={[
-            { id: "inv-1", title: "Exercise books", subtitle: "Store balance looks healthy for the month", value: "1,240" },
-            { id: "inv-2", title: "Science kits", subtitle: "Three kits need replenishment before exams", value: "Low" },
-            { id: "inv-3", title: "Printer paper", subtitle: "Stock supports current report-card run", value: "OK" },
-          ]}
-        />
+        <InventoryModuleScreen role={workspace.dashboardRole} snapshot={workspace.snapshot} online />
       ) : null}
       {!studentId && section === "settings" ? (
         <div className="space-y-6">
