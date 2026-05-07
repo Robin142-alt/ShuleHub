@@ -1,0 +1,103 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: shule-hub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-shule_hub}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: shule-hub-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shule-hub-api
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      PORT: 3000
+      APP_RUNTIME: server
+      EVENTS_DISPATCHER_ENABLED: "false"
+      EVENTS_WORKER_ENABLED: "false"
+      OBSERVABILITY_SLO_BACKGROUND_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3000}:3000"
+
+  payments-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shule-hub-payments-worker
+    restart: unless-stopped
+    command: ["node", "dist/apps/api/src/payments-worker.js"]
+    env_file:
+      - .env.production
+    environment:
+      APP_RUNTIME: worker
+      EVENTS_DISPATCHER_ENABLED: "false"
+      EVENTS_WORKER_ENABLED: "false"
+      OBSERVABILITY_SLO_BACKGROUND_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  events-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shule-hub-events-worker
+    restart: unless-stopped
+    command: ["node", "dist/apps/api/src/events-worker.js"]
+    env_file:
+      - .env.production
+    environment:
+      APP_RUNTIME: worker
+      EVENTS_DISPATCHER_ENABLED: "true"
+      EVENTS_WORKER_ENABLED: "true"
+      OBSERVABILITY_SLO_BACKGROUND_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

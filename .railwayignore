@@ -1,0 +1,7 @@
+node_modules
+dist
+artifacts
+.git
+.vercel
+coverage
+mpesa-official.pdf

@@ -1,0 +1,28 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Users\user\AppData\Roaming\npm\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.6.1
+2 info using node@v22.20.0
+3 silly config load:file:C:\Users\user\AppData\Roaming\npm\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\user\Desktop\PROJECTS\Shule hub\apps\web\.npmrc
+5 silly config load:file:C:\Users\user\.npmrc
+6 silly config load:file:C:\Users\user\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm exec vercel build --prod --yes
+8 verbose argv "exec" "--" "vercel" "build" "--prod" "--yes"
+9 verbose logfile logs-max:10 dir:C:\Users\user\Desktop\PROJECTS\Shule hub\apps\web\.npm-cache\_logs\2026-05-06T22_57_50_851Z-
+10 verbose logfile C:\Users\user\Desktop\PROJECTS\Shule hub\apps\web\.npm-cache\_logs\2026-05-06T22_57_50_851Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:2197815296 maxSize:549453824 maxEntrySize:274726912
+13 http fetch GET 200 https://registry.npmjs.org/npm 522ms
+14 http fetch GET 200 https://registry.npmjs.org/vercel 439ms (cache revalidated)
+15 silly packumentCache heap:2197815296 maxSize:549453824 maxEntrySize:274726912
+16 silly packumentCache heap:2197815296 maxSize:549453824 maxEntrySize:274726912
+17 verbose cwd C:\Users\user\Desktop\PROJECTS\Shule hub\apps\web
+18 verbose os Windows_NT 10.0.22000
+19 verbose node v22.20.0
+20 verbose npm  v11.6.1
+21 notice
+21 notice New minor version of npm available! 11.6.1 -> 11.14.0
+21 notice Changelog: https://github.com/npm/cli/releases/tag/v11.14.0
+21 notice To update run: npm install -g npm@11.14.0
+21 notice  { force: true, [Symbol(proc-log.meta)]: true }
+22 verbose exit 1
+23 verbose code 1

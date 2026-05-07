@@ -1,0 +1,16 @@
+export const MPESA_QUEUE_NAME = 'payments-mpesa';
+export const MPESA_PROCESS_CALLBACK_JOB = 'payments.mpesa.process-callback';
+export const PAYMENTS_QUEUE_NAME = 'payments';
+export const PAYMENTS_PROCESS_JOB = 'process-payment';
+export const PAYMENTS_QUEUE_RESULT_KEY_PREFIX = 'payments:queue:result';
+export const PAYMENTS_QUEUE_LOCK_KEY_PREFIX = 'payments:queue:lock';
+export const MPESA_PAYMENT_INTENT_SCOPE = 'payments:mpesa:payment-intents:create';
+export const MPESA_PAYMENT_INTENT_REQUEST_METHOD = 'POST';
+export const MPESA_PAYMENT_INTENT_REQUEST_PATH = '/payments/mpesa/payment-intents';
+export const MPESA_CALLBACK_SIGNATURE_HEADER = 'x-mpesa-signature';
+export const MPESA_CALLBACK_TIMESTAMP_HEADER = 'x-mpesa-timestamp';
+export const MPESA_CALLBACK_DELIVERY_ID_HEADER = 'x-mpesa-delivery-id';
+export const MPESA_ACCESS_TOKEN_CACHE_KEY = 'mpesa:oauth:access-token';
+export const MPESA_LEDGER_IDEMPOTENCY_PREFIX = 'mpesa:checkout';
+export const MPESA_DEFAULT_CURRENCY_CODE = 'KES';
+export const MPESA_EXPIRED_PAYMENT_FAILURE_REASON = 'M-PESA callback not received before expiry';

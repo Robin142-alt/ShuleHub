@@ -1,0 +1,14 @@
+.git
+.github
+.railway
+.vercel
+node_modules
+dist
+artifacts
+coverage
+*.log
+.env
+.env.local
+.env.production
+.DS_Store
+mpesa-official.pdf

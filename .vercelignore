@@ -1,0 +1,6 @@
+.git
+artifacts
+dist
+mpesa-official.pdf
+apps/api/test
+coverage

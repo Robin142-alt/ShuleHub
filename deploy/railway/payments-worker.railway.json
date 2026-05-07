@@ -1,0 +1,22 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "npm run build",
+    "watchPatterns": [
+      "apps/**",
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json",
+      "Dockerfile",
+      ".dockerignore"
+    ]
+  },
+  "deploy": {
+    "startCommand": "node dist/apps/api/src/payments-worker.js",
+    "restartPolicyType": "ALWAYS",
+    "numReplicas": 1,
+    "overlapSeconds": 5,
+    "drainingSeconds": 5
+  }
+}

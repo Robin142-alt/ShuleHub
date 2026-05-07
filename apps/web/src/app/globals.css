@@ -1,0 +1,534 @@
+@import "tailwindcss";
+
+/* ─── Design Tokens ──────────────────────────────────────────────── */
+:root {
+  /* Surfaces */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-muted: #f8fafc;
+  --surface-strong: #f1f5f9;
+
+  /* Borders */
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  /* Accent — Emerald */
+  --accent: #059669;
+  --accent-hover: #047857;
+  --accent-soft: #d1fae5;
+  --accent-ghost: rgba(5, 150, 105, 0.06);
+  --accent-muted: rgba(5, 150, 105, 0.12);
+
+  /* Semantic */
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --danger-soft: #fee2e2;
+  --warning: #ea580c;
+  --warning-soft: #fff7ed;
+  --success: #059669;
+  --success-soft: #d1fae5;
+  --info: #2563eb;
+  --info-soft: #dbeafe;
+
+  /* Text */
+  --muted: #64748b;
+  --muted-strong: #475569;
+
+  /* Sidebar */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.03);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow:
+    0 1px 3px rgba(15, 23, 42, 0.06),
+    0 4px 16px rgba(15, 23, 42, 0.03);
+  --shadow-md:
+    0 4px 6px -1px rgba(15, 23, 42, 0.06),
+    0 10px 20px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg:
+    0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-focus: 0 0 0 3px var(--accent-ghost);
+
+  /* Radius — Strict system */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* Spacing — 4px base grid */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Transitions */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration: 150ms;
+  --duration-md: 200ms;
+  --duration-lg: 300ms;
+
+  /* Layout */
+  --sidebar-width: 240px;
+  --topbar-height: 56px;
+  --content-max-width: 1320px;
+}
+
+/* ─── Tailwind Theme Integration ─────────────────────────────────── */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-strong: var(--surface-strong);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ghost: var(--accent-ghost);
+  --color-accent-muted: var(--accent-muted);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+}
+
+/* ─── Base Resets ─────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  line-height: 1.5;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(5, 150, 105, 0.15);
+}
+
+/* ─── Dashboard Card ──────────────────────────────────────────────── */
+.dashboard-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-xs);
+  transition:
+    box-shadow var(--duration) var(--ease),
+    border-color var(--duration) var(--ease),
+    transform var(--duration) var(--ease);
+}
+
+.dashboard-card:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+/* ─── Status Classes ──────────────────────────────────────────────── */
+.status-critical {
+  color: var(--danger);
+}
+
+.status-warning {
+  color: var(--warning);
+}
+
+.status-ok {
+  color: var(--success);
+}
+
+/* ─── Skeleton Shimmer ────────────────────────────────────────────── */
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--surface-strong) 0%,
+    var(--surface) 50%,
+    var(--surface-strong) 100%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ─── Entrance Animations ─────────────────────────────────────────── */
+.auth-enter {
+  animation: auth-fade-up 280ms ease-out;
+}
+
+@keyframes auth-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: page-enter 200ms var(--ease-out);
+}
+
+/* Stagger animation for dashboard widgets */
+@keyframes widget-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.widget-enter {
+  animation: widget-enter 300ms var(--ease-out) both;
+}
+
+.widget-enter-delay-1 { animation-delay: 50ms; }
+.widget-enter-delay-2 { animation-delay: 100ms; }
+.widget-enter-delay-3 { animation-delay: 150ms; }
+.widget-enter-delay-4 { animation-delay: 200ms; }
+
+/* Fade in for floating panels */
+@keyframes fade-in-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.fade-in-panel {
+  animation: fade-in-scale 150ms var(--ease-out);
+}
+
+/* ─── Focus Ring ──────────────────────────────────────────────────── */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─── Input Styling ───────────────────────────────────────────────── */
+.input-base {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--foreground);
+  outline: none;
+  transition:
+    border-color var(--duration) var(--ease),
+    box-shadow var(--duration) var(--ease);
+}
+
+.input-base::placeholder {
+  color: var(--muted);
+}
+
+.input-base:focus,
+.input-focus:focus {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.input-base:hover:not(:focus) {
+  border-color: var(--border-strong);
+}
+
+/* ─── Custom Scrollbar ────────────────────────────────────────────── */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* ─── Finance Numbers ─────────────────────────────────────────────── */
+.finance-number {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  font-feature-settings: "tnum";
+}
+
+/* ─── Table Enhancements ──────────────────────────────────────────── */
+.table-row-hover {
+  transition: background-color var(--duration) var(--ease);
+}
+
+.table-row-hover:hover {
+  background-color: var(--accent-ghost);
+}
+
+/* Improved table row height and readability */
+.table-compact td,
+.table-compact th {
+  padding: 10px 16px;
+}
+
+/* ─── Eyebrow Text ────────────────────────────────────────────────── */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  line-height: 1;
+}
+
+/* ─── Section Title ───────────────────────────────────────────────── */
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground);
+  line-height: 1.3;
+}
+
+/* ─── Card Metric ─────────────────────────────────────────────────── */
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--foreground);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-value-sm {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--foreground);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Badge ───────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 100px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.badge-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.badge-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.badge-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.badge-info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.badge-neutral {
+  background: var(--surface-strong);
+  color: var(--muted-strong);
+}
+
+/* ─── Pulse animation for live indicators ─────────────────────────── */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.pulse-indicator {
+  position: relative;
+}
+
+.pulse-indicator::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+/* ─── Print Styles ────────────────────────────────────────────────── */
+@media print {
+  body {
+    background: white;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .dashboard-card {
+    box-shadow: none;
+    border: 1px solid #ddd;
+    break-inside: avoid;
+  }
+}
+
+/* ─── Responsive Helpers ──────────────────────────────────────────── */
+@media (max-width: 767px) {
+  .mobile-stack {
+    flex-direction: column;
+  }
+
+  .mobile-full {
+    width: 100%;
+  }
+
+  .mobile-hide {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .tablet-hide {
+    display: none;
+  }
+}
+
+/* ─── Truncate Multi-line ─────────────────────────────────────────── */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* ─── Smooth transitions for sidebar ──────────────────────────────── */
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.slide-in-sidebar {
+  animation: slide-in-left 200ms var(--ease-out);
+}
+
+/* ─── Data density helpers ────────────────────────────────────────── */
+.data-grid {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .data-grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .data-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .data-grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}

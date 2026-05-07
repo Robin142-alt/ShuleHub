@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.worktrees/
+.env
+.env.local
+.env.production
+.env.production.local
+.DS_Store
+npm-debug.log*
+.vercel
+.railway
+railway.json
+.npm-cache/
+artifacts/

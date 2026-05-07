@@ -1,0 +1,257 @@
+# ShuleHub Production Docker Compose
+# Includes: NGINX reverse proxy, PgBouncer connection pooler, multi-replica API
+#
+# Usage:
+#   docker compose -f docker-compose.production.yml up --build -d
+#
+# Architecture:
+#   Internet → NGINX (443/80) → API instances (3000) → PgBouncer (6432) → PostgreSQL (5432)
+#                                                    → Redis (6379)
+
+services:
+  # ──────────────────────────────────────────────────────────────────
+  # NGINX Reverse Proxy / Load Balancer
+  # ──────────────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: shule-hub-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────────────────────────────
+  # PostgreSQL 16
+  # ──────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: shule-hub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-shule_hub}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=768MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_buffers=16MB
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - log_min_duration_statement=500
+      - -c
+      - log_checkpoints=on
+      - -c
+      - log_lock_waits=on
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ──────────────────────────────────────────────────────────────────
+  # PgBouncer — Connection Pooler
+  # ──────────────────────────────────────────────────────────────────
+  pgbouncer:
+    image: bitnami/pgbouncer:1
+    container_name: shule-hub-pgbouncer
+    restart: unless-stopped
+    environment:
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_PORT: "5432"
+      POSTGRESQL_DATABASE: ${POSTGRES_DB:-shule_hub}
+      POSTGRESQL_USERNAME: ${POSTGRES_USER:-postgres}
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGBOUNCER_DATABASE: ${POSTGRES_DB:-shule_hub}
+      PGBOUNCER_PORT: "6432"
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: "1000"
+      PGBOUNCER_DEFAULT_POOL_SIZE: "50"
+      PGBOUNCER_MIN_POOL_SIZE: "10"
+      PGBOUNCER_RESERVE_POOL_SIZE: "10"
+      PGBOUNCER_RESERVE_POOL_TIMEOUT: "3"
+      PGBOUNCER_SERVER_IDLE_TIMEOUT: "600"
+      PGBOUNCER_SERVER_LIFETIME: "3600"
+      PGBOUNCER_STATS_PERIOD: "60"
+      PGBOUNCER_LOG_CONNECTIONS: "0"
+      PGBOUNCER_LOG_DISCONNECTIONS: "0"
+    ports:
+      - "${PGBOUNCER_PORT:-6432}:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-p", "6432"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ──────────────────────────────────────────────────────────────────
+  # Redis 7
+  # ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: shule-hub-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - "256mb"
+      - --maxmemory-policy
+      - allkeys-lru
+      - --tcp-keepalive
+      - "300"
+      - --timeout
+      - "300"
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ──────────────────────────────────────────────────────────────────
+  # NestJS API (scalable replicas)
+  # ──────────────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    deploy:
+      replicas: ${API_REPLICAS:-3}
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    env_file:
+      - .env.production
+    environment:
+      PORT: 3000
+      APP_RUNTIME: server
+      # Point at PgBouncer instead of directly at PostgreSQL
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgbouncer:6432/${POSTGRES_DB:-shule_hub}
+      REDIS_URL: redis://redis:6379
+      EVENTS_DISPATCHER_ENABLED: "false"
+      EVENTS_WORKER_ENABLED: "false"
+      OBSERVABILITY_SLO_BACKGROUND_ENABLED: "false"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const http=require('http');const req=http.get({host:'127.0.0.1',port:3000,path:'/health'},res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  # ──────────────────────────────────────────────────────────────────
+  # Payments Worker (dedicated BullMQ processor)
+  # ──────────────────────────────────────────────────────────────────
+  payments-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    deploy:
+      replicas: ${PAYMENTS_WORKER_REPLICAS:-2}
+      resources:
+        limits:
+          memory: 384M
+          cpus: '0.35'
+        reservations:
+          memory: 192M
+          cpus: '0.15'
+    command: ["node", "dist/apps/api/src/payments-worker.js"]
+    env_file:
+      - .env.production
+    environment:
+      APP_RUNTIME: worker
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgbouncer:6432/${POSTGRES_DB:-shule_hub}
+      REDIS_URL: redis://redis:6379
+      EVENTS_DISPATCHER_ENABLED: "false"
+      EVENTS_WORKER_ENABLED: "false"
+      OBSERVABILITY_SLO_BACKGROUND_ENABLED: "false"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ──────────────────────────────────────────────────────────────────
+  # Events Worker (outbox dispatcher + consumer)
+  # ──────────────────────────────────────────────────────────────────
+  events-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    deploy:
+      replicas: ${EVENTS_WORKER_REPLICAS:-2}
+      resources:
+        limits:
+          memory: 384M
+          cpus: '0.35'
+        reservations:
+          memory: 192M
+          cpus: '0.15'
+    command: ["node", "dist/apps/api/src/events-worker.js"]
+    env_file:
+      - .env.production
+    environment:
+      APP_RUNTIME: worker
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgbouncer:6432/${POSTGRES_DB:-shule_hub}
+      REDIS_URL: redis://redis:6379
+      EVENTS_DISPATCHER_ENABLED: "true"
+      EVENTS_WORKER_ENABLED: "true"
+      OBSERVABILITY_SLO_BACKGROUND_ENABLED: "false"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

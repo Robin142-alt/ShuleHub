@@ -1,0 +1,724 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Users\user\AppData\Roaming\npm\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.6.1
+2 info using node@v22.20.0
+3 silly config load:file:C:\Users\user\AppData\Roaming\npm\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\user\Desktop\PROJECTS\Shule hub\apps\web\.npmrc
+5 silly config load:file:C:\Users\user\.npmrc
+6 silly config load:file:C:\Users\user\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm exec vercel deploy --prebuilt --prod --yes
+8 verbose argv "exec" "--" "vercel" "deploy" "--prebuilt" "--prod" "--yes"
+9 verbose logfile logs-max:10 dir:C:\Users\user\Desktop\PROJECTS\Shule hub\apps\web\.npm-cache\_logs\2026-05-06T19_38_54_252Z-
+10 verbose logfile C:\Users\user\Desktop\PROJECTS\Shule hub\apps\web\.npm-cache\_logs\2026-05-06T19_38_54_252Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:2197815296 maxSize:549453824 maxEntrySize:274726912
+13 http fetch GET 200 https://registry.npmjs.org/vercel 1394ms (cache updated)
+14 silly packumentCache heap:2197815296 maxSize:549453824 maxEntrySize:274726912
+15 silly packumentCache heap:2197815296 maxSize:549453824 maxEntrySize:274726912
+16 warn exec The following package was not found and will be installed: vercel@53.2.0
+17 silly idealTree buildDeps
+18 silly fetch manifest vercel@53.2.0
+19 silly packumentCache full:https://registry.npmjs.org/vercel cache-miss
+20 http fetch GET 200 https://registry.npmjs.org/vercel 871ms (cache updated)
+21 silly packumentCache full:https://registry.npmjs.org/vercel set size:undefined disposed:false
+22 silly placeDep ROOT vercel@53.2.0 REPLACE for:  want: 53.2.0
+23 silly fetch manifest @vercel/next@4.17.1
+24 silly packumentCache full:https://registry.npmjs.org/@vercel%2fnext cache-miss
+25 silly fetch manifest @vercel/python@6.38.0
+26 silly packumentCache full:https://registry.npmjs.org/@vercel%2fpython cache-miss
+27 silly fetch manifest @vercel/remix-builder@5.8.1
+28 silly packumentCache full:https://registry.npmjs.org/@vercel%2fremix-builder cache-miss
+29 http fetch GET 200 https://registry.npmjs.org/@vercel%2fnext 1349ms (cache updated)
+30 silly packumentCache full:https://registry.npmjs.org/@vercel%2fnext set size:undefined disposed:false
+31 http fetch GET 200 https://registry.npmjs.org/@vercel%2fremix-builder 1480ms (cache updated)
+32 silly packumentCache full:https://registry.npmjs.org/@vercel%2fremix-builder set size:undefined disposed:false
+33 http fetch GET 200 https://registry.npmjs.org/@vercel%2fpython 2750ms (cache updated)
+34 silly packumentCache full:https://registry.npmjs.org/@vercel%2fpython set size:undefined disposed:false
+35 silly fetch manifest @emnapi/core@^1.7.1
+36 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fcore cache-miss
+37 http fetch GET 200 https://registry.npmjs.org/@emnapi%2fcore 773ms (cache revalidated)
+38 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fcore set size:105841 disposed:false
+39 silly fetch manifest @emnapi/runtime@^1.7.1
+40 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime cache-miss
+41 http fetch GET 200 https://registry.npmjs.org/@emnapi%2fruntime 760ms (cache revalidated)
+42 silly packumentCache full:https://registry.npmjs.org/@emnapi%2fruntime set size:108129 disposed:false
+43 silly placeDep ROOT @emnapi/core@1.10.0 OK for: @napi-rs/wasm-runtime@1.1.4 want: ^1.7.1
+44 silly placeDep ROOT @emnapi/runtime@1.10.0 OK for: @napi-rs/wasm-runtime@1.1.4 want: ^1.7.1
+45 silly placeDep ROOT @vercel/next@4.17.1 OK for: vercel@53.2.0 want: 4.17.1
+46 silly placeDep ROOT @vercel/python@6.38.0 OK for: vercel@53.2.0 want: 6.38.0
+47 silly placeDep ROOT @vercel/remix-builder@5.8.1 OK for: vercel@53.2.0 want: 5.8.1
+48 silly fetch manifest path-to-regexp@6.1.0
+49 silly packumentCache full:https://registry.npmjs.org/path-to-regexp cache-miss
+50 http fetch GET 200 https://registry.npmjs.org/path-to-regexp 24ms (cache revalidated)
+51 silly packumentCache full:https://registry.npmjs.org/path-to-regexp set size:216334 disposed:false
+52 silly placeDep node_modules/@vercel/remix-builder path-to-regexp@6.1.0 OK for: @vercel/remix-builder@5.8.1 want: 6.1.0
+53 silly reify mark retired [
+53 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\@vercel\\next'
+53 silly reify ]
+54 silly reify mark retired [
+54 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\@vercel\\python'
+54 silly reify ]
+55 silly reify mark retired [
+55 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\@vercel\\remix-builder'
+55 silly reify ]
+56 silly reify mark retired [
+56 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\vercel',
+56 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vc',
+56 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vc.cmd',
+56 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vc.ps1',
+56 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vercel',
+56 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vercel.cmd',
+56 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vercel.ps1'
+56 silly reify ]
+57 silly reify moves {
+57 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\@vercel\\next': 'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\@vercel\\.next-1pvfvpr5',
+57 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\@vercel\\python': 'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\@vercel\\.python-kJjUeeKk',
+57 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\@vercel\\remix-builder': 'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\@vercel\\.remix-builder-QHkEwEYx',
+57 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\vercel': 'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.vercel-ZbB5glT6',
+57 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vc': 'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\.vc-g8cp2k9L',
+57 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vc.cmd': 'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\.vc.cmd-p83PvoUB',
+57 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vc.ps1': 'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\.vc.ps1-ITxbpw0j',
+57 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vercel': 'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\.vercel-2Vu6aqFN',
+57 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vercel.cmd': 'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\.vercel.cmd-kA44UxYY',
+57 silly reify   'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\vercel.ps1': 'C:\\Users\\user\\Desktop\\PROJECTS\\Shule hub\\apps\\web\\.npm-cache\\_npx\\69f9afb961c37556\\node_modules\\.bin\\.vercel.ps1-JwD2HDea'
+57 silly reify }
+58 silly audit bulk request {
+58 silly audit   '@bytecodealliance/preview2-shim': [ '0.17.6' ],
+58 silly audit   '@edge-runtime/format': [ '2.2.1' ],
+58 silly audit   '@edge-runtime/node-utils': [ '2.3.0' ],
+58 silly audit   '@edge-runtime/ponyfill': [ '2.4.2' ],
+58 silly audit   '@edge-runtime/primitives': [ '4.1.0' ],
+58 silly audit   '@edge-runtime/vm': [ '3.2.0' ],
+58 silly audit   '@emnapi/wasi-threads': [ '1.2.1' ],
+58 silly audit   '@esbuild/aix-ppc64': [ '0.27.0' ],
+58 silly audit   '@esbuild/android-arm': [ '0.27.0' ],
+58 silly audit   '@esbuild/android-arm64': [ '0.27.0' ],
+58 silly audit   '@esbuild/android-x64': [ '0.27.0' ],
+58 silly audit   '@esbuild/darwin-arm64': [ '0.27.0' ],
+58 silly audit   '@esbuild/darwin-x64': [ '0.27.0' ],
+58 silly audit   '@esbuild/freebsd-arm64': [ '0.27.0' ],
+58 silly audit   '@esbuild/freebsd-x64': [ '0.27.0' ],
+58 silly audit   '@esbuild/linux-arm': [ '0.27.0' ],
+58 silly audit   '@esbuild/linux-arm64': [ '0.27.0' ],
+58 silly audit   '@esbuild/linux-ia32': [ '0.27.0' ],
+58 silly audit   '@esbuild/linux-loong64': [ '0.27.0' ],
+58 silly audit   '@esbuild/linux-mips64el': [ '0.27.0' ],
+58 silly audit   '@esbuild/linux-ppc64': [ '0.27.0' ],
+58 silly audit   '@esbuild/linux-riscv64': [ '0.27.0' ],
+58 silly audit   '@esbuild/linux-s390x': [ '0.27.0' ],
+58 silly audit   '@esbuild/linux-x64': [ '0.27.0' ],
+58 silly audit   '@esbuild/netbsd-arm64': [ '0.27.0' ],
+58 silly audit   '@esbuild/netbsd-x64': [ '0.27.0' ],
+58 silly audit   '@esbuild/openbsd-arm64': [ '0.27.0' ],
+58 silly audit   '@esbuild/openbsd-x64': [ '0.27.0' ],
+58 silly audit   '@esbuild/openharmony-arm64': [ '0.27.0' ],
+58 silly audit   '@esbuild/sunos-x64': [ '0.27.0' ],
+58 silly audit   '@esbuild/win32-arm64': [ '0.27.0' ],
+58 silly audit   '@esbuild/win32-ia32': [ '0.27.0' ],
+58 silly audit   '@esbuild/win32-x64': [ '0.27.0' ],
+58 silly audit   '@fastify/busboy': [ '2.1.1' ],
+58 silly audit   '@isaacs/balanced-match': [ '4.0.1' ],
+58 silly audit   '@isaacs/brace-expansion': [ '5.0.1' ],
+58 silly audit   '@isaacs/fs-minipass': [ '4.0.1' ],
+58 silly audit   '@mapbox/node-pre-gyp': [ '2.0.3' ],
+58 silly audit   '@napi-rs/wasm-runtime': [ '1.1.4' ],
+58 silly audit   '@nodelib/fs.scandir': [ '2.1.5' ],
+58 silly audit   '@nodelib/fs.stat': [ '2.0.5' ],
+58 silly audit   '@nodelib/fs.walk': [ '1.2.8' ],
+58 silly audit   '@oxc-project/types': [ '0.110.0' ],
+58 silly audit   '@oxc-transform/binding-android-arm-eabi': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-android-arm64': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-darwin-arm64': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-darwin-x64': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-freebsd-x64': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-linux-arm-gnueabihf': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-linux-arm-musleabihf': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-linux-arm64-gnu': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-linux-arm64-musl': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-linux-ppc64-gnu': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-linux-riscv64-gnu': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-linux-riscv64-musl': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-linux-s390x-gnu': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-linux-x64-gnu': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-linux-x64-musl': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-openharmony-arm64': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-wasm32-wasi': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-win32-arm64-msvc': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-win32-ia32-msvc': [ '0.111.0' ],
+58 silly audit   '@oxc-transform/binding-win32-x64-msvc': [ '0.111.0' ],
+58 silly audit   '@renovatebot/pep440': [ '4.2.1' ],
+58 silly audit   '@rolldown/binding-android-arm64': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-darwin-arm64': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-darwin-x64': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-freebsd-x64': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-linux-arm-gnueabihf': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-linux-arm64-gnu': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-linux-arm64-musl': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-linux-x64-gnu': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-linux-x64-musl': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-openharmony-arm64': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-wasm32-wasi': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-win32-arm64-msvc': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/binding-win32-x64-msvc': [ '1.0.0-rc.1' ],
+58 silly audit   '@rolldown/pluginutils': [ '1.0.0-rc.1' ],
+58 silly audit   '@rollup/pluginutils': [ '5.3.0' ],
+58 silly audit   '@sinclair/typebox': [ '0.25.24' ],
+58 silly audit   '@tootallnate/once': [ '2.0.0' ],
+58 silly audit   '@tootallnate/quickjs-emscripten': [ '0.23.0' ],
+58 silly audit   '@ts-morph/common': [ '0.11.1' ],
+58 silly audit   minimatch: [ '3.1.5', '10.2.5', '10.1.1' ],
+58 silly audit   '@tybys/wasm-util': [ '0.10.1' ],
+58 silly audit   '@types/estree': [ '1.0.8' ],
+58 silly audit   '@types/json-schema': [ '7.0.15' ],
+58 silly audit   '@types/node': [ '20.11.0' ],
+58 silly audit   '@vercel/backends': [ '0.3.0' ],
+58 silly audit   '@vercel/blob': [ '2.3.0' ],
+58 silly audit   '@vercel/build-utils': [ '13.21.0' ],
+58 silly audit   '@vercel/cervel': [ '0.1.0' ],
+58 silly audit   '@vercel/detect-agent': [ '1.2.3' ],
+58 silly audit   '@vercel/elysia': [ '0.1.73' ],
+58 silly audit   '@vercel/error-utils': [ '2.1.0' ],
+58 silly audit   '@vercel/express': [ '0.1.83' ],
+58 silly audit   '@vercel/fastify': [ '0.1.76' ],
+58 silly audit   '@vercel/fun': [ '1.3.0' ],
+58 silly audit   'async-listen': [ '1.2.0', '3.0.0', '3.0.1' ],
+58 silly audit   'path-to-regexp': [ '8.2.0', '6.1.0', '8.3.0', '6.3.0' ],
+58 silly audit   'xdg-app-paths': [ '5.1.0' ],
+58 silly audit   '@vercel/gatsby-plugin-vercel-analytics': [ '1.0.11' ],
+58 silly audit   '@vercel/gatsby-plugin-vercel-builder': [ '2.2.0' ],
+58 silly audit   '@vercel/go': [ '3.6.0' ],
+58 silly audit   '@vercel/h3': [ '0.1.82' ],
+58 silly audit   '@vercel/hono': [ '0.2.76' ],
+58 silly audit   '@vercel/hydrogen': [ '1.3.7' ],
+58 silly audit   '@vercel/koa': [ '0.1.56' ],
+58 silly audit   '@vercel/nestjs': [ '0.2.77' ],
+58 silly audit   '@vercel/nft': [ '1.5.0' ],
+58 silly audit   '@vercel/node': [ '5.7.15' ],
+58 silly audit   'es-module-lexer': [ '1.4.1', '1.5.0' ],
+58 silly audit   'node-fetch': [ '2.6.9', '2.6.7' ],
+58 silly audit   undici: [ '5.28.4', '7.25.0', '6.25.0' ],
+58 silly audit   '@vercel/oidc': [ '3.2.0' ],
+58 silly audit   '@vercel/prepare-flags-definitions': [ '0.2.1' ],
+58 silly audit   '@vercel/python-analysis': [ '0.11.1' ],
+58 silly audit   argparse: [ '2.0.1', '1.0.10' ],
+58 silly audit   'fs-extra': [ '11.1.1', '11.1.0' ],
+58 silly audit   'js-yaml': [ '4.1.1', '3.14.2' ],
+58 silly audit   '@vercel/redwood': [ '2.4.13' ],
+58 silly audit   semver: [ '6.3.1', '7.5.4' ],
+58 silly audit   '@vercel/ruby': [ '2.3.2' ],
+58 silly audit   '@vercel/rust': [ '1.2.0' ],
+58 silly audit   execa: [ '5.1.1', '3.2.0' ],
+58 silly audit   'get-stream': [ '6.0.1', '5.2.0' ],
+58 silly audit   'human-signals': [ '2.1.0', '1.1.1' ],
+58 silly audit   'signal-exit': [ '3.0.7', '4.0.2' ],
+58 silly audit   '@vercel/sandbox': [ '1.9.0' ],
+58 silly audit   ms: [ '2.1.3', '2.1.2', '2.1.1' ],
+58 silly audit   picocolors: [ '1.1.1', '1.0.0' ],
+58 silly audit   zod: [ '3.24.4', '4.3.6', '3.22.4' ],
+58 silly audit   '@vercel/static-build': [ '2.9.22' ],
+58 silly audit   '@vercel/static-config': [ '3.3.0' ],
+58 silly audit   '@yarnpkg/parsers': [ '3.0.3' ],
+58 silly audit   abbrev: [ '3.0.1' ],
+58 silly audit   acorn: [ '8.16.0' ],
+58 silly audit   'acorn-import-attributes': [ '1.9.5' ],
+58 silly audit   'agent-base': [ '7.1.4' ],
+58 silly audit   ajv: [ '8.6.3' ],
+58 silly audit   'any-promise': [ '1.3.0' ],
+58 silly audit   arg: [ '4.1.0' ],
+58 silly audit   'ast-types': [ '0.13.4' ],
+58 silly audit   'async-retry': [ '1.3.3' ],
+58 silly audit   'async-sema': [ '3.1.1' ],
+58 silly audit   asynckit: [ '0.4.0' ],
+58 silly audit   b4a: [ '1.8.0' ],
+58 silly audit   'balanced-match': [ '1.0.2', '4.0.4' ],
+58 silly audit   'bare-events': [ '2.8.2' ],
+58 silly audit   'basic-ftp': [ '5.3.1' ],
+58 silly audit   bindings: [ '1.5.0' ],
+58 silly audit   'brace-expansion': [ '1.1.14', '5.0.5' ],
+58 silly audit   braces: [ '3.0.3' ],
+58 silly audit   'buffer-crc32': [ '0.2.13' ],
+58 silly audit   bytes: [ '3.1.0' ],
+58 silly audit   'call-bind-apply-helpers': [ '1.0.2' ],
+58 silly audit   chokidar: [ '4.0.0' ],
+58 silly audit   chownr: [ '3.0.0' ],
+58 silly audit   'cjs-module-lexer': [ '1.2.3' ],
+58 silly audit   'code-block-writer': [ '10.1.1' ],
+58 silly audit   'combined-stream': [ '1.0.8' ],
+58 silly audit   'concat-map': [ '0.0.1' ],
+58 silly audit   consola: [ '3.4.2' ],
+58 silly audit   'content-type': [ '1.0.4' ],
+58 silly audit   'convert-hrtime': [ '3.0.0' ],
+58 silly audit   'cookie-es': [ '2.0.1' ],
+58 silly audit   'cross-spawn': [ '7.0.6' ],
+58 silly audit   'data-uri-to-buffer': [ '6.0.2' ],
+58 silly audit   debug: [ '4.3.4', '4.4.3' ],
+58 silly audit   degenerator: [ '5.0.1' ],
+58 silly audit   'delayed-stream': [ '1.0.0' ],
+58 silly audit   depd: [ '1.1.2' ],
+58 silly audit   'detect-libc': [ '2.1.2' ],
+58 silly audit   'dunder-proto': [ '1.0.1' ],
+58 silly audit   'edge-runtime': [ '2.5.9' ],
+58 silly audit   'end-of-stream': [ '1.4.5', '1.1.0' ],
+58 silly audit   'es-define-property': [ '1.0.1' ],
+58 silly audit   'es-errors': [ '1.3.0' ],
+58 silly audit   'es-object-atoms': [ '1.1.1' ],
+58 silly audit   'es-set-tostringtag': [ '2.1.0' ],
+58 silly audit   esbuild: [ '0.27.0' ],
+58 silly audit   escodegen: [ '2.1.0' ],
+58 silly audit   esprima: [ '4.0.1' ],
+58 silly audit   estraverse: [ '5.3.0' ],
+58 silly audit   'estree-walker': [ '2.0.2' ],
+58 silly audit   esutils: [ '2.0.3' ],
+58 silly audit   etag: [ '1.8.1' ],
+58 silly audit   'events-intercept': [ '2.0.0' ],
+58 silly audit   'events-universal': [ '1.0.1' ],
+58 silly audit   'fast-deep-equal': [ '3.1.3' ],
+58 silly audit   'fast-fifo': [ '1.3.2' ],
+58 silly audit   'fast-glob': [ '3.3.3' ],
+58 silly audit   fastq: [ '1.20.1' ],
+58 silly audit   'fd-slicer': [ '1.1.0' ],
+58 silly audit   'file-uri-to-path': [ '1.0.0' ],
+58 silly audit   'fill-range': [ '7.1.1' ],
+58 silly audit   'form-data': [ '4.0.5' ],
+58 silly audit   fsevents: [ '2.3.3' ],
+58 silly audit   'function-bind': [ '1.1.2' ],
+58 silly audit   'generic-pool': [ '3.4.2' ],
+58 silly audit   'get-intrinsic': [ '1.3.0' ],
+58 silly audit   'get-proto': [ '1.0.1' ],
+58 silly audit   'get-tsconfig': [ '4.14.0' ],
+58 silly audit   'get-uri': [ '6.0.5' ],
+58 silly audit   glob: [ '13.0.6' ],
+58 silly audit   'glob-parent': [ '5.1.2' ],
+58 silly audit   gopd: [ '1.2.0' ],
+58 silly audit   'graceful-fs': [ '4.2.11' ],
+58 silly audit   'has-symbols': [ '1.1.0' ],
+58 silly audit   'has-tostringtag': [ '1.0.2' ],
+58 silly audit   hasown: [ '2.0.3' ],
+58 silly audit   'http-errors': [ '1.7.3' ],
+58 silly audit   'http-proxy-agent': [ '7.0.2' ],
+58 silly audit   'https-proxy-agent': [ '7.0.6' ],
+58 silly audit   'iconv-lite': [ '0.4.24' ],
+58 silly audit   inherits: [ '2.0.4' ],
+58 silly audit   'ip-address': [ '10.1.1' ],
+58 silly audit   'is-buffer': [ '2.0.5' ],
+58 silly audit   'is-extglob': [ '2.1.1' ],
+58 silly audit   'is-glob': [ '4.0.3' ],
+58 silly audit   'is-node-process': [ '1.2.0' ],
+58 silly audit   'is-number': [ '7.0.0' ],
+58 silly audit   'is-stream': [ '2.0.1' ],
+58 silly audit   isexe: [ '2.0.0' ],
+58 silly audit   jose: [ '5.9.6' ],
+58 silly audit   'json-schema-to-ts': [ '1.6.4' ],
+58 silly audit   'json-schema-traverse': [ '1.0.0' ],
+58 silly audit   jsonfile: [ '6.2.1' ],
+58 silly audit   jsonlines: [ '0.1.1' ],
+58 silly audit   'lru-cache': [ '11.3.5', '7.18.3', '6.0.0' ],
+58 silly audit   luxon: [ '3.7.2' ],
+58 silly audit   'math-intrinsics': [ '1.1.0' ],
+58 silly audit   'merge-stream': [ '2.0.0' ],
+58 silly audit   merge2: [ '1.4.1' ],
+58 silly audit   micro: [ '9.3.5-canary.3' ],
+58 silly audit   micromatch: [ '4.0.8' ],
+58 silly audit   picomatch: [ '2.3.2', '4.0.4' ],
+58 silly audit   'mime-db': [ '1.52.0' ],
+58 silly audit   'mime-types': [ '2.1.35' ],
+58 silly audit   'mimic-fn': [ '2.1.0' ],
+58 silly audit   minipass: [ '7.1.3' ],
+58 silly audit   minizlib: [ '3.1.0' ],
+58 silly audit   mkdirp: [ '1.0.4' ],
+58 silly audit   mri: [ '1.2.0' ],
+58 silly audit   netmask: [ '2.1.1' ],
+58 silly audit   'node-gyp-build': [ '4.8.4' ],
+58 silly audit   nopt: [ '8.1.0' ],
+58 silly audit   'npm-run-path': [ '4.0.1' ],
+58 silly audit   once: [ '1.4.0', '1.3.3' ],
+58 silly audit   onetime: [ '5.1.2' ],
+58 silly audit   'os-paths': [ '4.4.0' ],
+58 silly audit   'oxc-transform': [ '0.111.0' ],
+58 silly audit   'p-finally': [ '2.0.1' ],
+58 silly audit   'pac-proxy-agent': [ '7.2.0' ],
+58 silly audit   'pac-resolver': [ '7.0.1' ],
+58 silly audit   'parse-ms': [ '2.1.0' ],
+58 silly audit   'path-browserify': [ '1.0.1' ],
+58 silly audit   'path-key': [ '3.1.1' ],
+58 silly audit   'path-scurry': [ '2.0.2' ],
+58 silly audit   pend: [ '1.2.0' ],
+58 silly audit   'pretty-ms': [ '7.0.1' ],
+58 silly audit   promisepipe: [ '3.0.0' ],
+58 silly audit   'proxy-agent': [ '6.4.0' ],
+58 silly audit   'proxy-from-env': [ '1.1.0' ],
+58 silly audit   pump: [ '3.0.4' ],
+58 silly audit   punycode: [ '2.3.1' ],
+58 silly audit   'queue-microtask': [ '1.2.3' ],
+58 silly audit   'raw-body': [ '2.4.1' ],
+58 silly audit   readdirp: [ '4.1.2' ],
+58 silly audit   'require-from-string': [ '2.0.2' ],
+58 silly audit   'resolve-from': [ '5.0.0' ],
+58 silly audit   'resolve-pkg-maps': [ '1.0.0' ],
+58 silly audit   'resolve.exports': [ '2.0.3' ],
+58 silly audit   retry: [ '0.13.1' ],
+58 silly audit   reusify: [ '1.1.0' ],
+58 silly audit   rolldown: [ '1.0.0-rc.1' ],
+58 silly audit   'run-parallel': [ '1.2.0' ],
+58 silly audit   'safer-buffer': [ '2.1.2' ],
+58 silly audit   sandbox: [ '2.5.6' ],
+58 silly audit   yallist: [ '4.0.0', '5.0.0' ],
+58 silly audit   setprototypeof: [ '1.1.1' ],
+58 silly audit   'shebang-command': [ '2.0.0' ],
+58 silly audit   'shebang-regex': [ '3.0.0' ],
+58 silly audit   'smart-buffer': [ '4.2.0' ],
+58 silly audit   'smol-toml': [ '1.5.2' ],
+58 silly audit   socks: [ '2.8.8' ],
+58 silly audit   'socks-proxy-agent': [ '8.0.5' ],
+58 silly audit   'source-map': [ '0.6.1' ],
+58 silly audit   'sprintf-js': [ '1.0.3' ],
+58 silly audit   srvx: [ '0.8.9' ],
+58 silly audit   'stat-mode': [ '0.3.0' ],
+58 silly audit   statuses: [ '1.5.0' ],
+58 silly audit   'stream-to-array': [ '2.3.0' ],
+58 silly audit   'stream-to-promise': [ '2.2.0' ],
+58 silly audit   streamx: [ '2.25.0' ],
+58 silly audit   'strip-final-newline': [ '2.0.0' ],
+58 silly audit   tar: [ '7.5.7' ],
+58 silly audit   'tar-stream': [ '3.1.7' ],
+58 silly audit   'text-decoder': [ '1.2.7' ],
+58 silly audit   throttleit: [ '2.1.0' ],
+58 silly audit   'time-span': [ '4.0.0' ],
+58 silly audit   tinyexec: [ '0.3.2' ],
+58 silly audit   'to-regex-range': [ '5.0.1' ],
+58 silly audit   toidentifier: [ '1.0.0' ],
+58 silly audit   tr46: [ '0.0.3' ],
+58 silly audit   'tree-kill': [ '1.2.2' ],
+58 silly audit   'ts-morph': [ '12.0.0' ],
+58 silly audit   'ts-toolbelt': [ '6.15.5' ],
+58 silly audit   tslib: [ '2.8.1' ],
+58 silly audit   tsx: [ '4.21.0' ],
+58 silly audit   typescript: [ '5.9.3' ],
+58 silly audit   'uid-promise': [ '1.0.0' ],
+58 silly audit   'undici-types': [ '5.26.5' ],
+58 silly audit   universalify: [ '2.0.1' ],
+58 silly audit   unpipe: [ '1.0.0' ],
+58 silly audit   'uri-js': [ '4.4.1' ],
+58 silly audit   'web-vitals': [ '0.2.4' ],
+58 silly audit   'webidl-conversions': [ '3.0.1' ],
+58 silly audit   'whatwg-url': [ '5.0.0' ],
+58 silly audit   which: [ '2.0.2' ],
+58 silly audit   wrappy: [ '1.0.2' ],
+58 silly audit   'xdg-portable': [ '7.3.0' ],
+58 silly audit   yauzl: [ '2.10.0' ],
+58 silly audit   'yauzl-clone': [ '1.0.4' ],
+58 silly audit   'yauzl-promise': [ '2.1.3' ],
+58 silly audit   vercel: [ '53.2.0' ],
+58 silly audit   '@vercel/next': [ '4.17.1' ],
+58 silly audit   '@vercel/python': [ '6.38.0' ],
+58 silly audit   '@vercel/remix-builder': [ '5.8.1' ]
+58 silly audit }
+59 http cache vercel@https://registry.npmjs.org/vercel/-/vercel-53.2.0.tgz 0ms (cache hit)
+60 http cache @vercel/remix-builder@https://registry.npmjs.org/@vercel/remix-builder/-/remix-builder-5.8.1.tgz 0ms (cache hit)
+61 http cache @vercel/python@https://registry.npmjs.org/@vercel/python/-/python-6.38.0.tgz 0ms (cache hit)
+62 http cache @vercel/next@https://registry.npmjs.org/@vercel/next/-/next-4.17.1.tgz 0ms (cache hit)
+63 silly tarball no local data for vercel@https://registry.npmjs.org/vercel/-/vercel-53.2.0.tgz. Extracting by manifest.
+64 silly tarball no local data for @vercel/remix-builder@https://registry.npmjs.org/@vercel/remix-builder/-/remix-builder-5.8.1.tgz. Extracting by manifest.
+65 silly tarball no local data for @vercel/python@https://registry.npmjs.org/@vercel/python/-/python-6.38.0.tgz. Extracting by manifest.
+66 silly tarball no local data for @vercel/next@https://registry.npmjs.org/@vercel/next/-/next-4.17.1.tgz. Extracting by manifest.
+67 http fetch GET 200 https://registry.npmjs.org/@vercel/remix-builder/-/remix-builder-5.8.1.tgz 655ms (cache miss)
+68 http fetch GET 200 https://registry.npmjs.org/@vercel/python/-/python-6.38.0.tgz 681ms (cache miss)
+69 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 775ms
+70 silly audit report {
+70 silly audit report   '@tootallnate/once': [
+70 silly audit report     {
+70 silly audit report       id: 1113977,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-vpq2-c234-7xj6',
+70 silly audit report       title: '@tootallnate/once vulnerable to Incorrect Control Flow Scoping',
+70 silly audit report       severity: 'low',
+70 silly audit report       vulnerable_versions: '<3.0.1',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     }
+70 silly audit report   ],
+70 silly audit report   minimatch: [
+70 silly audit report     {
+70 silly audit report       id: 1113466,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-3ppc-4f35-3m26',
+70 silly audit report       title: 'minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern',
+70 silly audit report       severity: 'high',
+70 silly audit report       vulnerable_versions: '>=10.0.0 <10.2.1',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1113545,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-7r86-cg39-jmmj',
+70 silly audit report       title: 'minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments',
+70 silly audit report       severity: 'high',
+70 silly audit report       vulnerable_versions: '>=10.0.0 <10.2.3',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1113553,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-23c5-xmqv-rm74',
+70 silly audit report       title: 'minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions',
+70 silly audit report       severity: 'high',
+70 silly audit report       vulnerable_versions: '>=10.0.0 <10.2.3',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     }
+70 silly audit report   ],
+70 silly audit report   'path-to-regexp': [
+70 silly audit report     {
+70 silly audit report       id: 1101846,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-9wv6-86v2-598j',
+70 silly audit report       title: 'path-to-regexp outputs backtracking regular expressions',
+70 silly audit report       severity: 'high',
+70 silly audit report       vulnerable_versions: '>=4.0.0 <6.3.0',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1115573,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-j3q9-mxjg-w52f',
+70 silly audit report       title: 'path-to-regexp vulnerable to Denial of Service via sequential optional groups',
+70 silly audit report       severity: 'high',
+70 silly audit report       vulnerable_versions: '>=8.0.0 <8.4.0',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1115582,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-27v5-c462-wpq7',
+70 silly audit report       title: 'path-to-regexp vulnerable to Regular Expression Denial of Service via multiple wildcards',
+70 silly audit report       severity: 'moderate',
+70 silly audit report       vulnerable_versions: '>=8.0.0 <8.4.0',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     }
+70 silly audit report   ],
+70 silly audit report   undici: [
+70 silly audit report     {
+70 silly audit report       id: 1101610,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-c76h-2ccp-4975',
+70 silly audit report       title: 'Use of Insufficiently Random Values in undici',
+70 silly audit report       severity: 'moderate',
+70 silly audit report       vulnerable_versions: '>=4.5.0 <5.28.5',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1112496,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-g9mf-h72j-4rw9',
+70 silly audit report       title: 'Undici has an unbounded decompression chain in HTTP responses on Node.js Fetch API via Content-Encoding leads to resource exhaustion',
+70 silly audit report       severity: 'moderate',
+70 silly audit report       vulnerable_versions: '<6.23.0',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1113069,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-cxrh-j4jr-qwg3',
+70 silly audit report       title: 'undici Denial of Service attack via bad certificate data',
+70 silly audit report       severity: 'low',
+70 silly audit report       vulnerable_versions: '<5.29.0',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1114594,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-2mjp-6q6p-2qxm',
+70 silly audit report       title: 'Undici has an HTTP Request/Response Smuggling issue',
+70 silly audit report       severity: 'moderate',
+70 silly audit report       vulnerable_versions: '<6.24.0',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1114638,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-vrm6-8vpv-qv8q',
+70 silly audit report       title: 'Undici has Unbounded Memory Consumption in WebSocket permessage-deflate Decompression',
+70 silly audit report       severity: 'high',
+70 silly audit report       vulnerable_versions: '<6.24.0',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1114640,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-v9p9-hfj2-hcw8',
+70 silly audit report       title: 'Undici has Unhandled Exception in WebSocket Client Due to Invalid server_max_window_bits Validation',
+70 silly audit report       severity: 'high',
+70 silly audit report       vulnerable_versions: '<6.24.0',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1114642,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-4992-7rv2-5pvq',
+70 silly audit report       title: 'Undici has CRLF Injection in undici via `upgrade` option',
+70 silly audit report       severity: 'moderate',
+70 silly audit report       vulnerable_versions: '<6.24.0',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     }
+70 silly audit report   ],
+70 silly audit report   ajv: [
+70 silly audit report     {
+70 silly audit report       id: 1113715,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-2g4f-4pwh-qvx6',
+70 silly audit report       title: 'ajv has ReDoS when using `$data` option',
+70 silly audit report       severity: 'moderate',
+70 silly audit report       vulnerable_versions: '>=7.0.0-alpha.0 <8.18.0',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     }
+70 silly audit report   ],
+70 silly audit report   'smol-toml': [
+70 silly audit report     {
+70 silly audit report       id: 1115393,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-v3rj-xjv7-4jmq',
+70 silly audit report       title: 'smol-toml: Denial of Service via TOML documents containing thousands of consecutive commented lines',
+70 silly audit report       severity: 'moderate',
+70 silly audit report       vulnerable_versions: '<1.6.1',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     }
+70 silly audit report   ],
+70 silly audit report   srvx: [
+70 silly audit report     {
+70 silly audit report       id: 1115537,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-p36q-q72m-gchr',
+70 silly audit report       title: 'srvx is vulnerable to middleware bypass via absolute URI in request line ',
+70 silly audit report       severity: 'moderate',
+70 silly audit report       vulnerable_versions: '<0.11.13',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     }
+70 silly audit report   ],
+70 silly audit report   tar: [
+70 silly audit report     {
+70 silly audit report       id: 1113375,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-83g3-92jg-28cx',
+70 silly audit report       title: 'Arbitrary File Read/Write via Hardlink Target Escape Through Symlink Chain in node-tar Extraction',
+70 silly audit report       severity: 'high',
+70 silly audit report       vulnerable_versions: '<7.5.8',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1114200,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-qffp-2rhf-9h96',
+70 silly audit report       title: 'tar has Hardlink Path Traversal via Drive-Relative Linkpath',
+70 silly audit report       severity: 'high',
+70 silly audit report       vulnerable_versions: '<=7.5.9',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     },
+70 silly audit report     {
+70 silly audit report       id: 1114302,
+70 silly audit report       url: 'https://github.com/advisories/GHSA-9ppj-qmqm-q256',
+70 silly audit report       title: 'node-tar Symlink Path Traversal via Drive-Relative Linkpath',
+70 silly audit report       severity: 'high',
+70 silly audit report       vulnerable_versions: '<=7.5.10',
+70 silly audit report       cwe: [Array],
+70 silly audit report       cvss: [Object]
+70 silly audit report     }
+70 silly audit report   ]
+70 silly audit report }
+71 silly packumentCache corgi:https://registry.npmjs.org/@tootallnate%2fonce cache-miss
+72 silly packumentCache corgi:https://registry.npmjs.org/minimatch cache-miss
+73 silly packumentCache corgi:https://registry.npmjs.org/path-to-regexp cache-miss
+74 silly packumentCache corgi:https://registry.npmjs.org/undici cache-miss
+75 silly packumentCache corgi:https://registry.npmjs.org/ajv cache-miss
+76 silly packumentCache corgi:https://registry.npmjs.org/smol-toml cache-miss
+77 silly packumentCache corgi:https://registry.npmjs.org/srvx cache-miss
+78 silly packumentCache corgi:https://registry.npmjs.org/tar cache-miss
+79 http fetch GET 200 https://registry.npmjs.org/@tootallnate%2fonce 310ms (cache revalidated)
+80 silly packumentCache corgi:https://registry.npmjs.org/@tootallnate%2fonce set size:11748 disposed:false
+81 http fetch GET 200 https://registry.npmjs.org/ajv 584ms (cache revalidated)
+82 silly packumentCache corgi:https://registry.npmjs.org/ajv set size:467559 disposed:false
+83 http fetch GET 200 https://registry.npmjs.org/undici 694ms (cache revalidated)
+84 silly packumentCache corgi:https://registry.npmjs.org/undici set size:433175 disposed:false
+85 http fetch GET 200 https://registry.npmjs.org/minimatch 923ms (cache revalidated)
+86 silly packumentCache corgi:https://registry.npmjs.org/minimatch set size:168441 disposed:false
+87 http fetch GET 200 https://registry.npmjs.org/smol-toml 1196ms (cache revalidated)
+88 silly packumentCache corgi:https://registry.npmjs.org/smol-toml set size:21871 disposed:false
+89 http fetch GET 200 https://registry.npmjs.org/@vercel/next/-/next-4.17.1.tgz 2565ms (cache miss)
+90 http fetch GET 200 https://registry.npmjs.org/path-to-regexp 1925ms (cache revalidated)
+91 silly packumentCache corgi:https://registry.npmjs.org/path-to-regexp set size:66575 disposed:false
+92 http fetch GET 200 https://registry.npmjs.org/srvx 1983ms (cache revalidated)
+93 silly packumentCache corgi:https://registry.npmjs.org/srvx set size:86505 disposed:false
+94 http fetch GET 200 https://registry.npmjs.org/tar 2161ms (cache updated)
+95 silly packumentCache corgi:https://registry.npmjs.org/tar set size:undefined disposed:false
+96 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2ffun cache-miss
+97 http fetch GET 200 https://registry.npmjs.org/vercel/-/vercel-53.2.0.tgz 3649ms (cache miss)
+98 http fetch GET 200 https://registry.npmjs.org/@vercel%2ffun 731ms (cache revalidated)
+99 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2ffun set size:23528 disposed:false
+100 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fpython-analysis cache-miss
+101 http fetch GET 200 https://registry.npmjs.org/@vercel%2fpython-analysis 787ms (cache revalidated)
+102 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fpython-analysis set size:22008 disposed:false
+103 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fnode cache-miss
+104 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fremix-builder cache-miss
+105 http fetch GET 200 https://registry.npmjs.org/@vercel%2fremix-builder 657ms (cache updated)
+106 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fremix-builder set size:undefined disposed:false
+107 http fetch GET 200 https://registry.npmjs.org/@vercel%2fnode 1265ms (cache revalidated)
+108 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fnode set size:828347 disposed:false
+109 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fbackends cache-miss
+110 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fexpress cache-miss
+111 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fhono cache-miss
+112 http fetch GET 200 https://registry.npmjs.org/@vercel%2fhono 737ms (cache revalidated)
+113 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fhono set size:105354 disposed:false
+114 http fetch GET 200 https://registry.npmjs.org/@vercel%2fbackends 1260ms (cache revalidated)
+115 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fbackends set size:76171 disposed:false
+116 http fetch GET 200 https://registry.npmjs.org/@vercel%2fexpress 1326ms (cache revalidated)
+117 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fexpress set size:109271 disposed:false
+118 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fstatic-config cache-miss
+119 http fetch GET 200 https://registry.npmjs.org/@vercel%2fstatic-config 727ms (cache revalidated)
+120 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fstatic-config set size:46538 disposed:false
+121 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2frust cache-miss
+122 silly packumentCache corgi:https://registry.npmjs.org/vercel cache-miss
+123 http cache https://registry.npmjs.org/vercel 51ms (cache hit)
+124 silly packumentCache corgi:https://registry.npmjs.org/vercel set size:4185725 disposed:false
+125 http fetch GET 200 https://registry.npmjs.org/@vercel%2frust 745ms (cache revalidated)
+126 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2frust set size:11995 disposed:false
+127 silly packumentCache corgi:https://registry.npmjs.org/@mapbox%2fnode-pre-gyp cache-miss
+128 http fetch GET 200 https://registry.npmjs.org/@mapbox%2fnode-pre-gyp 256ms (cache revalidated)
+129 silly packumentCache corgi:https://registry.npmjs.org/@mapbox%2fnode-pre-gyp set size:47144 disposed:false
+130 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fbuild-utils cache-miss
+131 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fpython cache-miss
+132 http fetch GET 200 https://registry.npmjs.org/@vercel%2fbuild-utils 1523ms (cache revalidated)
+133 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fbuild-utils set size:819514 disposed:false
+134 http fetch GET 200 https://registry.npmjs.org/@vercel%2fpython 1657ms (cache updated)
+135 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fpython set size:undefined disposed:false
+136 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2felysia cache-miss
+137 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2ffastify cache-miss
+138 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fh3 cache-miss
+139 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fkoa cache-miss
+140 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fnestjs cache-miss
+141 http fetch GET 200 https://registry.npmjs.org/@vercel%2felysia 744ms (cache revalidated)
+142 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2felysia set size:65318 disposed:false
+143 http fetch GET 200 https://registry.npmjs.org/@vercel%2fh3 749ms (cache revalidated)
+144 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fh3 set size:73471 disposed:false
+145 http fetch GET 200 https://registry.npmjs.org/@vercel%2fnestjs 758ms (cache revalidated)
+146 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fnestjs set size:73779 disposed:false
+147 http fetch GET 200 https://registry.npmjs.org/@vercel%2ffastify 798ms (cache revalidated)
+148 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2ffastify set size:69375 disposed:false
+149 http fetch GET 200 https://registry.npmjs.org/@vercel%2fkoa 1272ms (cache revalidated)
+150 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fkoa set size:48663 disposed:false
+151 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fcervel cache-miss
+152 http fetch GET 200 https://registry.npmjs.org/@vercel%2fcervel 735ms (cache revalidated)
+153 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fcervel set size:48191 disposed:false
+154 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fhydrogen cache-miss
+155 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fredwood cache-miss
+156 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fstatic-build cache-miss
+157 http fetch GET 200 https://registry.npmjs.org/@vercel%2fredwood 739ms (cache revalidated)
+158 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fredwood set size:264495 disposed:false
+159 http fetch GET 200 https://registry.npmjs.org/@vercel%2fhydrogen 783ms (cache revalidated)
+160 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fhydrogen set size:123734 disposed:false
+161 http fetch GET 200 https://registry.npmjs.org/@vercel%2fstatic-build 1465ms (cache revalidated)
+162 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fstatic-build set size:621039 disposed:false
+163 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fgatsby-plugin-vercel-builder cache-miss
+164 http fetch GET 200 https://registry.npmjs.org/@vercel%2fgatsby-plugin-vercel-builder 1041ms (cache revalidated)
+165 silly packumentCache corgi:https://registry.npmjs.org/@vercel%2fgatsby-plugin-vercel-builder set size:265165 disposed:false
+166 verbose cwd C:\Users\user\Desktop\PROJECTS\Shule hub\apps\web
+167 verbose os Windows_NT 10.0.22000
+168 verbose node v22.20.0
+169 verbose npm  v11.6.1
+170 verbose exit 1
+171 verbose code 1

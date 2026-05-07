@@ -1,0 +1,2803 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`STEP 1: Layout tests matches the dashboard regression snapshots 1`] = `
+<div
+  class="space-y-6"
+  data-testid="dashboard-view"
+>
+  <div
+    data-testid="alerts-section"
+  >
+    <section
+      class="dashboard-card  p-4 border-danger/15"
+      data-testid="alerts-panel"
+    >
+      <div
+        class="flex items-center justify-between gap-3 mb-3"
+      >
+        <div
+          class="flex items-center gap-2"
+        >
+          <div
+            class="h-2 w-2 rounded-full bg-danger animate-pulse"
+          />
+          <h2
+            class="section-title"
+          >
+            3
+             
+            items
+             need attention
+          </h2>
+        </div>
+      </div>
+      <div
+        class="grid gap-2 xl:grid-cols-3"
+      >
+        <a
+          class="group rounded-[var(--radius-sm)] border border-border bg-surface-muted/50 p-3.5 transition-all duration-150 hover:border-accent/20 hover:bg-surface hover:shadow-sm"
+          data-testid="alert-card"
+          href="/dashboard/admin/finance"
+        >
+          <div
+            class="flex items-start justify-between gap-2"
+          >
+            <span
+              class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-danger/10 text-danger"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-shield-alert h-3 w-3"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                />
+                <path
+                  d="M12 8v4"
+                />
+                <path
+                  d="M12 16h.01"
+                />
+              </svg>
+              Open receivables
+            </span>
+            <div
+              class="text-right"
+            >
+              <p
+                class="text-[10px] uppercase tracking-wider text-muted"
+              >
+                Outstanding
+              </p>
+              <p
+                class="mt-0.5 text-base font-bold text-foreground finance-number"
+              >
+                KES 1.24M
+              </p>
+            </div>
+          </div>
+          <h3
+            class="mt-2.5 text-[13px] font-semibold text-foreground"
+          >
+            Outstanding fees need follow-up
+          </h3>
+          <p
+            class="mt-1 text-[11px] text-muted line-clamp-2"
+          >
+            34 invoices are over 14 days late across Grade 7 to Grade 9.
+          </p>
+          <div
+            class="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100"
+          >
+            <span>
+              Resolve
+            </span>
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-arrow-right h-3 w-3"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5 12h14"
+              />
+              <path
+                d="m12 5 7 7-7 7"
+              />
+            </svg>
+          </div>
+        </a>
+        <a
+          class="group rounded-[var(--radius-sm)] border border-border bg-surface-muted/50 p-3.5 transition-all duration-150 hover:border-accent/20 hover:bg-surface hover:shadow-sm"
+          data-testid="alert-card"
+          href="/dashboard/admin/finance"
+        >
+          <div
+            class="flex items-start justify-between gap-2"
+          >
+            <span
+              class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-danger/10 text-danger"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-shield-alert h-3 w-3"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                />
+                <path
+                  d="M12 8v4"
+                />
+                <path
+                  d="M12 16h.01"
+                />
+              </svg>
+              Review failures
+            </span>
+            <div
+              class="text-right"
+            >
+              <p
+                class="text-[10px] uppercase tracking-wider text-muted"
+              >
+                Failed
+              </p>
+              <p
+                class="mt-0.5 text-base font-bold text-foreground finance-number"
+              >
+                2
+              </p>
+            </div>
+          </div>
+          <h3
+            class="mt-2.5 text-[13px] font-semibold text-foreground"
+          >
+            Two M-PESA callbacks failed validation
+          </h3>
+          <p
+            class="mt-1 text-[11px] text-muted line-clamp-2"
+          >
+            Payment intents are waiting for verification before posting to the ledger.
+          </p>
+          <div
+            class="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100"
+          >
+            <span>
+              Resolve
+            </span>
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-arrow-right h-3 w-3"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5 12h14"
+              />
+              <path
+                d="m12 5 7 7-7 7"
+              />
+            </svg>
+          </div>
+        </a>
+        <a
+          class="group rounded-[var(--radius-sm)] border border-border bg-surface-muted/50 p-3.5 transition-all duration-150 hover:border-accent/20 hover:bg-surface hover:shadow-sm"
+          data-testid="alert-card"
+          href="/dashboard/admin/attendance"
+        >
+          <div
+            class="flex items-start justify-between gap-2"
+          >
+            <span
+              class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-warning/10 text-warning"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-triangle-alert h-3 w-3"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                />
+                <path
+                  d="M12 9v4"
+                />
+                <path
+                  d="M12 17h.01"
+                />
+              </svg>
+              Resolve sync
+            </span>
+            <div
+              class="text-right"
+            >
+              <p
+                class="text-[10px] uppercase tracking-wider text-muted"
+              >
+                Conflicts
+              </p>
+              <p
+                class="mt-0.5 text-base font-bold text-foreground finance-number"
+              >
+                3
+              </p>
+            </div>
+          </div>
+          <h3
+            class="mt-2.5 text-[13px] font-semibold text-foreground"
+          >
+            Three sync conflicts need resolution
+          </h3>
+          <p
+            class="mt-1 text-[11px] text-muted line-clamp-2"
+          >
+            Offline attendance submissions for Grade 4 Umoja collided after morning roll call.
+          </p>
+          <div
+            class="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100"
+          >
+            <span>
+              Resolve
+            </span>
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-arrow-right h-3 w-3"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5 12h14"
+              />
+              <path
+                d="m12 5 7 7-7 7"
+              />
+            </svg>
+          </div>
+        </a>
+      </div>
+    </section>
+  </div>
+  <div
+    data-testid="kpi-section"
+  >
+    <section
+      class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+      data-testid="kpi-strip"
+    >
+      <a
+        class="group dashboard-card rounded-[var(--radius)] p-4 transition-all duration-150 hover:border-accent/20 hover:shadow-md widget-enter widget-enter-delay-1"
+        data-testid="kpi-card"
+        href="/dashboard/admin/finance"
+      >
+        <div
+          class="flex items-start justify-between gap-2"
+        >
+          <p
+            class="eyebrow"
+          >
+            Fees Collected Today
+          </p>
+          <span
+            class="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-success-soft text-success"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-arrow-up-right h-3 w-3"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M7 7h10v10"
+              />
+              <path
+                d="M7 17 17 7"
+              />
+            </svg>
+            +7.4%
+          </span>
+        </div>
+        <p
+          class="mt-2 text-[1.875rem] font-bold leading-none text-foreground finance-number"
+          data-testid="kpi-value"
+        >
+          Ksh 31,000
+        </p>
+        <p
+          class="mt-2 text-xs text-muted line-clamp-1"
+        >
+          Posted by cash office and M-PESA today
+        </p>
+        <div
+          class="mt-2.5"
+        >
+          <svg
+            aria-hidden="true"
+            class="h-10 w-full text-success"
+            preserveAspectRatio="none"
+            viewBox="0 0 100 100"
+          >
+            <polygon
+              fill="currentColor"
+              opacity="0.08"
+              points="0,100 0,53.84615384615385 16.666666666666664,43.58974358974359 33.33333333333333,38.46153846153846 50,25.641025641025635 66.66666666666666,20.51282051282051 83.33333333333334,10.256410256410248 100,0 100,100"
+            />
+            <polyline
+              fill="none"
+              points="0,53.84615384615385 16.666666666666664,43.58974358974359 33.33333333333333,38.46153846153846 50,25.641025641025635 66.66666666666666,20.51282051282051 83.33333333333334,10.256410256410248 100,0"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="4"
+            />
+          </svg>
+        </div>
+      </a>
+      <a
+        class="group dashboard-card rounded-[var(--radius)] p-4 transition-all duration-150 hover:border-accent/20 hover:shadow-md widget-enter widget-enter-delay-2"
+        data-testid="kpi-card"
+        href="/dashboard/admin/finance"
+      >
+        <div
+          class="flex items-start justify-between gap-2"
+        >
+          <p
+            class="eyebrow"
+          >
+            Total Fees This Term
+          </p>
+          <span
+            class="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-success-soft text-success"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-arrow-up-right h-3 w-3"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M7 7h10v10"
+              />
+              <path
+                d="M7 17 17 7"
+              />
+            </svg>
+            +4.2%
+          </span>
+        </div>
+        <p
+          class="mt-2 text-[1.875rem] font-bold leading-none text-foreground finance-number"
+          data-testid="kpi-value"
+        >
+          Ksh 373,600
+        </p>
+        <p
+          class="mt-2 text-xs text-muted line-clamp-1"
+        >
+          All billed lines across tuition, lunch, and transport
+        </p>
+        <div
+          class="mt-2.5"
+        >
+          <svg
+            aria-hidden="true"
+            class="h-10 w-full text-success"
+            preserveAspectRatio="none"
+            viewBox="0 0 100 100"
+          >
+            <polygon
+              fill="currentColor"
+              opacity="0.08"
+              points="0,100 0,18.421052631578945 16.666666666666664,14.473684210526315 33.33333333333333,13.157894736842096 50,9.210526315789465 66.66666666666666,6.578947368421055 83.33333333333334,2.631578947368425 100,0 100,100"
+            />
+            <polyline
+              fill="none"
+              points="0,18.421052631578945 16.666666666666664,14.473684210526315 33.33333333333333,13.157894736842096 50,9.210526315789465 66.66666666666666,6.578947368421055 83.33333333333334,2.631578947368425 100,0"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="4"
+            />
+          </svg>
+        </div>
+      </a>
+      <a
+        class="group dashboard-card rounded-[var(--radius)] p-4 transition-all duration-150 hover:border-accent/20 hover:shadow-md widget-enter widget-enter-delay-3"
+        data-testid="kpi-card"
+        href="/dashboard/admin/finance"
+      >
+        <div
+          class="flex items-start justify-between gap-2"
+        >
+          <p
+            class="eyebrow"
+          >
+            Outstanding Balance
+          </p>
+          <span
+            class="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-warning-soft text-warning"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-arrow-down-right h-3 w-3"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m7 7 10 10"
+              />
+              <path
+                d="M17 7v10H7"
+              />
+            </svg>
+            -3.1%
+          </span>
+        </div>
+        <p
+          class="mt-2 text-[1.875rem] font-bold leading-none text-foreground finance-number"
+          data-testid="kpi-value"
+        >
+          Ksh 51,000
+        </p>
+        <p
+          class="mt-2 text-xs text-muted line-clamp-1"
+        >
+          Still awaiting follow-up and collection
+        </p>
+        <div
+          class="mt-2.5"
+        >
+          <svg
+            aria-hidden="true"
+            class="h-10 w-full text-warning"
+            preserveAspectRatio="none"
+            viewBox="0 0 100 100"
+          >
+            <polygon
+              fill="currentColor"
+              opacity="0.08"
+              points="0,100 0,0 16.666666666666664,4.166666666666657 33.33333333333333,8.333333333333343 50,12.5 66.66666666666666,16.666666666666657 83.33333333333334,18.75 100,25 100,100"
+            />
+            <polyline
+              fill="none"
+              points="0,0 16.666666666666664,4.166666666666657 33.33333333333333,8.333333333333343 50,12.5 66.66666666666666,16.666666666666657 83.33333333333334,18.75 100,25"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="4"
+            />
+          </svg>
+        </div>
+      </a>
+      <a
+        class="group dashboard-card rounded-[var(--radius)] p-4 transition-all duration-150 hover:border-accent/20 hover:shadow-md widget-enter widget-enter-delay-4"
+        data-testid="kpi-card"
+        href="/dashboard/admin/students"
+      >
+        <div
+          class="flex items-start justify-between gap-2"
+        >
+          <p
+            class="eyebrow"
+          >
+            Students with Balance
+          </p>
+          <span
+            class="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-warning-soft text-warning"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-arrow-down-right h-3 w-3"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m7 7 10 10"
+              />
+              <path
+                d="M17 7v10H7"
+              />
+            </svg>
+            -2
+          </span>
+        </div>
+        <p
+          class="mt-2 text-[1.875rem] font-bold leading-none text-foreground finance-number"
+          data-testid="kpi-value"
+        >
+          5
+        </p>
+        <p
+          class="mt-2 text-xs text-muted line-clamp-1"
+        >
+          Learners still carrying arrears
+        </p>
+        <div
+          class="mt-2.5"
+        >
+          <svg
+            aria-hidden="true"
+            class="h-10 w-full text-warning"
+            preserveAspectRatio="none"
+            viewBox="0 0 100 100"
+          >
+            <polygon
+              fill="currentColor"
+              opacity="0.08"
+              points="0,100 0,0 16.666666666666664,7.142857142857139 33.33333333333333,14.285714285714292 50,14.285714285714292 66.66666666666666,21.42857142857143 83.33333333333334,28.57142857142857 100,35.71428571428571 100,100"
+            />
+            <polyline
+              fill="none"
+              points="0,0 16.666666666666664,7.142857142857139 33.33333333333333,14.285714285714292 50,14.285714285714292 66.66666666666666,21.42857142857143 83.33333333333334,28.57142857142857 100,35.71428571428571"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="4"
+            />
+          </svg>
+        </div>
+      </a>
+    </section>
+  </div>
+  <div
+    data-testid="quick-actions-section"
+  >
+    <section
+      class="dashboard-card  p-4"
+      data-testid="quick-actions"
+    >
+      <div
+        class="flex items-center justify-between gap-3 mb-3"
+      >
+        <h3
+          class="section-title"
+        >
+          Quick actions
+        </h3>
+        <span
+          class="badge badge-neutral"
+        >
+          All available
+        </span>
+      </div>
+      <div
+        class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
+      >
+        <button
+          class="group flex items-center gap-3 rounded-[var(--radius-sm)] border px-3 py-2.5 text-left transition-all duration-150 border-border bg-surface hover:border-accent/20 hover:bg-accent-ghost active:scale-[0.98]"
+          data-testid="quick-action"
+          type="button"
+        >
+          <div
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-accent-soft"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-user-plus h-4 w-4 text-accent"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+              />
+              <circle
+                cx="9"
+                cy="7"
+                r="4"
+              />
+              <line
+                x1="19"
+                x2="19"
+                y1="8"
+                y2="14"
+              />
+              <line
+                x1="22"
+                x2="16"
+                y1="11"
+                y2="11"
+              />
+            </svg>
+          </div>
+          <div
+            class="min-w-0 flex-1"
+          >
+            <h4
+              class="text-[13px] font-semibold text-foreground"
+            >
+              Add Student
+            </h4>
+            <p
+              class="text-[10px] uppercase tracking-wider text-muted"
+            >
+              Online only
+            </p>
+          </div>
+        </button>
+        <button
+          class="group flex items-center gap-3 rounded-[var(--radius-sm)] border px-3 py-2.5 text-left transition-all duration-150 border-border bg-surface hover:border-accent/20 hover:bg-accent-ghost active:scale-[0.98]"
+          data-testid="quick-action"
+          type="button"
+        >
+          <div
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-accent-soft"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-credit-card h-4 w-4 text-accent"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect
+                height="14"
+                rx="2"
+                width="20"
+                x="2"
+                y="5"
+              />
+              <line
+                x1="2"
+                x2="22"
+                y1="10"
+                y2="10"
+              />
+            </svg>
+          </div>
+          <div
+            class="min-w-0 flex-1"
+          >
+            <h4
+              class="text-[13px] font-semibold text-foreground"
+            >
+              Record Payment
+            </h4>
+            <p
+              class="text-[10px] uppercase tracking-wider text-muted"
+            >
+              Online only
+            </p>
+          </div>
+        </button>
+        <button
+          class="group flex items-center gap-3 rounded-[var(--radius-sm)] border px-3 py-2.5 text-left transition-all duration-150 border-border bg-surface hover:border-accent/20 hover:bg-accent-ghost active:scale-[0.98]"
+          data-testid="quick-action"
+          type="button"
+        >
+          <div
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-accent-soft"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-message-square-text h-4 w-4 text-accent"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+              />
+              <path
+                d="M7 11h10"
+              />
+              <path
+                d="M7 15h6"
+              />
+              <path
+                d="M7 7h8"
+              />
+            </svg>
+          </div>
+          <div
+            class="min-w-0 flex-1"
+          >
+            <h4
+              class="text-[13px] font-semibold text-foreground"
+            >
+              Send SMS
+            </h4>
+            <p
+              class="text-[10px] uppercase tracking-wider text-muted"
+            >
+              Online only
+            </p>
+          </div>
+        </button>
+        <button
+          class="group flex items-center gap-3 rounded-[var(--radius-sm)] border px-3 py-2.5 text-left transition-all duration-150 border-border bg-surface hover:border-accent/20 hover:bg-accent-ghost active:scale-[0.98]"
+          data-testid="quick-action"
+          type="button"
+        >
+          <div
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-accent-soft"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-file-spreadsheet h-4 w-4 text-accent"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+              />
+              <path
+                d="M14 2v5a1 1 0 0 0 1 1h5"
+              />
+              <path
+                d="M8 13h2"
+              />
+              <path
+                d="M14 13h2"
+              />
+              <path
+                d="M8 17h2"
+              />
+              <path
+                d="M14 17h2"
+              />
+            </svg>
+          </div>
+          <div
+            class="min-w-0 flex-1"
+          >
+            <h4
+              class="text-[13px] font-semibold text-foreground"
+            >
+              Print Report
+            </h4>
+            <p
+              class="text-[10px] uppercase tracking-wider text-muted"
+            >
+              Online only
+            </p>
+          </div>
+        </button>
+      </div>
+    </section>
+  </div>
+  <section
+    class="grid gap-6 xl:grid-cols-12"
+    data-testid="core-widgets"
+  >
+    <div
+      class="xl:col-span-7"
+      data-testid="core-widget"
+    >
+      <div>
+        <section
+          class="dashboard-card  overflow-hidden"
+        >
+          <div
+            class="border-b border-border px-5 py-3.5"
+          >
+            <div
+              class="flex items-center justify-between gap-4"
+            >
+              <div
+                class="min-w-0"
+              >
+                <h3
+                  class="section-title text-lg"
+                >
+                  M-PESA feed
+                </h3>
+                <p
+                  class="mt-0.5 text-[13px] text-muted line-clamp-1"
+                >
+                  Fresh transactions that bursars usually need to verify first.
+                </p>
+              </div>
+              <span
+                class="badge badge-neutral shrink-0"
+              >
+                5
+                 
+                records
+              </span>
+            </div>
+          </div>
+          <div
+            class="hidden overflow-x-auto md:block"
+          >
+            <table
+              class="min-w-full table-auto border-collapse"
+            >
+              <thead>
+                <tr
+                  class="border-b border-border bg-surface-muted/50"
+                >
+                  <th
+                    class="sticky top-0 z-10 bg-surface-muted/50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted select-none "
+                  >
+                    Student
+                  </th>
+                  <th
+                    class="sticky top-0 z-10 bg-surface-muted/50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted select-none text-right"
+                  >
+                    Amount
+                  </th>
+                  <th
+                    class="sticky top-0 z-10 bg-surface-muted/50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted select-none "
+                  >
+                    Phone
+                  </th>
+                  <th
+                    class="sticky top-0 z-10 bg-surface-muted/50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted select-none "
+                  >
+                    Code
+                  </th>
+                  <th
+                    class="sticky top-0 z-10 bg-surface-muted/50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted select-none "
+                  >
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody
+                class="divide-y divide-border/50"
+              >
+                <tr
+                  class="table-row-hover group"
+                >
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    <span
+                      class="font-semibold"
+                    >
+                      Aisha Njeri
+                    </span>
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground text-right font-semibold"
+                  >
+                    Ksh 18,500
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    254712345801
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    QJT8M4P21
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-success/10 text-success"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-circle-check h-3 w-3"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                        />
+                        <path
+                          d="m9 12 2 2 4-4"
+                        />
+                      </svg>
+                      Matched
+                    </span>
+                  </td>
+                </tr>
+                <tr
+                  class="table-row-hover group"
+                >
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    <span
+                      class="font-semibold"
+                    >
+                      Brian Otieno
+                    </span>
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground text-right font-semibold"
+                  >
+                    Ksh 10,000
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    254723456810
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    QJT8L1R31
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-success/10 text-success"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-circle-check h-3 w-3"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                        />
+                        <path
+                          d="m9 12 2 2 4-4"
+                        />
+                      </svg>
+                      Matched
+                    </span>
+                  </td>
+                </tr>
+                <tr
+                  class="table-row-hover group"
+                >
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    <span
+                      class="font-semibold"
+                    >
+                      Daniel Mutua
+                    </span>
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground text-right font-semibold"
+                  >
+                    Ksh 6,000
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    254745678832
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    QJT8V9H33
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-warning/10 text-warning"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-triangle-alert h-3 w-3"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                        />
+                        <path
+                          d="M12 9v4"
+                        />
+                        <path
+                          d="M12 17h.01"
+                        />
+                      </svg>
+                      Pending match
+                    </span>
+                  </td>
+                </tr>
+                <tr
+                  class="table-row-hover group"
+                >
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    <span
+                      class="font-semibold"
+                    >
+                      Faith Ndungu
+                    </span>
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground text-right font-semibold"
+                  >
+                    Ksh 6,000
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    254767890854
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    QJT7W8P10
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-danger/10 text-danger"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-shield-alert h-3 w-3"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                        />
+                        <path
+                          d="M12 8v4"
+                        />
+                        <path
+                          d="M12 16h.01"
+                        />
+                      </svg>
+                      Failed
+                    </span>
+                  </td>
+                </tr>
+                <tr
+                  class="table-row-hover group"
+                >
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    <span
+                      class="font-semibold"
+                    >
+                      Hassan Abdi
+                    </span>
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground text-right font-semibold"
+                  >
+                    Ksh 9,000
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    254789012876
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    QJT8Z3P55
+                  </td>
+                  <td
+                    class="px-4 py-2.5 align-middle text-[13px] text-foreground "
+                  >
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-success/10 text-success"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-circle-check h-3 w-3"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                        />
+                        <path
+                          d="m9 12 2 2 4-4"
+                        />
+                      </svg>
+                      Matched
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div
+            class="space-y-2 p-3 md:hidden"
+          >
+            <div
+              class="rounded-[var(--radius-sm)] border border-border bg-surface-muted/50 px-4 py-3"
+            >
+              <div
+                class="space-y-2"
+              >
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Student
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    <span
+                      class="font-semibold"
+                    >
+                      Aisha Njeri
+                    </span>
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Amount
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    Ksh 18,500
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Phone
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    254712345801
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Code
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    QJT8M4P21
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Status
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-success/10 text-success"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-circle-check h-3 w-3"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                        />
+                        <path
+                          d="m9 12 2 2 4-4"
+                        />
+                      </svg>
+                      Matched
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              class="rounded-[var(--radius-sm)] border border-border bg-surface-muted/50 px-4 py-3"
+            >
+              <div
+                class="space-y-2"
+              >
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Student
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    <span
+                      class="font-semibold"
+                    >
+                      Brian Otieno
+                    </span>
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Amount
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    Ksh 10,000
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Phone
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    254723456810
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Code
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    QJT8L1R31
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Status
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-success/10 text-success"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-circle-check h-3 w-3"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                        />
+                        <path
+                          d="m9 12 2 2 4-4"
+                        />
+                      </svg>
+                      Matched
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              class="rounded-[var(--radius-sm)] border border-border bg-surface-muted/50 px-4 py-3"
+            >
+              <div
+                class="space-y-2"
+              >
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Student
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    <span
+                      class="font-semibold"
+                    >
+                      Daniel Mutua
+                    </span>
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Amount
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    Ksh 6,000
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Phone
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    254745678832
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Code
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    QJT8V9H33
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Status
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-warning/10 text-warning"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-triangle-alert h-3 w-3"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                        />
+                        <path
+                          d="M12 9v4"
+                        />
+                        <path
+                          d="M12 17h.01"
+                        />
+                      </svg>
+                      Pending match
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              class="rounded-[var(--radius-sm)] border border-border bg-surface-muted/50 px-4 py-3"
+            >
+              <div
+                class="space-y-2"
+              >
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Student
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    <span
+                      class="font-semibold"
+                    >
+                      Faith Ndungu
+                    </span>
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Amount
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    Ksh 6,000
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Phone
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    254767890854
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Code
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    QJT7W8P10
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Status
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-danger/10 text-danger"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-shield-alert h-3 w-3"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                        />
+                        <path
+                          d="M12 8v4"
+                        />
+                        <path
+                          d="M12 16h.01"
+                        />
+                      </svg>
+                      Failed
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              class="rounded-[var(--radius-sm)] border border-border bg-surface-muted/50 px-4 py-3"
+            >
+              <div
+                class="space-y-2"
+              >
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Student
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    <span
+                      class="font-semibold"
+                    >
+                      Hassan Abdi
+                    </span>
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Amount
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    Ksh 9,000
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Phone
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    254789012876
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Code
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    QJT8Z3P55
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between gap-3"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+                  >
+                    Status
+                  </p>
+                  <div
+                    class="text-[13px] text-foreground text-right"
+                  >
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-success/10 text-success"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        class="lucide lucide-circle-check h-3 w-3"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                        />
+                        <path
+                          d="m9 12 2 2 4-4"
+                        />
+                      </svg>
+                      Matched
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div
+      class="space-y-6 xl:col-span-5"
+    >
+      <div
+        data-testid="context-section"
+      >
+        <section
+          class="dashboard-card  p-5"
+        >
+          <div
+            class="flex items-end justify-between gap-3"
+          >
+            <div>
+              <p
+                class="eyebrow"
+              >
+                Defaulters
+              </p>
+              <h3
+                class="mt-2 section-title text-lg"
+              >
+                Students with balances
+              </h3>
+            </div>
+            <a
+              class="text-sm font-semibold text-accent"
+              href="/dashboard/admin/students"
+            >
+              View all
+            </a>
+          </div>
+          <div
+            class="mt-4 space-y-3"
+          >
+            <div
+              class="flex items-center justify-between rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3"
+            >
+              <div
+                class="min-w-0"
+              >
+                <p
+                  class="truncate text-sm font-semibold text-foreground"
+                >
+                  Daniel Mutua
+                </p>
+                <p
+                  class="mt-1 text-sm text-muted"
+                >
+                  Grade 9 Courage
+                </p>
+              </div>
+              <p
+                class="text-sm font-semibold text-danger"
+              >
+                Ksh 18,200
+              </p>
+            </div>
+            <div
+              class="flex items-center justify-between rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3"
+            >
+              <div
+                class="min-w-0"
+              >
+                <p
+                  class="truncate text-sm font-semibold text-foreground"
+                >
+                  Brian Otieno
+                </p>
+                <p
+                  class="mt-1 text-sm text-muted"
+                >
+                  Grade 8 Unity
+                </p>
+              </div>
+              <p
+                class="text-sm font-semibold text-danger"
+              >
+                Ksh 12,000
+              </p>
+            </div>
+            <div
+              class="flex items-center justify-between rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3"
+            >
+              <div
+                class="min-w-0"
+              >
+                <p
+                  class="truncate text-sm font-semibold text-foreground"
+                >
+                  Hassan Abdi
+                </p>
+                <p
+                  class="mt-1 text-sm text-muted"
+                >
+                  Grade 2 Joy
+                </p>
+              </div>
+              <p
+                class="text-sm font-semibold text-danger"
+              >
+                Ksh 9,500
+              </p>
+            </div>
+            <div
+              class="flex items-center justify-between rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3"
+            >
+              <div
+                class="min-w-0"
+              >
+                <p
+                  class="truncate text-sm font-semibold text-foreground"
+                >
+                  Faith Ndungu
+                </p>
+                <p
+                  class="mt-1 text-sm text-muted"
+                >
+                  Grade 4 Light
+                </p>
+              </div>
+              <p
+                class="text-sm font-semibold text-danger"
+              >
+                Ksh 6,800
+              </p>
+            </div>
+            <div
+              class="flex items-center justify-between rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3"
+            >
+              <div
+                class="min-w-0"
+              >
+                <p
+                  class="truncate text-sm font-semibold text-foreground"
+                >
+                  Carol Wanjiku
+                </p>
+                <p
+                  class="mt-1 text-sm text-muted"
+                >
+                  Grade 6 Peace
+                </p>
+              </div>
+              <p
+                class="text-sm font-semibold text-danger"
+              >
+                Ksh 4,500
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div
+        data-testid="activity-feed-section"
+      >
+        <section
+          class="dashboard-card  p-4"
+          data-testid="activity-feed"
+        >
+          <div
+            class="flex items-center justify-between gap-3 mb-3"
+          >
+            <h3
+              class="section-title"
+            >
+              Recent activity
+            </h3>
+            <span
+              class="badge badge-neutral"
+            >
+              4
+               events
+            </span>
+          </div>
+          <div
+            class="space-y-0.5"
+          >
+            <a
+              class="flex items-start gap-3 rounded-[var(--radius-sm)] px-3 py-2 transition-colors hover:bg-surface-muted"
+              data-testid="activity-item"
+              href="/dashboard/admin/finance"
+            >
+              <div
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-surface-strong"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-receipt-text h-3.5 w-3.5 text-accent"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M13 16H8"
+                  />
+                  <path
+                    d="M14 8H8"
+                  />
+                  <path
+                    d="M16 12H8"
+                  />
+                  <path
+                    d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+                  />
+                </svg>
+              </div>
+              <div
+                class="min-w-0 flex-1"
+              >
+                <div
+                  class="flex items-center justify-between gap-2"
+                >
+                  <p
+                    class="truncate text-[13px] font-medium text-foreground"
+                  >
+                    M-PESA payment posted
+                  </p>
+                  <p
+                    class="shrink-0 text-[11px] text-muted"
+                  >
+                    2 min ago
+                  </p>
+                </div>
+                <p
+                  class="mt-0.5 truncate text-[11px] text-muted"
+                >
+                  KES 24,500 received for Grade 8 transport bundle and pushed to the ledger.
+                </p>
+              </div>
+            </a>
+            <a
+              class="flex items-start gap-3 rounded-[var(--radius-sm)] px-3 py-2 transition-colors hover:bg-surface-muted"
+              data-testid="activity-item"
+              href="/dashboard/admin/attendance"
+            >
+              <div
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-surface-strong"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-activity h-3.5 w-3.5 text-accent"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+                  />
+                </svg>
+              </div>
+              <div
+                class="min-w-0 flex-1"
+              >
+                <div
+                  class="flex items-center justify-between gap-2"
+                >
+                  <p
+                    class="truncate text-[13px] font-medium text-foreground"
+                  >
+                    Attendance queued offline
+                  </p>
+                  <p
+                    class="shrink-0 text-[11px] text-muted"
+                  >
+                    7 min ago
+                  </p>
+                </div>
+                <p
+                  class="mt-0.5 truncate text-[11px] text-muted"
+                >
+                  Grade 4 Umoja attendance captured on tablet and awaiting sync.
+                </p>
+              </div>
+            </a>
+            <a
+              class="flex items-start gap-3 rounded-[var(--radius-sm)] px-3 py-2 transition-colors hover:bg-surface-muted"
+              data-testid="activity-item"
+              href="/dashboard/admin/students"
+            >
+              <div
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-surface-strong"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-user-plus h-3.5 w-3.5 text-accent"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+                  />
+                  <circle
+                    cx="9"
+                    cy="7"
+                    r="4"
+                  />
+                  <line
+                    x1="19"
+                    x2="19"
+                    y1="8"
+                    y2="14"
+                  />
+                  <line
+                    x1="22"
+                    x2="16"
+                    y1="11"
+                    y2="11"
+                  />
+                </svg>
+              </div>
+              <div
+                class="min-w-0 flex-1"
+              >
+                <div
+                  class="flex items-center justify-between gap-2"
+                >
+                  <p
+                    class="truncate text-[13px] font-medium text-foreground"
+                  >
+                    Student admission updated
+                  </p>
+                  <p
+                    class="shrink-0 text-[11px] text-muted"
+                  >
+                    18 min ago
+                  </p>
+                </div>
+                <p
+                  class="mt-0.5 truncate text-[11px] text-muted"
+                >
+                  New learner admitted into Grade 2 Amani with guardian contacts verified.
+                </p>
+              </div>
+            </a>
+            <a
+              class="flex items-start gap-3 rounded-[var(--radius-sm)] px-3 py-2 transition-colors hover:bg-surface-muted"
+              data-testid="activity-item"
+              href="/dashboard/admin/communication"
+            >
+              <div
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-surface-strong"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-message-square h-3.5 w-3.5 text-accent"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+                  />
+                </svg>
+              </div>
+              <div
+                class="min-w-0 flex-1"
+              >
+                <div
+                  class="flex items-center justify-between gap-2"
+                >
+                  <p
+                    class="truncate text-[13px] font-medium text-foreground"
+                  >
+                    SMS reminder sent
+                  </p>
+                  <p
+                    class="shrink-0 text-[11px] text-muted"
+                  >
+                    26 min ago
+                  </p>
+                </div>
+                <p
+                  class="mt-0.5 truncate text-[11px] text-muted"
+                >
+                  Fee reminder delivered to 48 guardians with overdue invoices.
+                </p>
+              </div>
+            </a>
+          </div>
+        </section>
+      </div>
+    </div>
+  </section>
+</div>
+`;
+
+exports[`STEP 1: Layout tests matches the dashboard regression snapshots 2`] = `
+<section
+  class="dashboard-card  p-4 border-danger/15"
+  data-testid="alerts-panel"
+>
+  <div
+    class="flex items-center justify-between gap-3 mb-3"
+  >
+    <div
+      class="flex items-center gap-2"
+    >
+      <div
+        class="h-2 w-2 rounded-full bg-danger animate-pulse"
+      />
+      <h2
+        class="section-title"
+      >
+        3
+         
+        items
+         need attention
+      </h2>
+    </div>
+  </div>
+  <div
+    class="grid gap-2 xl:grid-cols-3"
+  >
+    <a
+      class="group rounded-[var(--radius-sm)] border border-border bg-surface-muted/50 p-3.5 transition-all duration-150 hover:border-accent/20 hover:bg-surface hover:shadow-sm"
+      data-testid="alert-card"
+      href="/dashboard/admin/finance"
+    >
+      <div
+        class="flex items-start justify-between gap-2"
+      >
+        <span
+          class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-danger/10 text-danger"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-shield-alert h-3 w-3"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+            />
+            <path
+              d="M12 8v4"
+            />
+            <path
+              d="M12 16h.01"
+            />
+          </svg>
+          Open receivables
+        </span>
+        <div
+          class="text-right"
+        >
+          <p
+            class="text-[10px] uppercase tracking-wider text-muted"
+          >
+            Outstanding
+          </p>
+          <p
+            class="mt-0.5 text-base font-bold text-foreground finance-number"
+          >
+            KES 1.24M
+          </p>
+        </div>
+      </div>
+      <h3
+        class="mt-2.5 text-[13px] font-semibold text-foreground"
+      >
+        Outstanding fees need follow-up
+      </h3>
+      <p
+        class="mt-1 text-[11px] text-muted line-clamp-2"
+      >
+        34 invoices are over 14 days late across Grade 7 to Grade 9.
+      </p>
+      <div
+        class="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100"
+      >
+        <span>
+          Resolve
+        </span>
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-arrow-right h-3 w-3"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M5 12h14"
+          />
+          <path
+            d="m12 5 7 7-7 7"
+          />
+        </svg>
+      </div>
+    </a>
+    <a
+      class="group rounded-[var(--radius-sm)] border border-border bg-surface-muted/50 p-3.5 transition-all duration-150 hover:border-accent/20 hover:bg-surface hover:shadow-sm"
+      data-testid="alert-card"
+      href="/dashboard/admin/finance"
+    >
+      <div
+        class="flex items-start justify-between gap-2"
+      >
+        <span
+          class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-danger/10 text-danger"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-shield-alert h-3 w-3"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+            />
+            <path
+              d="M12 8v4"
+            />
+            <path
+              d="M12 16h.01"
+            />
+          </svg>
+          Review failures
+        </span>
+        <div
+          class="text-right"
+        >
+          <p
+            class="text-[10px] uppercase tracking-wider text-muted"
+          >
+            Failed
+          </p>
+          <p
+            class="mt-0.5 text-base font-bold text-foreground finance-number"
+          >
+            2
+          </p>
+        </div>
+      </div>
+      <h3
+        class="mt-2.5 text-[13px] font-semibold text-foreground"
+      >
+        Two M-PESA callbacks failed validation
+      </h3>
+      <p
+        class="mt-1 text-[11px] text-muted line-clamp-2"
+      >
+        Payment intents are waiting for verification before posting to the ledger.
+      </p>
+      <div
+        class="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100"
+      >
+        <span>
+          Resolve
+        </span>
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-arrow-right h-3 w-3"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M5 12h14"
+          />
+          <path
+            d="m12 5 7 7-7 7"
+          />
+        </svg>
+      </div>
+    </a>
+    <a
+      class="group rounded-[var(--radius-sm)] border border-border bg-surface-muted/50 p-3.5 transition-all duration-150 hover:border-accent/20 hover:bg-surface hover:shadow-sm"
+      data-testid="alert-card"
+      href="/dashboard/admin/attendance"
+    >
+      <div
+        class="flex items-start justify-between gap-2"
+      >
+        <span
+          class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-tight whitespace-nowrap bg-warning/10 text-warning"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-triangle-alert h-3 w-3"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+            />
+            <path
+              d="M12 9v4"
+            />
+            <path
+              d="M12 17h.01"
+            />
+          </svg>
+          Resolve sync
+        </span>
+        <div
+          class="text-right"
+        >
+          <p
+            class="text-[10px] uppercase tracking-wider text-muted"
+          >
+            Conflicts
+          </p>
+          <p
+            class="mt-0.5 text-base font-bold text-foreground finance-number"
+          >
+            3
+          </p>
+        </div>
+      </div>
+      <h3
+        class="mt-2.5 text-[13px] font-semibold text-foreground"
+      >
+        Three sync conflicts need resolution
+      </h3>
+      <p
+        class="mt-1 text-[11px] text-muted line-clamp-2"
+      >
+        Offline attendance submissions for Grade 4 Umoja collided after morning roll call.
+      </p>
+      <div
+        class="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100"
+      >
+        <span>
+          Resolve
+        </span>
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-arrow-right h-3 w-3"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M5 12h14"
+          />
+          <path
+            d="m12 5 7 7-7 7"
+          />
+        </svg>
+      </div>
+    </a>
+  </div>
+</section>
+`;
+
+exports[`STEP 1: Layout tests matches the dashboard regression snapshots 3`] = `
+<section
+  class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+  data-testid="kpi-strip"
+>
+  <a
+    class="group dashboard-card rounded-[var(--radius)] p-4 transition-all duration-150 hover:border-accent/20 hover:shadow-md widget-enter widget-enter-delay-1"
+    data-testid="kpi-card"
+    href="/dashboard/admin/finance"
+  >
+    <div
+      class="flex items-start justify-between gap-2"
+    >
+      <p
+        class="eyebrow"
+      >
+        Fees Collected Today
+      </p>
+      <span
+        class="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-success-soft text-success"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-arrow-up-right h-3 w-3"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M7 7h10v10"
+          />
+          <path
+            d="M7 17 17 7"
+          />
+        </svg>
+        +7.4%
+      </span>
+    </div>
+    <p
+      class="mt-2 text-[1.875rem] font-bold leading-none text-foreground finance-number"
+      data-testid="kpi-value"
+    >
+      Ksh 31,000
+    </p>
+    <p
+      class="mt-2 text-xs text-muted line-clamp-1"
+    >
+      Posted by cash office and M-PESA today
+    </p>
+    <div
+      class="mt-2.5"
+    >
+      <svg
+        aria-hidden="true"
+        class="h-10 w-full text-success"
+        preserveAspectRatio="none"
+        viewBox="0 0 100 100"
+      >
+        <polygon
+          fill="currentColor"
+          opacity="0.08"
+          points="0,100 0,53.84615384615385 16.666666666666664,43.58974358974359 33.33333333333333,38.46153846153846 50,25.641025641025635 66.66666666666666,20.51282051282051 83.33333333333334,10.256410256410248 100,0 100,100"
+        />
+        <polyline
+          fill="none"
+          points="0,53.84615384615385 16.666666666666664,43.58974358974359 33.33333333333333,38.46153846153846 50,25.641025641025635 66.66666666666666,20.51282051282051 83.33333333333334,10.256410256410248 100,0"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="4"
+        />
+      </svg>
+    </div>
+  </a>
+  <a
+    class="group dashboard-card rounded-[var(--radius)] p-4 transition-all duration-150 hover:border-accent/20 hover:shadow-md widget-enter widget-enter-delay-2"
+    data-testid="kpi-card"
+    href="/dashboard/admin/finance"
+  >
+    <div
+      class="flex items-start justify-between gap-2"
+    >
+      <p
+        class="eyebrow"
+      >
+        Total Fees This Term
+      </p>
+      <span
+        class="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-success-soft text-success"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-arrow-up-right h-3 w-3"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M7 7h10v10"
+          />
+          <path
+            d="M7 17 17 7"
+          />
+        </svg>
+        +4.2%
+      </span>
+    </div>
+    <p
+      class="mt-2 text-[1.875rem] font-bold leading-none text-foreground finance-number"
+      data-testid="kpi-value"
+    >
+      Ksh 373,600
+    </p>
+    <p
+      class="mt-2 text-xs text-muted line-clamp-1"
+    >
+      All billed lines across tuition, lunch, and transport
+    </p>
+    <div
+      class="mt-2.5"
+    >
+      <svg
+        aria-hidden="true"
+        class="h-10 w-full text-success"
+        preserveAspectRatio="none"
+        viewBox="0 0 100 100"
+      >
+        <polygon
+          fill="currentColor"
+          opacity="0.08"
+          points="0,100 0,18.421052631578945 16.666666666666664,14.473684210526315 33.33333333333333,13.157894736842096 50,9.210526315789465 66.66666666666666,6.578947368421055 83.33333333333334,2.631578947368425 100,0 100,100"
+        />
+        <polyline
+          fill="none"
+          points="0,18.421052631578945 16.666666666666664,14.473684210526315 33.33333333333333,13.157894736842096 50,9.210526315789465 66.66666666666666,6.578947368421055 83.33333333333334,2.631578947368425 100,0"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="4"
+        />
+      </svg>
+    </div>
+  </a>
+  <a
+    class="group dashboard-card rounded-[var(--radius)] p-4 transition-all duration-150 hover:border-accent/20 hover:shadow-md widget-enter widget-enter-delay-3"
+    data-testid="kpi-card"
+    href="/dashboard/admin/finance"
+  >
+    <div
+      class="flex items-start justify-between gap-2"
+    >
+      <p
+        class="eyebrow"
+      >
+        Outstanding Balance
+      </p>
+      <span
+        class="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-warning-soft text-warning"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-arrow-down-right h-3 w-3"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="m7 7 10 10"
+          />
+          <path
+            d="M17 7v10H7"
+          />
+        </svg>
+        -3.1%
+      </span>
+    </div>
+    <p
+      class="mt-2 text-[1.875rem] font-bold leading-none text-foreground finance-number"
+      data-testid="kpi-value"
+    >
+      Ksh 51,000
+    </p>
+    <p
+      class="mt-2 text-xs text-muted line-clamp-1"
+    >
+      Still awaiting follow-up and collection
+    </p>
+    <div
+      class="mt-2.5"
+    >
+      <svg
+        aria-hidden="true"
+        class="h-10 w-full text-warning"
+        preserveAspectRatio="none"
+        viewBox="0 0 100 100"
+      >
+        <polygon
+          fill="currentColor"
+          opacity="0.08"
+          points="0,100 0,0 16.666666666666664,4.166666666666657 33.33333333333333,8.333333333333343 50,12.5 66.66666666666666,16.666666666666657 83.33333333333334,18.75 100,25 100,100"
+        />
+        <polyline
+          fill="none"
+          points="0,0 16.666666666666664,4.166666666666657 33.33333333333333,8.333333333333343 50,12.5 66.66666666666666,16.666666666666657 83.33333333333334,18.75 100,25"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="4"
+        />
+      </svg>
+    </div>
+  </a>
+  <a
+    class="group dashboard-card rounded-[var(--radius)] p-4 transition-all duration-150 hover:border-accent/20 hover:shadow-md widget-enter widget-enter-delay-4"
+    data-testid="kpi-card"
+    href="/dashboard/admin/students"
+  >
+    <div
+      class="flex items-start justify-between gap-2"
+    >
+      <p
+        class="eyebrow"
+      >
+        Students with Balance
+      </p>
+      <span
+        class="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-warning-soft text-warning"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-arrow-down-right h-3 w-3"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="m7 7 10 10"
+          />
+          <path
+            d="M17 7v10H7"
+          />
+        </svg>
+        -2
+      </span>
+    </div>
+    <p
+      class="mt-2 text-[1.875rem] font-bold leading-none text-foreground finance-number"
+      data-testid="kpi-value"
+    >
+      5
+    </p>
+    <p
+      class="mt-2 text-xs text-muted line-clamp-1"
+    >
+      Learners still carrying arrears
+    </p>
+    <div
+      class="mt-2.5"
+    >
+      <svg
+        aria-hidden="true"
+        class="h-10 w-full text-warning"
+        preserveAspectRatio="none"
+        viewBox="0 0 100 100"
+      >
+        <polygon
+          fill="currentColor"
+          opacity="0.08"
+          points="0,100 0,0 16.666666666666664,7.142857142857139 33.33333333333333,14.285714285714292 50,14.285714285714292 66.66666666666666,21.42857142857143 83.33333333333334,28.57142857142857 100,35.71428571428571 100,100"
+        />
+        <polyline
+          fill="none"
+          points="0,0 16.666666666666664,7.142857142857139 33.33333333333333,14.285714285714292 50,14.285714285714292 66.66666666666666,21.42857142857143 83.33333333333334,28.57142857142857 100,35.71428571428571"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="4"
+        />
+      </svg>
+    </div>
+  </a>
+</section>
+`;
