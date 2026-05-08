@@ -19,6 +19,6 @@ import { StudentsRepository } from './repositories/students.repository';
     AttendanceService,
     StudentsRepository,
   ],
-  exports: [StudentsService, AttendanceService, StudentsRepository],
+  exports: [StudentsSchemaService, StudentsService, AttendanceService, StudentsRepository],
 })
 export class StudentsModule {}
