@@ -1,0 +1,10 @@
+.git
+.vercel
+node_modules
+.next
+.swc
+.npm-cache
+test-results
+coverage
+*.tsbuildinfo
+.env*
