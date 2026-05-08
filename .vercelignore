@@ -1,4 +1,10 @@
 .git
+node_modules
+apps/web/node_modules
+apps/web/.next
+apps/web/.swc
+apps/web/.npm-cache
+apps/web/test-results
 .npm-cache
 artifacts
 dist
