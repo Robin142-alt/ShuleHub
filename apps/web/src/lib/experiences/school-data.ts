@@ -27,6 +27,7 @@ import type {
 } from "@/lib/experiences/types";
 export type { SchoolExperienceRole } from "@/lib/experiences/types";
 import { toSchoolPath } from "@/lib/routing/experience-routes";
+import { supportSidebarItems } from "@/lib/support/support-data";
 
 export interface SchoolSubscriptionReminder {
   id: string;
@@ -70,6 +71,7 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
     { id: "mpesa", label: "MPESA Transactions", href: toSchoolPath("mpesa"), icon: SmartphoneCharging, group: "Finance" },
     { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Operations" },
     { id: "communication", label: "Communication (SMS)", href: toSchoolPath("communication"), icon: MessageSquareText, group: "Operations" },
+    ...supportSidebarItems,
     { id: "staff", label: "Staff", href: toSchoolPath("staff"), icon: UserSquare2, group: "Administration" },
     { id: "inventory", label: "Inventory", href: toSchoolPath("inventory"), icon: Boxes, group: "Administration" },
     { id: "settings", label: "Settings", href: toSchoolPath("settings"), icon: Settings, group: "Administration" },
@@ -81,6 +83,7 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
     { id: "mpesa", label: "MPESA Transactions", href: toSchoolPath("mpesa"), icon: SmartphoneCharging, group: "Finance" },
     { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Operations" },
     { id: "communication", label: "Communication (SMS)", href: toSchoolPath("communication"), icon: MessageSquareText, group: "Operations" },
+    ...supportSidebarItems,
     { id: "settings", label: "Settings", href: toSchoolPath("settings"), icon: Settings, group: "Administration" },
   ],
   teacher: [
@@ -92,6 +95,7 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
     { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Academics" },
     { id: "communication", label: "Communication (SMS)", href: toSchoolPath("communication"), icon: MessageSquareText, group: "Operations" },
     { id: "timetable", label: "Timetable", href: toSchoolPath("timetable"), icon: CalendarDays, group: "Operations" },
+    ...supportSidebarItems,
   ],
   admin: [
     { id: "dashboard", label: "Dashboard", href: toSchoolPath("dashboard"), icon: LayoutGrid, group: "Overview" },
@@ -101,6 +105,7 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
     { id: "mpesa", label: "MPESA Transactions", href: toSchoolPath("mpesa"), icon: SmartphoneCharging, group: "Finance" },
     { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Operations" },
     { id: "communication", label: "Communication (SMS)", href: toSchoolPath("communication"), icon: MessageSquareText, group: "Operations" },
+    ...supportSidebarItems,
     { id: "staff", label: "Staff", href: toSchoolPath("staff"), icon: UserSquare2, group: "Administration" },
     { id: "inventory", label: "Inventory", href: toSchoolPath("inventory"), icon: Boxes, group: "Administration" },
     { id: "settings", label: "Settings", href: toSchoolPath("settings"), icon: Settings, group: "Administration" },
@@ -110,6 +115,7 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
     { id: "inventory", label: "Inventory", href: toSchoolPath("inventory"), icon: Boxes, group: "Store operations" },
     { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Store operations" },
     { id: "communication", label: "Communication", href: toSchoolPath("communication"), icon: MessageSquareText, group: "Operations" },
+    ...supportSidebarItems,
   ],
   admissions: [
     { id: "dashboard", label: "Dashboard", href: toSchoolPath("dashboard"), icon: LayoutGrid, group: "Overview" },
@@ -117,6 +123,7 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
     { id: "students", label: "Students", href: toSchoolPath("students"), icon: Users, group: "Admissions" },
     { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Admissions" },
     { id: "communication", label: "Communication", href: toSchoolPath("communication"), icon: MessageSquareText, group: "Operations" },
+    ...supportSidebarItems,
   ],
 };
 
@@ -142,6 +149,10 @@ export const schoolSectionLabels: Record<string, string> = {
   timetable: "Timetable",
   staff: "Staff",
   inventory: "Inventory",
+  "support-new-ticket": "New Ticket",
+  "support-my-tickets": "My Tickets",
+  "support-knowledge-base": "Knowledge Base",
+  "support-system-status": "System Status",
   settings: "Settings",
 };
 

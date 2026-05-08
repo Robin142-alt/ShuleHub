@@ -10,6 +10,7 @@ import { QuickActionBar } from "@/components/experience/quick-action-bar";
 import { AdmissionsModuleScreen } from "@/components/modules/admissions/admissions-module-screen";
 import { InventoryModuleScreen } from "@/components/modules/inventory/inventory-module-screen";
 import { ErpShell } from "@/components/school/erp-shell";
+import { SupportCenterWorkspace } from "@/components/support/support-center-workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -1652,6 +1653,17 @@ export function SchoolPages({
       {!studentId && section === "academics" ? <SchoolAcademicsPage role={role} tenantSlug={tenantSlug} /> : null}
       {!studentId && section === "reports" ? <SchoolReportsPage role={role} tenantSlug={tenantSlug} /> : null}
       {!studentId && section === "communication" ? <SchoolCommunicationPage role={role} tenantSlug={tenantSlug} /> : null}
+      {!studentId && (
+        section === "support-new-ticket"
+        || section === "support-my-tickets"
+        || section === "support-knowledge-base"
+        || section === "support-system-status"
+      ) ? (
+        <SupportCenterWorkspace
+          tenantSlug={tenantSlug}
+          defaultView={section as "support-new-ticket" | "support-my-tickets" | "support-knowledge-base" | "support-system-status"}
+        />
+      ) : null}
       {!studentId && section === "exams" ? (
         <SchoolBasicCardPage
           eyebrow="Exams"

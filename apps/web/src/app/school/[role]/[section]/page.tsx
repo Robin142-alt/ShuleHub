@@ -6,6 +6,12 @@ import { readPublicSchoolSession } from "@/lib/routing/public-experience-session
 import { isSchoolSection } from "@/lib/routing/experience-routes";
 
 const allowedRoles = ["principal", "bursar", "teacher", "admin", "storekeeper", "admissions"] as const;
+const supportSections = new Set([
+  "support-new-ticket",
+  "support-my-tickets",
+  "support-knowledge-base",
+  "support-system-status",
+]);
 
 export default async function SchoolSectionPage({
   params,
@@ -24,7 +30,7 @@ export default async function SchoolSectionPage({
 
   const session = await readPublicSchoolSession(role as SchoolExperienceRole);
 
-  if (session.role === "storekeeper") {
+  if (session.role === "storekeeper" && !supportSections.has(section)) {
     redirect("/inventory/dashboard");
   }
 

@@ -22,6 +22,7 @@ import type {
   ExperienceProfile,
 } from "@/lib/experiences/types";
 import { toSuperadminPath } from "@/lib/routing/experience-routes";
+import { adminSupportSidebarItems } from "@/lib/support/support-data";
 
 export const superadminNav: ExperienceNavItem[] = [
   { id: "overview", label: "Overview", href: toSuperadminPath("dashboard"), icon: Activity, group: "Control tower" },
@@ -30,7 +31,7 @@ export const superadminNav: ExperienceNavItem[] = [
   { id: "subscriptions", label: "Subscriptions", href: toSuperadminPath("subscriptions"), icon: CreditCard, group: "Commercial" },
   { id: "mpesa-monitoring", label: "MPESA Monitoring", href: toSuperadminPath("mpesa-monitoring"), icon: SmartphoneCharging, badge: "3", group: "Operations" },
   { id: "users", label: "Users", href: toSuperadminPath("users"), icon: Users, group: "Operations" },
-  { id: "support", label: "Support Tickets", href: toSuperadminPath("support"), icon: LifeBuoy, badge: "12", group: "Operations" },
+  ...adminSupportSidebarItems,
   { id: "audit-logs", label: "Audit Logs", href: toSuperadminPath("audit-logs"), icon: ShieldCheck, group: "Trust & security" },
   { id: "infrastructure", label: "Infrastructure", href: toSuperadminPath("infrastructure"), icon: ServerCog, group: "Trust & security" },
   { id: "notifications", label: "Notifications", href: toSuperadminPath("notifications"), icon: BellRing, badge: "6", group: "Trust & security" },

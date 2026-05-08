@@ -9,6 +9,7 @@ import { ChartCard } from "@/components/experience/chart-card";
 import { MetricGrid } from "@/components/experience/metric-grid";
 import { QuickActionBar } from "@/components/experience/quick-action-bar";
 import { PlatformShell } from "@/components/platform/platform-shell";
+import { PlatformSupportWorkspace } from "@/components/support/platform-support-workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -24,7 +25,6 @@ import {
   revenuePoints,
   subscriptionRows,
   supportActivity,
-  supportRows,
   superadminKpis,
   superadminNav,
   superadminProfile,
@@ -374,29 +374,7 @@ function UsersPage() {
 }
 
 function SupportPage() {
-  const columns: DataTableColumn<(typeof supportRows)[number]>[] = [
-    { id: "tenant", header: "Tenant", render: (row) => <span className="font-semibold">{row.tenant}</span> },
-    { id: "issue", header: "Issue", render: (row) => row.issue },
-    { id: "priority", header: "Priority", render: (row) => <StatusPill label={row.priority} tone={row.priority} /> },
-    { id: "owner", header: "Owner", render: (row) => row.owner },
-    { id: "updatedAt", header: "Updated", render: (row) => row.updatedAt },
-  ];
-
-  return (
-    <div className="space-y-6">
-      <SuperadminPageHeader
-        title="Support tickets"
-        description="Resolve issues from a SaaS-operations perspective: billing, platform health, onboarding, and secure access."
-      />
-      <DataTable
-        title="Live support queue"
-        subtitle="Open issues across tenants, already narrowed to what support or operations can act on."
-        columns={columns}
-        rows={supportRows}
-        getRowKey={(row) => row.id}
-      />
-    </div>
-  );
+  return <PlatformSupportWorkspace defaultView="support" />;
 }
 
 function AuditLogsPage() {
@@ -630,6 +608,12 @@ export function SuperadminPages({
       {normalizedSection === "mpesa-monitoring" ? <MpesaMonitoringPage /> : null}
       {normalizedSection === "users" ? <UsersPage /> : null}
       {normalizedSection === "support" ? <SupportPage /> : null}
+      {normalizedSection === "support-open" ? <PlatformSupportWorkspace defaultView="support-open" /> : null}
+      {normalizedSection === "support-in-progress" ? <PlatformSupportWorkspace defaultView="support-in-progress" /> : null}
+      {normalizedSection === "support-escalated" ? <PlatformSupportWorkspace defaultView="support-escalated" /> : null}
+      {normalizedSection === "support-resolved" ? <PlatformSupportWorkspace defaultView="support-resolved" /> : null}
+      {normalizedSection === "support-sla" ? <PlatformSupportWorkspace defaultView="support-sla" /> : null}
+      {normalizedSection === "support-analytics" ? <PlatformSupportWorkspace defaultView="support-analytics" /> : null}
       {normalizedSection === "audit-logs" ? <AuditLogsPage /> : null}
       {normalizedSection === "infrastructure" ? <InfrastructurePage /> : null}
       {normalizedSection === "notifications" ? <NotificationsPage /> : null}

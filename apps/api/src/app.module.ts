@@ -35,6 +35,7 @@ import { ObservabilityModule } from './modules/observability/observability.modul
 import { SecurityModule } from './modules/security/security.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { AdmissionsModule } from './modules/admissions/admissions.module';
+import { SupportModule } from './modules/support/support.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { AdmissionsModule } from './modules/admissions/admissions.module';
     SecurityModule,
     InventoryModule,
     AdmissionsModule,
+    SupportModule,
     FinanceModule,
     SyncModule,
     StudentsModule,

@@ -13,6 +13,8 @@ export const DEFAULT_ROLE_OWNER = 'owner';
 export const DEFAULT_ROLE_ADMIN = 'admin';
 export const DEFAULT_ROLE_MEMBER = 'member';
 export const DEFAULT_ROLE_STOREKEEPER = 'storekeeper';
+export const DEFAULT_ROLE_SUPPORT_AGENT = 'support_agent';
+export const DEFAULT_ROLE_SUPPORT_LEAD = 'support_lead';
 
 export const DEFAULT_PERMISSION_CATALOG = [
   { resource: '*', action: '*', description: 'Full tenant access' },
@@ -41,6 +43,10 @@ export const DEFAULT_PERMISSION_CATALOG = [
   { resource: 'transfers', action: 'write', description: 'Manage transfer workflows' },
   { resource: 'billing', action: 'read', description: 'View SaaS billing state' },
   { resource: 'billing', action: 'write', description: 'Manage SaaS billing state' },
+  { resource: 'support', action: 'view', description: 'View tenant support tickets and support resources' },
+  { resource: 'support', action: 'create', description: 'Create tenant support tickets' },
+  { resource: 'support', action: 'reply', description: 'Reply to support ticket conversations and upload support attachments' },
+  { resource: 'support', action: 'manage', description: 'Manage, assign, escalate, resolve, and analyze support tickets' },
 ] as const;
 
 export const DEFAULT_ROLE_CATALOG = [
@@ -80,13 +86,24 @@ export const DEFAULT_ROLE_CATALOG = [
       'transfers:write',
       'billing:read',
       'billing:write',
+      'support:view',
+      'support:create',
+      'support:reply',
     ],
   },
   {
     code: DEFAULT_ROLE_MEMBER,
     name: 'Member',
     description: 'Standard tenant access',
-    permissions: ['auth:read', 'users:read', 'students:read', 'attendance:read'],
+    permissions: [
+      'auth:read',
+      'users:read',
+      'students:read',
+      'attendance:read',
+      'support:view',
+      'support:create',
+      'support:reply',
+    ],
   },
   {
     code: DEFAULT_ROLE_STOREKEEPER,
@@ -100,6 +117,36 @@ export const DEFAULT_ROLE_CATALOG = [
       'procurement:write',
       'transfers:read',
       'transfers:write',
+      'support:view',
+      'support:create',
+      'support:reply',
+    ],
+  },
+  {
+    code: DEFAULT_ROLE_SUPPORT_AGENT,
+    name: 'Support Agent',
+    description: 'Platform support operator who manages school tickets and customer conversations',
+    permissions: [
+      'auth:read',
+      'support:view',
+      'support:create',
+      'support:reply',
+      'support:manage',
+      'billing:read',
+    ],
+  },
+  {
+    code: DEFAULT_ROLE_SUPPORT_LEAD,
+    name: 'Support Lead',
+    description: 'Platform support lead with queue, SLA, assignment, and analytics control',
+    permissions: [
+      'auth:read',
+      'support:view',
+      'support:create',
+      'support:reply',
+      'support:manage',
+      'users:read',
+      'billing:read',
     ],
   },
 ] as const;
