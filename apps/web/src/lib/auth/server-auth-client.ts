@@ -150,6 +150,8 @@ async function requestBackendAuth<T>(
     method: input.method,
     headers: {
       Accept: "application/json",
+      "x-auth-audience": "school",
+      "x-tenant-id": input.tenantSlug,
       ...(input.body ? { "Content-Type": "application/json" } : {}),
       ...(input.accessToken ? { Authorization: `Bearer ${input.accessToken}` } : {}),
     },

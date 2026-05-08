@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
   AlertCircle,
@@ -15,7 +16,9 @@ import { MetricGrid } from "@/components/experience/metric-grid";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { Modal } from "@/components/ui/modal";
 import { StatusPill } from "@/components/ui/status-pill";
+import { isDashboardApiConfigured } from "@/lib/dashboard/api-client";
 import {
   buildAttachmentPath,
   createSupportTickets,
@@ -25,9 +28,21 @@ import {
   supportCategories,
   supportModules,
   systemStatusComponents,
+  type SupportAttachment,
+  type SupportMessage,
   type SupportPriority,
   type SupportTicket,
 } from "@/lib/support/support-data";
+import {
+  createSupportTicketLive,
+  fetchKnowledgeBaseLive,
+  fetchSupportCategoriesLive,
+  fetchSupportTicketDetailLive,
+  fetchSupportTicketsLive,
+  fetchSystemStatusLive,
+  replyToSupportTicketLive,
+  uploadSupportAttachmentLive,
+} from "@/lib/support/support-live";
 
 type SchoolSupportView =
   | "support-new-ticket"
@@ -35,15 +50,37 @@ type SchoolSupportView =
   | "support-knowledge-base"
   | "support-system-status";
 
-function createBrowserContext() {
+function createBrowserContext(defaultView: SchoolSupportView, moduleAffected = "Support") {
+  const userAgent =
+    typeof navigator === "undefined" || !navigator.userAgent.includes("Chrome")
+      ? "Chrome 124"
+      : navigator.userAgent;
+  const path =
+    typeof window === "undefined"
+      ? `/support/${defaultView}`
+      : `${window.location.pathname}${window.location.search}`;
+
   return {
-    requestId: "req-local-support",
-    browser: "Chrome 124",
-    device: "Windows laptop",
-    pageUrl: "/support-new-ticket",
-    appVersion: "2026.05.08",
+    requestId:
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : "req-local-support",
+    browser: userAgent,
+    device:
+      typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+        ? "Mobile device"
+        : "Windows laptop",
+    pageUrl: moduleAffected === "Support" ? path : `/school/admin/${moduleAffected.toLowerCase().replace(/\s+/g, "-")}`,
+    appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? "2026.05.08",
     errorLogs: ["No client errors captured in the last 5 minutes"],
   };
+}
+
+function upsertTicket(tickets: SupportTicket[], nextTicket: SupportTicket) {
+  const existing = tickets.some((ticket) => ticket.id === nextTicket.id);
+  return existing
+    ? tickets.map((ticket) => (ticket.id === nextTicket.id ? nextTicket : ticket))
+    : [nextTicket, ...tickets];
 }
 
 export function SupportCenterWorkspace({
@@ -54,28 +91,140 @@ export function SupportCenterWorkspace({
   defaultView: SchoolSupportView;
 }) {
   const normalizedTenantSlug = tenantSlug ?? "barakaacademy";
+  const apiConfigured = isDashboardApiConfigured();
+  const queryClient = useQueryClient();
   const seededTickets = useMemo(
     () => createSupportTickets().filter((ticket) => ticket.tenantSlug === normalizedTenantSlug),
     [normalizedTenantSlug],
   );
-  const [tickets, setTickets] = useState<SupportTicket[]>(seededTickets);
+  const [localTickets, setLocalTickets] = useState<SupportTicket[]>(seededTickets);
   const [subject, setSubject] = useState("");
-  const [category, setCategory] = useState<(typeof supportCategories)[number]>("MPESA");
+  const [category, setCategory] = useState<string>("MPESA");
   const [priority, setPriority] = useState<SupportPriority>("Medium");
-  const [moduleAffected, setModuleAffected] = useState<(typeof supportModules)[number]>("MPESA");
+  const [moduleAffected, setModuleAffected] = useState<string>("MPESA");
   const [description, setDescription] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [createdAttachmentPath, setCreatedAttachmentPath] = useState<string | null>(null);
-  const context = createBrowserContext();
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [schoolReply, setSchoolReply] = useState("");
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const context = useMemo(
+    () => createBrowserContext(defaultView, moduleAffected),
+    [defaultView, moduleAffected],
+  );
+  const ticketsQueryKey = ["support-tickets", normalizedTenantSlug] as const;
+  const ticketDetailQueryKey = ["support-ticket-detail", normalizedTenantSlug, selectedTicketId] as const;
 
-  function submitTicket() {
+  const liveTicketsQuery = useQuery({
+    queryKey: ticketsQueryKey,
+    queryFn: () => fetchSupportTicketsLive({ tenantSlug: normalizedTenantSlug, audience: "school" }),
+    enabled: apiConfigured,
+    retry: false,
+    placeholderData: (previous) => previous,
+  });
+  const liveCategoriesQuery = useQuery({
+    queryKey: ["support-categories", normalizedTenantSlug],
+    queryFn: () => fetchSupportCategoriesLive(normalizedTenantSlug),
+    enabled: apiConfigured,
+    retry: false,
+  });
+  const liveKnowledgeBaseQuery = useQuery({
+    queryKey: ["support-kb", normalizedTenantSlug],
+    queryFn: () => fetchKnowledgeBaseLive(normalizedTenantSlug),
+    enabled: apiConfigured && defaultView === "support-knowledge-base",
+    retry: false,
+  });
+  const liveSystemStatusQuery = useQuery({
+    queryKey: ["support-status", normalizedTenantSlug],
+    queryFn: () => fetchSystemStatusLive(normalizedTenantSlug),
+    enabled: apiConfigured && defaultView === "support-system-status",
+    retry: false,
+  });
+  const liveTicketDetailQuery = useQuery({
+    queryKey: ticketDetailQueryKey,
+    queryFn: () =>
+      fetchSupportTicketDetailLive({
+        ticketId: selectedTicketId!,
+        tenantSlug: normalizedTenantSlug,
+        audience: "school",
+      }),
+    enabled: apiConfigured && Boolean(selectedTicketId),
+    retry: false,
+  });
+  const isLiveMode = Boolean(apiConfigured && liveTicketsQuery.data);
+  const tickets = liveTicketsQuery.data ?? localTickets;
+  const selectedTicket = liveTicketDetailQuery.data
+    ?? tickets.find((ticket) => ticket.id === selectedTicketId)
+    ?? null;
+  const categoryOptions = liveCategoriesQuery.data?.length
+    ? liveCategoriesQuery.data
+    : [...supportCategories];
+  const knowledgeArticles = liveKnowledgeBaseQuery.data?.length
+    ? liveKnowledgeBaseQuery.data
+    : knowledgeBaseArticles;
+  const systemStatus = liveSystemStatusQuery.data?.components?.length
+    ? liveSystemStatusQuery.data.components
+    : systemStatusComponents;
+  const currentIncident = liveSystemStatusQuery.data?.incidents?.[0];
+
+  async function submitTicket() {
     if (!subject.trim() || !description.trim()) {
       setFormError("Subject and description are required before support can triage the ticket.");
       return;
     }
 
+    if (apiConfigured) {
+      try {
+        const liveTicket = await createSupportTicketLive({
+          tenantSlug: normalizedTenantSlug,
+          subject: subject.trim(),
+          category,
+          priority,
+          moduleAffected,
+          description: description.trim(),
+          browser: context.browser,
+          device: context.device,
+          currentPageUrl: context.pageUrl,
+          appVersion: context.appVersion,
+          errorLogs: context.errorLogs,
+        });
+        const attachment = selectedFile
+          ? await uploadSupportAttachmentLive({
+              tenantSlug: normalizedTenantSlug,
+              ticketId: liveTicket.id,
+              file: selectedFile,
+            })
+          : null;
+        const savedTicket = attachment
+          ? { ...liveTicket, attachments: [attachment] }
+          : liveTicket;
+
+        queryClient.setQueryData<SupportTicket[]>(ticketsQueryKey, (current = []) =>
+          upsertTicket(current, savedTicket),
+        );
+        setLocalTickets((current) => upsertTicket(current, savedTicket));
+        setFormError(null);
+        setSuccessMessage(`Ticket ${savedTicket.ticketNumber} created and ${savedTicket.status.toLowerCase()}.`);
+        setCreatedAttachmentPath(attachment?.storedPath ?? null);
+        setSubject("");
+        setDescription("");
+        setSelectedFile(null);
+        return;
+      } catch (error) {
+        setFormError(
+          error instanceof Error
+            ? error.message
+            : "Unable to create the live support ticket.",
+        );
+      }
+    }
+
+    createLocalTicket();
+  }
+
+  function createLocalTicket() {
     const ticketNumber = `SUP-2026-${String(145 + tickets.length + 1).padStart(6, "0")}`;
     const attachmentPath = selectedFile
       ? buildAttachmentPath(normalizedTenantSlug, ticketNumber, selectedFile.name)
@@ -83,7 +232,7 @@ export function SupportCenterWorkspace({
     const newTicket: SupportTicket = {
       id: `ticket-${Date.now()}`,
       ticketNumber,
-      tenantId: `tenant-${normalizedTenantSlug}`,
+      tenantId: normalizedTenantSlug,
       tenantSlug: normalizedTenantSlug,
       schoolName: "Baraka Academy",
       subject: subject.trim(),
@@ -97,10 +246,7 @@ export function SupportCenterWorkspace({
       updatedAt: "now",
       firstResponseDue: priority === "Critical" ? "15 min" : "4 hr",
       resolutionDue: priority === "Critical" ? "4 hr" : "2 days",
-      context: {
-        ...context,
-        pageUrl: `/school/admin/${moduleAffected.toLowerCase().replace(/\s+/g, "-")}`,
-      },
+      context,
       attachments: attachmentPath
         ? [
             {
@@ -124,13 +270,73 @@ export function SupportCenterWorkspace({
       internalNotes: [],
     };
 
-    setTickets((current) => [newTicket, ...current]);
+    setLocalTickets((current) => [newTicket, ...current]);
     setFormError(null);
     setSuccessMessage(`Ticket ${ticketNumber} created and ${newTicket.status.toLowerCase()}.`);
     setCreatedAttachmentPath(attachmentPath);
     setSubject("");
     setDescription("");
     setSelectedFile(null);
+  }
+
+  async function sendSchoolReply() {
+    if (!selectedTicket || !schoolReply.trim()) {
+      return;
+    }
+
+    const body = schoolReply.trim();
+    setReplyError(null);
+
+    if (isLiveMode) {
+      try {
+        const response = await replyToSupportTicketLive({
+          tenantSlug: normalizedTenantSlug,
+          audience: "school",
+          ticketId: selectedTicket.id,
+          body,
+        });
+
+        applyTicketConversationUpdate(selectedTicket.id, response.ticket.status, response.message);
+        setSchoolReply("");
+        void queryClient.invalidateQueries({ queryKey: ticketsQueryKey });
+        return;
+      } catch (error) {
+        setReplyError(
+          error instanceof Error
+            ? error.message
+            : "Unable to send this support reply.",
+        );
+      }
+    }
+
+    applyTicketConversationUpdate(selectedTicket.id, "In Progress", {
+      id: `school-reply-${selectedTicket.messages.length + 1}`,
+      author: "School admin",
+      authorType: "school",
+      body,
+      createdAt: "now",
+    });
+    setSchoolReply("");
+  }
+
+  function applyTicketConversationUpdate(ticketId: string, status: SupportTicket["status"], message: SupportMessage) {
+    const updater = (ticket: SupportTicket): SupportTicket =>
+      ticket.id === ticketId
+        ? {
+            ...ticket,
+            status,
+            updatedAt: "now",
+            messages: [...ticket.messages, message],
+          }
+        : ticket;
+
+    setLocalTickets((current) => current.map(updater));
+    queryClient.setQueryData<SupportTicket[]>(ticketsQueryKey, (current) =>
+      current ? current.map(updater) : current,
+    );
+    queryClient.setQueryData<SupportTicket>(ticketDetailQueryKey, (current) =>
+      current ? updater(current) : current,
+    );
   }
 
   const columns: DataTableColumn<SupportTicket>[] = [
@@ -148,6 +354,17 @@ export function SupportCenterWorkspace({
     { id: "priority", header: "Priority", render: (row) => <StatusPill label={row.priority} tone={priorityTone(row.priority)} /> },
     { id: "status", header: "Status", render: (row) => <StatusPill label={row.status} tone={statusTone(row.status)} /> },
     { id: "updated", header: "Updated", render: (row) => row.updatedAt },
+    {
+      id: "action",
+      header: "Action",
+      render: (row) => (
+        <Button size="sm" variant="secondary" onClick={() => setSelectedTicketId(row.id)}>
+          Open {row.ticketNumber}
+        </Button>
+      ),
+      className: "text-right",
+      headerClassName: "text-right",
+    },
   ];
 
   return (
@@ -163,7 +380,10 @@ export function SupportCenterWorkspace({
               Raise issues, send screenshots or logs, follow ticket progress, and keep every support conversation attached to your school tenant.
             </p>
           </div>
-          <StatusPill label="Tenant isolated" tone="ok" />
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill label="Tenant isolated" tone="ok" />
+            <StatusPill label={isLiveMode ? "Live backend" : "Review fallback"} tone={isLiveMode ? "ok" : "warning"} />
+          </div>
         </div>
       </Card>
 
@@ -204,8 +424,8 @@ export function SupportCenterWorkspace({
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="space-y-2 text-sm text-foreground">
                   <span className="font-medium">Category</span>
-                  <select aria-label="Category" value={category} onChange={(event) => setCategory(event.target.value as typeof category)} className="input-base">
-                    {supportCategories.map((item) => <option key={item}>{item}</option>)}
+                  <select aria-label="Category" value={category} onChange={(event) => setCategory(event.target.value)} className="input-base">
+                    {categoryOptions.map((item) => <option key={item}>{item}</option>)}
                   </select>
                 </label>
                 <label className="space-y-2 text-sm text-foreground">
@@ -216,7 +436,7 @@ export function SupportCenterWorkspace({
                 </label>
                 <label className="space-y-2 text-sm text-foreground">
                   <span className="font-medium">Module affected</span>
-                  <select aria-label="Module affected" value={moduleAffected} onChange={(event) => setModuleAffected(event.target.value as typeof moduleAffected)} className="input-base">
+                  <select aria-label="Module affected" value={moduleAffected} onChange={(event) => setModuleAffected(event.target.value)} className="input-base">
                     {supportModules.map((item) => <option key={item}>{item}</option>)}
                   </select>
                 </label>
@@ -241,7 +461,7 @@ export function SupportCenterWorkspace({
                 />
               </label>
               <div className="flex flex-wrap items-center gap-2">
-                <Button onClick={submitTicket}>
+                <Button onClick={submitTicket} disabled={liveTicketsQuery.isFetching}>
                   <Send className="h-4 w-4" />
                   Submit ticket
                 </Button>
@@ -294,7 +514,7 @@ export function SupportCenterWorkspace({
             items={[
               { id: "open", label: "Open tickets", value: String(tickets.filter((ticket) => ticket.status !== "Closed" && ticket.status !== "Resolved").length), helper: "Visible only to your school tenant" },
               { id: "critical", label: "Critical escalations", value: String(tickets.filter((ticket) => ticket.priority === "Critical").length), helper: "Instant support notification" },
-              { id: "response", label: "Next response due", value: "15m", helper: "Based on active ticket SLA" },
+              { id: "response", label: "Next response due", value: tickets[0]?.firstResponseDue ?? "None", helper: "Based on active ticket SLA" },
             ]}
           />
           <DataTable
@@ -309,7 +529,7 @@ export function SupportCenterWorkspace({
 
       {defaultView === "support-knowledge-base" ? (
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {knowledgeBaseArticles.map((article) => (
+          {knowledgeArticles.map((article) => (
             <Card key={article.id} className="p-5">
               <BookOpenCheck className="h-5 w-5 text-foreground" />
               <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-muted">{article.category}</p>
@@ -336,18 +556,21 @@ export function SupportCenterWorkspace({
               { id: "uptime", header: "Uptime", render: (row) => row.uptime },
               { id: "latency", header: "Latency", render: (row) => row.latency },
             ]}
-            rows={systemStatusComponents}
+            rows={systemStatus}
             getRowKey={(row) => row.id}
           />
           <Card className="p-5">
             <AlertCircle className="h-5 w-5 text-warning" />
             <p className="mt-4 text-lg font-semibold text-foreground">Current incident note</p>
             <p className="mt-2 text-sm leading-6 text-muted">
-              MPESA callbacks are degraded for a subset of providers. Schools can keep collecting payments while support monitors callback replay and reconciliation.
+              {currentIncident?.update_summary
+                ?? "MPESA callbacks are degraded for a subset of providers. Schools can keep collecting payments while support monitors callback replay and reconciliation."}
             </p>
             <div className="mt-5 flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-muted" />
-              <span className="text-sm text-muted">Updated 8 minutes ago</span>
+              <span className="text-sm text-muted">
+                {currentIncident?.updated_at ? `Updated ${currentIncident.updated_at}` : "Updated 8 minutes ago"}
+              </span>
             </div>
           </Card>
         </div>
@@ -362,6 +585,118 @@ export function SupportCenterWorkspace({
           getRowKey={(row) => row.id}
         />
       ) : null}
+
+      <Modal
+        open={Boolean(selectedTicket)}
+        title="Ticket conversation"
+        description={selectedTicket ? `${selectedTicket.ticketNumber} - ${selectedTicket.subject}` : undefined}
+        size="lg"
+        onClose={() => {
+          setSelectedTicketId(null);
+          setSchoolReply("");
+          setReplyError(null);
+        }}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setSelectedTicketId(null)}>
+              Close
+            </Button>
+            <Button onClick={sendSchoolReply}>
+              <Send className="h-4 w-4" />
+              Send reply
+            </Button>
+          </>
+        }
+      >
+        {selectedTicket ? (
+          <div className="space-y-5">
+            {replyError ? (
+              <div role="alert" className="rounded-[var(--radius-sm)] border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-foreground">
+                {replyError}
+              </div>
+            ) : null}
+            <div className="grid gap-3 md:grid-cols-3">
+              <SummaryTile label="Status" value={<StatusPill label={selectedTicket.status} tone={statusTone(selectedTicket.status)} />} />
+              <SummaryTile label="Owner" value={selectedTicket.owner} />
+              <SummaryTile label="Request ID" value={selectedTicket.context.requestId} />
+            </div>
+            <Conversation messages={selectedTicket.messages} />
+            <Attachments attachments={selectedTicket.attachments} />
+            <label className="space-y-2 text-sm text-foreground">
+              <span className="font-medium">Reply to support</span>
+              <textarea
+                aria-label="Reply to support"
+                value={schoolReply}
+                onChange={(event) => setSchoolReply(event.target.value)}
+                className="input-base min-h-24"
+                placeholder="Add an update, answer a support question, or share what changed"
+              />
+            </label>
+          </div>
+        ) : null}
+      </Modal>
+    </div>
+  );
+}
+
+function SummaryTile({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-[var(--radius-sm)] border border-border bg-surface-muted px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{label}</p>
+      <div className="mt-2 text-sm font-semibold text-foreground">{value}</div>
+    </div>
+  );
+}
+
+function Conversation({ messages }: { messages: SupportMessage[] }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-semibold text-foreground">Conversation</p>
+      {messages.length > 0 ? (
+        messages.map((message) => (
+          <div
+            key={message.id}
+            className={`rounded-[var(--radius-sm)] border px-4 py-3 ${
+              message.authorType === "support"
+                ? "border-accent/20 bg-accent-ghost"
+                : "border-border bg-surface-muted"
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">{message.author}</p>
+              <span className="text-xs text-muted">{message.createdAt}</span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-muted">{message.body}</p>
+          </div>
+        ))
+      ) : (
+        <p className="rounded-[var(--radius-sm)] border border-border bg-surface-muted px-4 py-3 text-sm text-muted">
+          Conversation history is loading.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Attachments({ attachments }: { attachments: SupportAttachment[] }) {
+  if (attachments.length === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      <p className="text-sm font-semibold text-foreground">Attachments</p>
+      <div className="mt-2 space-y-2">
+        {attachments.map((attachment) => (
+          <div key={attachment.id} className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-border bg-surface-muted px-4 py-3 text-sm">
+            <Paperclip className="h-4 w-4 text-muted" />
+            <div className="min-w-0">
+              <p className="font-semibold text-foreground">{attachment.name}</p>
+              <p className="truncate text-xs text-muted">{attachment.storedPath}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

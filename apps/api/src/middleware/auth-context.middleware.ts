@@ -25,14 +25,16 @@ export class AuthContextMiddleware implements NestMiddleware {
 
       const requestContext = this.requestContext.requireStore();
 
-      if (!requestContext.tenant_id) {
+      const audience = this.resolveAudience(request);
+      const expectedTenantId = audience === 'superadmin' ? null : requestContext.tenant_id;
+
+      if (!requestContext.tenant_id && expectedTenantId !== null) {
         throw new UnauthorizedException('Tenant context is required before authentication');
       }
 
-      const audience = this.resolveAudience(request);
       const principal = await this.authService.authenticateAccessToken(
         accessToken,
-        requestContext.tenant_id,
+        expectedTenantId,
         audience,
       );
 

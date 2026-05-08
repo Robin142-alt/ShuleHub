@@ -98,6 +98,7 @@ jest.mock("next/link", () => {
 
 beforeEach(() => {
   resetRouterMocks();
+  document.body.style.overflow = "";
   document.cookie.split(";").forEach((cookie) => {
     const [rawName] = cookie.split("=");
     const name = rawName?.trim();

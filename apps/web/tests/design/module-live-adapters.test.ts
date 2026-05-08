@@ -9,8 +9,129 @@ import {
   mapInventoryDatasetFromLive,
   mapInventoryReportsFromLive,
 } from "@/lib/modules/inventory-live";
+import {
+  mapLiveSupportAnalytics,
+  mapLiveSupportTicketDetail,
+} from "@/lib/support/support-live";
 
 describe("module live adapters", () => {
+  test("maps support API ticket detail into the threaded workspace shape", () => {
+    const ticket = mapLiveSupportTicketDetail({
+      ticket: {
+        id: "00000000-0000-0000-0000-00000000aaa1",
+        tenant_id: "barakaacademy",
+        ticket_number: "SUP-2026-000145",
+        subject: "MPESA callbacks are failing",
+        category: "MPESA",
+        priority: "Critical",
+        module_affected: "MPESA",
+        description: "Callbacks are returning 500 and receipts are not matching learners.",
+        status: "Escalated",
+        requester_user_id: "00000000-0000-0000-0000-000000000001",
+        assigned_agent_id: null,
+        assigned_agent_name: "Mercy Otieno",
+        school_name: "Baraka Academy",
+        first_response_due_at: "2026-05-08T08:15:00.000Z",
+        resolution_due_at: "2026-05-08T10:00:00.000Z",
+        context: {
+          request_id: "req-support-1",
+          browser: "Chrome 124",
+          device: "Android phone",
+          current_page_url: "/school/admin/mpesa",
+          app_version: "2026.05.08",
+          error_logs: ["POST /mpesa/callback 500"],
+        },
+        created_at: "2026-05-08T08:00:00.000Z",
+        updated_at: "2026-05-08T08:08:00.000Z",
+      },
+      messages: [
+        {
+          id: "message-1",
+          author_type: "school",
+          body: "Parents are paying but callbacks remain unmatched.",
+          created_at: "2026-05-08T08:00:00.000Z",
+        },
+        {
+          id: "message-2",
+          author_type: "support",
+          body: "We are replaying callback events now.",
+          created_at: "2026-05-08T08:08:00.000Z",
+        },
+      ],
+      attachments: [
+        {
+          id: "attachment-1",
+          original_file_name: "mpesa-callback.log",
+          mime_type: "text/plain",
+          size_bytes: 18432,
+          stored_path: "tenant/barakaacademy/support/00000000-0000-0000-0000-00000000aaa1/mpesa-callback.log",
+        },
+      ],
+      internal_notes: [
+        {
+          id: "note-1",
+          note: "Bug confirmed. Deploying fix tonight.",
+          created_at: "2026-05-08T08:11:00.000Z",
+        },
+      ],
+      status_logs: [],
+    });
+
+    expect(ticket).toMatchObject({
+      id: "00000000-0000-0000-0000-00000000aaa1",
+      tenantSlug: "barakaacademy",
+      ticketNumber: "SUP-2026-000145",
+      schoolName: "Baraka Academy",
+      owner: "Mercy Otieno",
+      status: "Escalated",
+      context: {
+        requestId: "req-support-1",
+        browser: "Chrome 124",
+        device: "Android phone",
+        pageUrl: "/school/admin/mpesa",
+        appVersion: "2026.05.08",
+        errorLogs: ["POST /mpesa/callback 500"],
+      },
+    });
+    expect(ticket.messages.map((message) => message.authorType)).toEqual(["school", "support"]);
+    expect(ticket.attachments[0]).toMatchObject({
+      name: "mpesa-callback.log",
+      size: "18 KB",
+    });
+    expect(ticket.internalNotes[0]?.body).toBe("Bug confirmed. Deploying fix tonight.");
+  });
+
+  test("maps support analytics into command-center metrics and heatmap rows", () => {
+    const analytics = mapLiveSupportAnalytics({
+      status_counts: [
+        { status: "Open", total: 5 },
+        { status: "In Progress", total: 3 },
+        { status: "Waiting for School", total: 2 },
+      ],
+      priority_counts: [
+        { priority: "Critical", total: 2 },
+        { priority: "High", total: 4 },
+      ],
+      sla_breaches: 7,
+      recurring_issues: [
+        { category: "MPESA", module_affected: "MPESA", total: 6 },
+      ],
+      ticket_heatmap: [
+        { day: "2026-05-08", total: 11 },
+      ],
+    });
+
+    expect(analytics.metrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "unresolved", value: "10" }),
+        expect.objectContaining({ id: "breach", value: "7" }),
+        expect.objectContaining({ id: "critical", value: "2" }),
+      ]),
+    );
+    expect(analytics.recurringIssues).toContain("MPESA in MPESA: 6 tickets");
+    expect(analytics.heatmap[0]).toEqual({ day: "Fri", tickets: 11 });
+  });
+
   test("maps inventory API records into the operational dataset shape", () => {
     const dataset = mapInventoryDatasetFromLive({
       categories: [

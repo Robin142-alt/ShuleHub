@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createElement } from "react";
 
@@ -64,14 +64,15 @@ describe("enterprise support workspace", () => {
       "/support-new-ticket",
     );
 
-    await user.type(screen.getByLabelText(/ticket subject/i), "MPESA receipts not matching learners");
+    fireEvent.change(screen.getByLabelText(/ticket subject/i), {
+      target: { value: "MPESA receipts not matching learners" },
+    });
     await user.selectOptions(screen.getByLabelText(/category/i), "MPESA");
     await user.selectOptions(screen.getByLabelText(/priority/i), "Critical");
     await user.selectOptions(screen.getByLabelText(/module affected/i), "MPESA");
-    await user.type(
-      screen.getByLabelText(/description/i),
-      "Parents are paying but callbacks remain unmatched in the finance workspace.",
-    );
+    fireEvent.change(screen.getByLabelText(/description/i), {
+      target: { value: "Parents are paying but callbacks remain unmatched in the finance workspace." },
+    });
     await user.upload(
       screen.getByLabelText(/attachments/i),
       new File(["callback log"], "mpesa-callback.log", { type: "text/plain" }),
@@ -103,10 +104,9 @@ describe("enterprise support workspace", () => {
     expect(within(dialog).getByText(/Internal notes/i)).toBeVisible();
     expect(within(dialog).getByText(/Bug confirmed. Deploying fix tonight./i)).toBeVisible();
 
-    await user.type(
-      within(dialog).getByLabelText(/support reply/i),
-      "We have patched the callback worker and are replaying unmatched receipts.",
-    );
+    fireEvent.change(within(dialog).getByLabelText(/support reply/i), {
+      target: { value: "We have patched the callback worker and are replaying unmatched receipts." },
+    });
     await user.click(within(dialog).getByRole("button", { name: /send reply/i }));
 
     expect(

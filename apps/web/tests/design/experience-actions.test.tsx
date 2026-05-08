@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createElement } from "react";
 
@@ -50,10 +50,18 @@ describe("experience actions", () => {
     await user.click(screen.getByRole("button", { name: /add student/i }));
 
     const dialog = await screen.findByRole("dialog", { name: /add student/i });
-    await user.type(within(dialog).getByLabelText(/learner name/i), "Mercy Atieno");
-    await user.type(within(dialog).getByLabelText(/admission number/i), "ADM-9001");
-    await user.type(within(dialog).getByLabelText(/^class$/i), "Grade 6 Hope");
-    await user.type(within(dialog).getByLabelText(/parent contact/i), "0722000001");
+    fireEvent.change(within(dialog).getByLabelText(/learner name/i), {
+      target: { value: "Mercy Atieno" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/admission number/i), {
+      target: { value: "ADM-9001" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/^class$/i), {
+      target: { value: "Grade 6 Hope" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/parent contact/i), {
+      target: { value: "0722000001" },
+    });
 
     await user.click(within(dialog).getByRole("button", { name: /save student/i }));
 
@@ -92,7 +100,7 @@ describe("experience actions", () => {
 
     await user.click(screen.getByRole("button", { name: /share statement/i }));
 
-    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("ShuleHub family statement"));
     expect(screen.getByText(/statement copied for sharing/i)).toBeVisible();
   });
 
@@ -109,9 +117,15 @@ describe("experience actions", () => {
     await user.click(screen.getByRole("button", { name: /record payment/i }));
 
     const dialog = await screen.findByRole("dialog", { name: /record payment/i });
-    await user.type(within(dialog).getByLabelText(/payment student/i), "Mercy Atieno");
-    await user.type(within(dialog).getByLabelText(/payment amount/i), "18500");
-    await user.type(within(dialog).getByLabelText(/payment reference/i), "SMX82KQ4");
+    fireEvent.change(within(dialog).getByLabelText(/payment student/i), {
+      target: { value: "Mercy Atieno" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/payment amount/i), {
+      target: { value: "18500" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/payment reference/i), {
+      target: { value: "SMX82KQ4" },
+    });
 
     await user.click(within(dialog).getByRole("button", { name: /save payment/i }));
 
@@ -133,10 +147,12 @@ describe("experience actions", () => {
 
     const dialog = await screen.findByRole("dialog", { name: /manual reconcile/i });
     const receiptInput = within(dialog).getByLabelText(/^receipt code$/i);
-    await user.clear(receiptInput);
-    await user.type(receiptInput, "QJT8V9H33");
-    await user.clear(within(dialog).getByLabelText(/matched learner/i));
-    await user.type(within(dialog).getByLabelText(/matched learner/i), "Mercy Atieno");
+    fireEvent.change(receiptInput, {
+      target: { value: "QJT8V9H33" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/matched learner/i), {
+      target: { value: "Mercy Atieno" },
+    });
 
     await user.click(within(dialog).getByRole("button", { name: /save match/i }));
 

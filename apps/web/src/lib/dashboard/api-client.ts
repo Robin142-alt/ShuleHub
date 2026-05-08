@@ -147,9 +147,13 @@ export async function requestDashboardApi<T>(
       method: options?.method ?? "GET",
       headers: {
         Accept: "application/json",
+        ...(options?.tenantId ? { "x-tenant-id": options.tenantId } : {}),
         ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
         ...(options?.accessToken
-          ? { Authorization: `Bearer ${options.accessToken}` }
+          ? {
+              Authorization: `Bearer ${options.accessToken}`,
+              "x-auth-audience": "school",
+            }
           : {}),
       },
       cache: "no-store",
