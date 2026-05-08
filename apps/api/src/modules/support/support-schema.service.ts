@@ -540,6 +540,8 @@ export class SupportSchemaService implements OnModuleInit {
     ];
 
     for (const article of articles) {
+      const tagsSql = article.tags.map((tag) => format('%L', tag)).join(', ');
+
       await this.databaseService.runSchemaBootstrap(format(
         `
           SET LOCAL app.role = 'system';
@@ -554,7 +556,7 @@ export class SupportSchemaService implements OnModuleInit {
             body,
             tags
           )
-          VALUES ('global', %L, %L, %L, %L, %L, %L::text[])
+          VALUES ('global', %L, %L, %L, %L, %L, ARRAY[${tagsSql}]::text[])
           ON CONFLICT (tenant_id, slug)
           DO UPDATE SET
             category = EXCLUDED.category,
@@ -570,7 +572,6 @@ export class SupportSchemaService implements OnModuleInit {
         article.title,
         article.summary,
         article.body,
-        article.tags,
       ));
     }
 
