@@ -15,6 +15,8 @@ interface MpesaTransactionRow {
   result_code: number;
   result_desc: string;
   status: MpesaTransactionEntity['status'];
+  transaction_id: string | null;
+  mpesa_short_code: string | null;
   mpesa_receipt_number: string | null;
   amount_minor: string | null;
   phone_number: string | null;
@@ -52,6 +54,8 @@ export class MpesaTransactionsRepository {
           result_code,
           result_desc,
           status,
+          transaction_id,
+          mpesa_short_code,
           mpesa_receipt_number,
           amount_minor,
           phone_number,
@@ -69,11 +73,13 @@ export class MpesaTransactionsRepository {
           $7,
           $8,
           $9,
-          $10::bigint,
+          $10,
           $11,
-          $12::jsonb,
-          $13::timestamptz,
-          $14::jsonb
+          $12::bigint,
+          $13,
+          $14::jsonb,
+          $15::timestamptz,
+          $16::jsonb
         )
         ON CONFLICT (tenant_id, checkout_request_id)
         DO UPDATE SET
@@ -83,6 +89,8 @@ export class MpesaTransactionsRepository {
           result_code = EXCLUDED.result_code,
           result_desc = EXCLUDED.result_desc,
           status = EXCLUDED.status,
+          transaction_id = COALESCE(EXCLUDED.transaction_id, mpesa_transactions.transaction_id),
+          mpesa_short_code = COALESCE(EXCLUDED.mpesa_short_code, mpesa_transactions.mpesa_short_code),
           mpesa_receipt_number = COALESCE(EXCLUDED.mpesa_receipt_number, mpesa_transactions.mpesa_receipt_number),
           amount_minor = COALESCE(EXCLUDED.amount_minor, mpesa_transactions.amount_minor),
           phone_number = COALESCE(EXCLUDED.phone_number, mpesa_transactions.phone_number),
@@ -103,6 +111,8 @@ export class MpesaTransactionsRepository {
           result_code,
           result_desc,
           status,
+          transaction_id,
+          mpesa_short_code,
           mpesa_receipt_number,
           amount_minor::text,
           phone_number,
@@ -123,6 +133,8 @@ export class MpesaTransactionsRepository {
         input.callback.result_code,
         input.callback.result_desc,
         input.callback.status,
+        input.callback.mpesa_receipt_number,
+        null,
         input.callback.mpesa_receipt_number,
         input.callback.amount_minor,
         this.piiEncryptionService.encryptNullable(
@@ -173,6 +185,8 @@ export class MpesaTransactionsRepository {
           result_code,
           result_desc,
           status,
+          transaction_id,
+          mpesa_short_code,
           mpesa_receipt_number,
           amount_minor::text,
           phone_number,

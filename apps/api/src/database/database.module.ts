@@ -16,11 +16,13 @@ import { DatabaseService } from './database.service';
         const logger = new Logger('DatabasePool');
         const connectionString = configService.get<string>('database.url');
         const statementTimeoutMs = Number(configService.get<number>('database.statementTimeoutMs') ?? 5000);
+        const connectionTimeoutMs = Number(configService.get<number>('database.connectionTimeoutMs') ?? 10000);
 
         const pool = new Pool({
           connectionString,
           max: Number(configService.get<number>('database.maxConnections') ?? 20),
           idleTimeoutMillis: Number(configService.get<number>('database.idleTimeoutMs') ?? 10000),
+          connectionTimeoutMillis: connectionTimeoutMs,
           statement_timeout: statementTimeoutMs,
           application_name: 'shule-hub-api',
           keepAlive: true,

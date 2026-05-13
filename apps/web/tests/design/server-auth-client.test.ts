@@ -34,7 +34,7 @@ describe("server auth client redirect targets", () => {
     }
   });
 
-  it("routes superadmin logins to the superadmin compatibility home", async () => {
+  it("routes superadmin logins to the platform dashboard", async () => {
     const client = createServerAuthClient(buildRequest("shule-hub-erp.vercel.app"));
 
     const session = await client.login({
@@ -44,11 +44,11 @@ describe("server auth client redirect targets", () => {
       verificationCode: superadminDemoCredentials.verificationCode,
     });
 
-    expect(session.homePath).toBe("/superadmin");
-    expect(session.redirectTo).toBe("/superadmin");
+    expect(session.homePath).toBe("/superadmin/dashboard");
+    expect(session.redirectTo).toBe("/superadmin/dashboard");
   });
 
-  it("routes school logins to the role-specific school compatibility home", async () => {
+  it("routes school logins to the required role dashboard", async () => {
     const client = createServerAuthClient(buildRequest("shule-hub-erp.vercel.app"));
 
     const session = await client.login({
@@ -58,8 +58,30 @@ describe("server auth client redirect targets", () => {
       tenantSlug: "barakaacademy",
     });
 
-    expect(session.homePath).toBe("/school/bursar");
-    expect(session.redirectTo).toBe("/school/bursar");
+    expect(session.homePath).toBe("/finance/dashboard");
+    expect(session.redirectTo).toBe("/finance/dashboard");
+  });
+
+  it("routes documented storekeeper and admissions credentials to their workspaces", async () => {
+    const client = createServerAuthClient(buildRequest("shule-hub-erp.vercel.app"));
+
+    const storekeeperSession = await client.login({
+      audience: "school",
+      identifier: schoolDemoCredentials.storekeeper.identifier,
+      password: schoolDemoCredentials.storekeeper.password,
+      tenantSlug: "amani-prep",
+    });
+    const admissionsSession = await client.login({
+      audience: "school",
+      identifier: schoolDemoCredentials.admissions.identifier,
+      password: schoolDemoCredentials.admissions.password,
+      tenantSlug: "barakaacademy",
+    });
+
+    expect(storekeeperSession.homePath).toBe("/inventory/dashboard");
+    expect(storekeeperSession.role).toBe("storekeeper");
+    expect(admissionsSession.homePath).toBe("/dashboard");
+    expect(admissionsSession.role).toBe("admissions");
   });
 
   it("routes seeded storekeeper accounts to the dedicated inventory workspace", async () => {
@@ -100,7 +122,7 @@ describe("server auth client redirect targets", () => {
     ).rejects.toThrow("Use one of the listed staff review accounts");
   });
 
-  it("routes portal logins to the viewer-specific portal compatibility home", async () => {
+  it("routes portal logins to the portal dashboard", async () => {
     const client = createServerAuthClient(buildRequest("shule-hub-erp.vercel.app"));
 
     const session = await client.login({
@@ -109,7 +131,7 @@ describe("server auth client redirect targets", () => {
       password: portalDemoCredentials.student.password,
     });
 
-    expect(session.homePath).toBe("/portal/student");
-    expect(session.redirectTo).toBe("/portal/student");
+    expect(session.homePath).toBe("/portal/dashboard");
+    expect(session.redirectTo).toBe("/portal/dashboard");
   });
 });

@@ -24,6 +24,7 @@ import {
   portalAttendanceTrend,
   portalFeeHistory,
   portalMessages,
+  portalPaymentInstructions,
   type PortalViewer,
 } from "@/lib/experiences/portal-data";
 import { toPortalPath } from "@/lib/routing/experience-routes";
@@ -177,18 +178,27 @@ function PortalFeesPage({ viewer }: { viewer: PortalViewer }) {
             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft text-foreground">
               <SmartphoneCharging className="h-5 w-5" />
             </span>
-            <div>
-              <p className="text-lg font-semibold text-foreground">M-PESA payment instructions</p>
-              <p className="mt-1 text-sm text-muted">Friendly enough for parents, still operationally accurate.</p>
+          <div>
+            <p className="text-lg font-semibold text-foreground">M-PESA payment instructions</p>
+              <p className="mt-1 text-sm text-muted">{portalPaymentInstructions.schoolName} receives fees directly.</p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-border bg-surface-muted px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Paybill</p>
+              <p className="mt-2 text-xl font-bold text-foreground">{portalPaymentInstructions.paybillNumber}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface-muted px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Till</p>
+              <p className="mt-2 text-xl font-bold text-foreground">{portalPaymentInstructions.tillNumber}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface-muted px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Account</p>
+              <p className="mt-2 text-xl font-bold text-foreground">{portalPaymentInstructions.accountNumber}</p>
             </div>
           </div>
           <div className="mt-5 space-y-3">
-            {[
-              "Go to M-PESA > Lipa na M-PESA > Pay Bill.",
-              "Business number: 174379",
-              "Account number: ADM SH-24011",
-              "Use the learner admission number exactly as shown.",
-            ].map((item) => (
+            {portalPaymentInstructions.steps.map((item) => (
               <div key={item} className="rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm text-foreground">
                 {item}
               </div>

@@ -60,12 +60,13 @@ export default () => ({
     maxConnections: parseNumber(process.env.DATABASE_MAX_CONNECTIONS, 20),
     idleTimeoutMs: parseNumber(process.env.DATABASE_IDLE_TIMEOUT_MS, 10000),
     statementTimeoutMs: parseNumber(process.env.DATABASE_STATEMENT_TIMEOUT_MS, 5000),
+    connectionTimeoutMs: parseNumber(process.env.DATABASE_CONNECT_TIMEOUT_MS, isServerlessRuntime ? 1500 : 10000),
     connectMaxRetries: parseNumber(process.env.DATABASE_CONNECT_MAX_RETRIES, 10),
     connectRetryDelayMs: parseNumber(process.env.DATABASE_CONNECT_RETRY_DELAY_MS, 2000),
   },
   redis: {
     url: process.env.REDIS_URL ?? 'redis://127.0.0.1:6379',
-    connectTimeoutMs: parseNumber(process.env.REDIS_CONNECT_TIMEOUT_MS, 10000),
+    connectTimeoutMs: parseNumber(process.env.REDIS_CONNECT_TIMEOUT_MS, isServerlessRuntime ? 1500 : 10000),
   },
   queue: {
     prefix: process.env.QUEUE_PREFIX ?? 'shule-hub',
@@ -147,7 +148,7 @@ export default () => ({
       process.env.MPESA_STALE_INTENT_SWEEP_BATCH_SIZE,
       100,
     ),
-    ledgerDebitAccountCode: process.env.MPESA_LEDGER_DEBIT_ACCOUNT_CODE ?? '1100-MPESA-CLEARING',
+    ledgerDebitAccountCode: process.env.MPESA_LEDGER_DEBIT_ACCOUNT_CODE ?? '1110-MPESA-CLEARING',
     ledgerCreditAccountCode:
       process.env.MPESA_LEDGER_CREDIT_ACCOUNT_CODE ?? '2100-CUSTOMER-DEPOSITS',
   },

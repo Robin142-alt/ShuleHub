@@ -13,6 +13,23 @@ interface CreateSessionInput extends AuthenticatedPrincipal {
   user_agent: string | null;
 }
 
+export interface SafeSessionRecord {
+  user_id: string;
+  tenant_id: string | null;
+  role: string;
+  audience: AuthSessionRecord['audience'];
+  permissions: string[];
+  session_id: string;
+  is_authenticated: boolean;
+  created_at: string;
+  updated_at: string;
+  refresh_expires_at: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  device_label: string;
+  suspicious: boolean;
+}
+
 @Injectable()
 export class SessionService {
   constructor(private readonly redisService: RedisService) {}
@@ -69,6 +86,27 @@ export class SessionService {
     }
 
     await redis.del(this.getUserSessionKey(userId));
+  }
+
+  async listUserSessions(userId: string): Promise<SafeSessionRecord[]> {
+    const redis = this.redisService.getClient();
+    const sessionIds = await redis.smembers(this.getUserSessionKey(userId));
+    const sessions: SafeSessionRecord[] = [];
+
+    for (const sessionId of sessionIds) {
+      const session = await this.getSession(sessionId);
+
+      if (!session) {
+        await redis.srem(this.getUserSessionKey(userId), sessionId);
+        continue;
+      }
+
+      sessions.push(this.toSafeSessionRecord(session));
+    }
+
+    return sessions.sort((left, right) =>
+      right.updated_at.localeCompare(left.updated_at),
+    );
   }
 
   async rotateRefreshToken(input: {
@@ -140,6 +178,49 @@ export class SessionService {
     const redis = this.redisService.getClient();
     await redis.set(this.getSessionKey(session.session_id), JSON.stringify(session), 'EX', ttlSeconds);
     await redis.sadd(this.getUserSessionKey(session.user_id), session.session_id);
+  }
+
+  private toSafeSessionRecord(session: AuthSessionRecord): SafeSessionRecord {
+    return {
+      user_id: session.user_id,
+      tenant_id: session.tenant_id,
+      role: session.role,
+      audience: session.audience,
+      permissions: session.permissions,
+      session_id: session.session_id,
+      is_authenticated: session.is_authenticated,
+      created_at: session.created_at,
+      updated_at: session.updated_at,
+      refresh_expires_at: session.refresh_expires_at,
+      ip_address: session.ip_address,
+      user_agent: session.user_agent,
+      device_label: this.getDeviceLabel(session.user_agent),
+      suspicious: false,
+    };
+  }
+
+  private getDeviceLabel(userAgent: string | null): string {
+    if (!userAgent) {
+      return 'Unknown device';
+    }
+
+    if (/firefox/i.test(userAgent)) {
+      return 'Firefox browser';
+    }
+
+    if (/edg/i.test(userAgent)) {
+      return 'Edge browser';
+    }
+
+    if (/chrome/i.test(userAgent)) {
+      return 'Chrome browser';
+    }
+
+    if (/safari/i.test(userAgent)) {
+      return 'Safari browser';
+    }
+
+    return 'Browser session';
   }
 
   private getSessionTtlSeconds(refreshExpiresAt: string): number {

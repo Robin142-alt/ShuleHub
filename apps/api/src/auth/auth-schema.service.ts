@@ -266,6 +266,133 @@ export class AuthSchemaService implements OnModuleInit {
       END;
       $$;
 
+      CREATE OR REPLACE FUNCTION app.ensure_global_user_for_invitation(
+        input_email text,
+        input_password_hash text,
+        input_display_name text
+      )
+      RETURNS TABLE (
+        id uuid,
+        tenant_id text,
+        email text,
+        password_hash text,
+        display_name text,
+        status text,
+        created_at timestamptz,
+        updated_at timestamptz
+      )
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public, app, pg_temp
+      AS $$
+      DECLARE
+        request_tenant_id text;
+        request_role text;
+        request_path text;
+        normalized_email text;
+        existing_user_id uuid;
+      BEGIN
+        request_tenant_id := NULLIF(current_setting('app.tenant_id', true), '');
+        request_role := COALESCE(NULLIF(current_setting('app.role', true), ''), '');
+        request_path := COALESCE(NULLIF(current_setting('app.path', true), ''), '');
+        normalized_email := lower(input_email);
+
+        IF request_tenant_id IS NULL THEN
+          RAISE EXCEPTION 'Tenant context is required for invitation acceptance'
+            USING ERRCODE = '42501';
+        END IF;
+
+        IF request_path <> '/auth/invitations/accept'
+          AND request_role NOT IN ('platform_owner', 'superadmin', 'system') THEN
+          RAISE EXCEPTION 'Invitation user activation is restricted'
+            USING ERRCODE = '42501';
+        END IF;
+
+        SELECT u.id
+        INTO existing_user_id
+        FROM users u
+        WHERE lower(u.email) = normalized_email
+        LIMIT 1
+        FOR UPDATE;
+
+        IF existing_user_id IS NULL THEN
+          RETURN QUERY
+          INSERT INTO users (tenant_id, email, password_hash, display_name, status)
+          VALUES ('global', normalized_email, input_password_hash, input_display_name, 'active')
+          RETURNING
+            users.id,
+            users.tenant_id,
+            users.email,
+            users.password_hash,
+            users.display_name,
+            users.status,
+            users.created_at,
+            users.updated_at;
+          RETURN;
+        END IF;
+
+        RETURN QUERY
+        UPDATE users
+        SET
+          password_hash = input_password_hash,
+          display_name = input_display_name,
+          status = 'active',
+          updated_at = NOW()
+        WHERE users.id = existing_user_id
+          AND users.tenant_id = 'global'
+        RETURNING
+          users.id,
+          users.tenant_id,
+          users.email,
+          users.password_hash,
+          users.display_name,
+          users.status,
+          users.created_at,
+          users.updated_at;
+      END;
+      $$;
+
+      CREATE OR REPLACE FUNCTION app.update_global_user_password_for_reset(
+        input_user_id uuid,
+        input_password_hash text
+      )
+      RETURNS void
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public, app, pg_temp
+      AS $$
+      DECLARE
+        request_tenant_id text;
+        request_role text;
+        request_path text;
+      BEGIN
+        request_tenant_id := NULLIF(current_setting('app.tenant_id', true), '');
+        request_role := COALESCE(NULLIF(current_setting('app.role', true), ''), '');
+        request_path := COALESCE(NULLIF(current_setting('app.path', true), ''), '');
+
+        IF request_tenant_id IS NULL THEN
+          RAISE EXCEPTION 'Tenant context is required for password reset'
+            USING ERRCODE = '42501';
+        END IF;
+
+        IF request_path <> '/auth/password/reset'
+          AND request_role NOT IN ('platform_owner', 'superadmin', 'system') THEN
+          RAISE EXCEPTION 'Password reset helper is restricted'
+            USING ERRCODE = '42501';
+        END IF;
+
+        UPDATE users
+        SET password_hash = input_password_hash, updated_at = NOW()
+        WHERE id = input_user_id
+          AND tenant_id = 'global';
+
+        IF NOT FOUND THEN
+          RAISE EXCEPTION 'Password reset target user was not found'
+            USING ERRCODE = 'P0002';
+        END IF;
+      END;
+      $$;
+
       CREATE TABLE IF NOT EXISTS users (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         tenant_id text NOT NULL DEFAULT 'global',
@@ -382,26 +509,50 @@ export class AuthSchemaService implements OnModuleInit {
       DROP POLICY IF EXISTS roles_rls_policy ON roles;
       CREATE POLICY roles_rls_policy ON roles
       FOR ALL
-      USING (tenant_id = current_setting('app.tenant_id', true))
-      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+      USING (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR current_setting('app.role', true) IN ('platform_owner', 'superadmin', 'system')
+      )
+      WITH CHECK (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR current_setting('app.role', true) IN ('platform_owner', 'superadmin', 'system')
+      );
 
       DROP POLICY IF EXISTS permissions_rls_policy ON permissions;
       CREATE POLICY permissions_rls_policy ON permissions
       FOR ALL
-      USING (tenant_id = current_setting('app.tenant_id', true))
-      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+      USING (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR current_setting('app.role', true) IN ('platform_owner', 'superadmin', 'system')
+      )
+      WITH CHECK (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR current_setting('app.role', true) IN ('platform_owner', 'superadmin', 'system')
+      );
 
       DROP POLICY IF EXISTS role_permissions_rls_policy ON role_permissions;
       CREATE POLICY role_permissions_rls_policy ON role_permissions
       FOR ALL
-      USING (tenant_id = current_setting('app.tenant_id', true))
-      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+      USING (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR current_setting('app.role', true) IN ('platform_owner', 'superadmin', 'system')
+      )
+      WITH CHECK (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR current_setting('app.role', true) IN ('platform_owner', 'superadmin', 'system')
+      );
 
       DROP POLICY IF EXISTS tenant_memberships_rls_policy ON tenant_memberships;
       CREATE POLICY tenant_memberships_rls_policy ON tenant_memberships
       FOR ALL
-      USING (tenant_id = current_setting('app.tenant_id', true))
-      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+      USING (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR current_setting('app.role', true) IN ('platform_owner', 'superadmin', 'system')
+      )
+      WITH CHECK (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR current_setting('app.role', true) IN ('platform_owner', 'superadmin', 'system')
+      );
 
       DROP TRIGGER IF EXISTS trg_users_set_updated_at ON users;
       CREATE TRIGGER trg_users_set_updated_at

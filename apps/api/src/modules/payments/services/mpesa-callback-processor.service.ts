@@ -35,6 +35,7 @@ import { CallbackLogsRepository } from '../repositories/callback-logs.repository
 import { MpesaTransactionsRepository } from '../repositories/mpesa-transactions.repository';
 import { PaymentIntentsRepository } from '../repositories/payment-intents.repository';
 import { MpesaService } from './mpesa.service';
+import { PaymentAllocationService } from './payment-allocation.service';
 
 interface PaymentProcessingJobInput {
   tenant_id: string;
@@ -67,6 +68,7 @@ export class MpesaCallbackProcessorService {
     private readonly billingService: BillingService,
     private readonly fraudDetectionService: FraudDetectionService,
     @Optional() private readonly sloMetrics?: SloMetricsService,
+    @Optional() private readonly paymentAllocationService?: PaymentAllocationService,
   ) {}
 
   async process(jobPayload: ProcessMpesaCallbackJobPayload): Promise<void> {
@@ -507,11 +509,13 @@ export class MpesaCallbackProcessorService {
 
     const debitAccount = await this.accountsRepository.findByCode(
       tenantId,
-      this.requireConfig('mpesa.ledgerDebitAccountCode'),
+      paymentIntent.ledger_debit_account_code ??
+        this.requireConfig('mpesa.ledgerDebitAccountCode'),
     );
     const creditAccount = await this.accountsRepository.findByCode(
       tenantId,
-      this.requireConfig('mpesa.ledgerCreditAccountCode'),
+      paymentIntent.ledger_credit_account_code ??
+        this.requireConfig('mpesa.ledgerCreditAccountCode'),
     );
 
     if (!debitAccount || !creditAccount) {
@@ -569,11 +573,20 @@ export class MpesaCallbackProcessorService {
       paymentIntent.id,
       postedTransaction.transaction_id,
     );
-    await this.billingService.handlePaymentIntentCompleted(
-      tenantId,
-      paymentIntent.id,
-      callback.amount_minor,
-    );
+    await this.paymentAllocationService?.allocateTenantFeePayment({
+      tenant_id: tenantId,
+      payment_intent: paymentIntent,
+      amount_minor: callback.amount_minor,
+      ledger_transaction_id: postedTransaction.transaction_id,
+    });
+
+    if (paymentIntent.payment_owner === 'platform') {
+      await this.billingService.handlePaymentIntentCompleted(
+        tenantId,
+        paymentIntent.id,
+        callback.amount_minor,
+      );
+    }
     await this.publishPaymentCompletedEvent(
       paymentIntent,
       callback,

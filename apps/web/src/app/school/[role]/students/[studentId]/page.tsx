@@ -13,7 +13,7 @@ export default async function SchoolStudentProfilePage({
 }) {
   const { role, studentId } = await params;
 
-  if (!allowedRoles.includes(role as SchoolExperienceRole)) {
+  if (!allowedRoles.includes(role as (typeof allowedRoles)[number])) {
     notFound();
   }
 

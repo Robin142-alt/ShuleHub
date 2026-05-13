@@ -123,6 +123,20 @@ export const portalFeeHistory = [
   { id: "fee-3", date: "2026-03-15", amount: formatCurrency(12_000), method: "Bank", reference: "BNK-84721", status: "Posted" },
 ];
 
+export const portalPaymentInstructions = {
+  schoolName: "Baraka Academy",
+  paybillNumber: "247247",
+  tillNumber: "837492",
+  accountNumber: "ADM-2025-001",
+  settlementLabel: "Baraka Academy school fees account",
+  steps: [
+    "Go to M-PESA > Lipa na M-PESA > Pay Bill.",
+    "Enter Paybill 247247.",
+    "Enter Account ADM-2025-001.",
+    "Use the learner admission number exactly as shown on the statement.",
+  ],
+};
+
 export const portalAcademicRows = [
   { id: "result-1", subject: "Mathematics", score: "82%", grade: "EE", teacher: "Mr. Otieno" },
   { id: "result-2", subject: "English", score: "75%", grade: "ME", teacher: "Ms. Njoroge" },

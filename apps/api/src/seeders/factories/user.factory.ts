@@ -52,10 +52,11 @@ export class UserFactory {
     const records: UserSeedRecord[] = [];
 
     records.push(
-      this.buildRecord(tenant, 'owner', 'Owner', 'owner', 'ADM-001', 'admin', ['students', 'attendance', 'billing']),
-      this.buildRecord(tenant, 'admin', 'Operations Admin', 'admin', 'ADM-002', 'admin', ['students', 'attendance']),
+      this.buildRecord(tenant, 'owner', 'Owner', 'owner', 'ADM-001', 'admin', ['students', 'billing']),
+      this.buildRecord(tenant, 'admin', 'Operations Admin', 'admin', 'ADM-002', 'admin', ['students']),
       this.buildRecord(tenant, 'bursar', 'Bursar', 'admin', 'FIN-001', 'finance', ['billing']),
       this.buildRecord(tenant, 'storekeeper', 'Storekeeper', 'storekeeper', 'STK-001', 'admin', ['inventory', 'procurement']),
+      this.buildRecord(tenant, 'librarian', 'Librarian', 'librarian', 'LIB-001', 'admin', ['library']),
       this.buildRecord(tenant, 'admissions', 'Admissions', 'admissions', 'ADM-003', 'admin', ['students', 'admissions']),
     );
 

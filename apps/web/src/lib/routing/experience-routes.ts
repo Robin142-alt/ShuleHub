@@ -5,6 +5,12 @@ export const SUPERADMIN_SECTIONS = [
   "subscriptions",
   "mpesa-monitoring",
   "support",
+  "support-open",
+  "support-in-progress",
+  "support-escalated",
+  "support-resolved",
+  "support-sla",
+  "support-analytics",
   "audit-logs",
   "infrastructure",
   "notifications",
@@ -27,6 +33,10 @@ export const SCHOOL_SECTIONS = [
   "communication",
   "settings",
   "timetable",
+  "support-new-ticket",
+  "support-my-tickets",
+  "support-knowledge-base",
+  "support-system-status",
 ] as const;
 
 export const PORTAL_SECTIONS = [

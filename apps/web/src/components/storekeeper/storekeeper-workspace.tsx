@@ -59,6 +59,7 @@ import {
   type StorekeeperSupplier,
   type StorekeeperTransfer,
 } from "@/lib/storekeeper/storekeeper-data";
+import { supportSidebarItems } from "@/lib/support/support-data";
 import {
   syncStorekeeperStockIssue,
   syncStorekeeperStockReceipt,
@@ -1628,6 +1629,27 @@ export function StorekeeperWorkspace({
                 );
               })}
             </nav>
+            <div className="mt-4 border-t border-slate-800 pt-4">
+              <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                Support Center
+              </p>
+              <nav className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-1">
+                {supportSidebarItems.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <Link
+                      key={item.id}
+                      href={`/school/storekeeper/${item.id}`}
+                      className="flex items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-[13px] font-semibold text-slate-300 transition hover:bg-slate-900 hover:text-white"
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
           </div>
         </aside>
 

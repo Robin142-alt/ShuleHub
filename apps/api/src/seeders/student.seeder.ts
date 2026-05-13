@@ -41,14 +41,12 @@ export class StudentSeeder {
         }
 
         await this.upsertEnrollment(context, studentId, studentSeed);
-        await this.upsertAttendance(context, studentId, studentSeed);
       }
 
       context.summary.counts.students = context.registries.student_ids.size;
       context.summary.counts.guardians = await this.countRows('guardians', context.options.tenant);
       context.summary.counts.student_guardians = await this.countRows('student_guardians', context.options.tenant);
       context.summary.counts.student_enrollments = await this.countRows('student_enrollments', context.options.tenant);
-      context.summary.counts.attendance_records = await this.countRows('attendance_records', context.options.tenant);
     });
   }
 
@@ -263,91 +261,6 @@ export class StudentSeeder {
     );
   }
 
-  private async upsertAttendance(
-    context: SeedRuntimeContext,
-    studentId: string,
-    seed: StudentSeedRecord,
-  ): Promise<void> {
-    const dates = this.buildAttendanceDates();
-
-    for (let index = 0; index < dates.length; index += 1) {
-      const attendanceDate = dates[index];
-      const status = this.resolveAttendanceStatus(seed.seed_key, index);
-      await this.databaseService.query(
-        `
-          INSERT INTO attendance_records (
-            id,
-            tenant_id,
-            student_id,
-            attendance_date,
-            status,
-            notes,
-            metadata,
-            source_device_id,
-            last_modified_at,
-            last_operation_id,
-            sync_version
-          )
-          VALUES (
-            $1::uuid,
-            $2,
-            $3,
-            $4::date,
-            $5,
-            $6,
-            $7::jsonb,
-            'seed-server',
-            $8::timestamptz,
-            NULL,
-            NULL
-          )
-          ON CONFLICT (tenant_id, student_id, attendance_date)
-          DO UPDATE SET
-            status = EXCLUDED.status,
-            notes = EXCLUDED.notes,
-            metadata = EXCLUDED.metadata,
-            source_device_id = EXCLUDED.source_device_id,
-            last_modified_at = EXCLUDED.last_modified_at,
-            updated_at = NOW()
-        `,
-        [
-          randomUUID(),
-          context.options.tenant,
-          studentId,
-          attendanceDate,
-          status,
-          status === 'present' ? 'Marked during demo seed.' : 'Seeded exception for dashboard realism.',
-          JSON.stringify({
-            seed_key: `${seed.seed_key}:attendance:${attendanceDate}`,
-          }),
-          new Date(`${attendanceDate}T07:${String(15 + index).padStart(2, '0')}:00.000Z`).toISOString(),
-        ],
-      );
-    }
-  }
-
-  private buildAttendanceDates(): string[] {
-    return ['2026-04-22', '2026-04-23', '2026-04-24', '2026-04-27', '2026-04-28'];
-  }
-
-  private resolveAttendanceStatus(seedKey: string, dayOffset: number): 'present' | 'absent' | 'late' | 'excused' {
-    const hash = Array.from(seedKey).reduce((total, char) => total + char.charCodeAt(0), 0) + dayOffset;
-    const mod = hash % 20;
-
-    if (mod === 0) {
-      return 'absent';
-    }
-
-    if (mod === 1 || mod === 2) {
-      return 'late';
-    }
-
-    if (mod === 3) {
-      return 'excused';
-    }
-
-    return 'present';
-  }
 
   private async countRows(tableName: string, tenantId: string): Promise<number> {
     const result = await this.databaseService.query<{ total: string }>(

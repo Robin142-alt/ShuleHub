@@ -12,6 +12,13 @@ export class PaymentIntentEntity extends BaseEntity {
   phone_number!: string;
   amount_minor!: string;
   currency_code!: string;
+  payment_owner!: 'tenant' | 'platform';
+  mpesa_config_id!: string | null;
+  payment_channel_id!: string | null;
+  mpesa_short_code!: string | null;
+  payment_channel_type!: string | null;
+  ledger_debit_account_code!: string | null;
+  ledger_credit_account_code!: string | null;
   status!: PaymentIntentStatus;
   merchant_request_id!: string | null;
   checkout_request_id!: string | null;

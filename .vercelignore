@@ -1,7 +1,13 @@
 .git
+.vercel
+.worktrees
+node_modules
 .npm-cache
 artifacts
 dist
 mpesa-official.pdf
 apps/api/test
+apps/web/.next
+apps/web/node_modules
+apps/web/.npm-cache
 coverage

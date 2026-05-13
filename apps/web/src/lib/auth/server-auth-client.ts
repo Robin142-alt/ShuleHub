@@ -17,6 +17,8 @@ import {
   readTenantCookie,
   type ExperienceGatewaySession,
 } from "@/lib/auth/server-session";
+import { getRoleHomePath } from "@/lib/auth/role-routing";
+import { libraryPermissions } from "@/lib/library/library-data";
 import { storekeeperPermissions } from "@/lib/storekeeper/storekeeper-data";
 
 type LoginInput = {
@@ -76,7 +78,12 @@ function buildDemoUser(input: {
     role: input.role,
     email: isEmailLike(input.identifier) ? input.identifier : `${input.role}@demo.local`,
     display_name: input.displayName,
-    permissions: input.role === "storekeeper" ? storekeeperPermissions : [],
+    permissions:
+      input.role === "storekeeper"
+        ? storekeeperPermissions
+        : input.role === "librarian"
+          ? libraryPermissions
+          : [],
     session_id: `demo-session-${input.audience}-${input.role}`,
   } satisfies LiveAuthUser;
 }
@@ -87,18 +94,14 @@ function buildExperienceHomePath(input: {
   viewer?: string;
 }) {
   if (input.audience === "superadmin") {
-    return "/superadmin";
+    return getRoleHomePath(input.role ?? "platform_owner");
   }
 
   if (input.audience === "school") {
-    if (input.role === "storekeeper") {
-      return "/inventory/dashboard";
-    }
-
-    return `/school/${input.role ?? "admin"}`;
+    return getRoleHomePath(input.role ?? "principal");
   }
 
-  return `/portal/${input.viewer ?? "parent"}`;
+  return getRoleHomePath(input.viewer ?? "parent");
 }
 
 function buildGatewaySession(input: {
@@ -223,9 +226,11 @@ async function loginSchoolAudience(input: LoginInput) {
           ? "Teacher"
           : matchedSchoolCredential.role === "storekeeper"
             ? "Storekeeper"
-            : matchedSchoolCredential.role === "admissions"
-              ? "Admissions officer"
-              : "Admin staff");
+            : matchedSchoolCredential.role === "librarian"
+              ? "Librarian"
+              : matchedSchoolCredential.role === "admissions"
+                ? "Admissions officer"
+                : "Admin staff");
 
   return buildGatewaySession({
     audience: "school",
@@ -391,7 +396,7 @@ export function createServerAuthClient(request: Request) {
               ? schoolDemoCredentials.bursar.identifier
               : demoRole === "teacher"
                 ? schoolDemoCredentials.teacher.identifier
-                : demoRole === "storekeeper" || demoRole === "admissions"
+                : demoRole === "storekeeper" || demoRole === "admissions" || demoRole === "librarian"
                   ? `${demoRole}@${session.tenantSlug ?? "amani-prep"}.demo.shulehub.ke`
                 : schoolDemoCredentials.admin.identifier;
 

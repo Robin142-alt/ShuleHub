@@ -34,6 +34,24 @@ export const schoolDemoCredentials = {
     destination: "/dashboard",
     role: "teacher",
   },
+  storekeeper: {
+    identifier: "storekeeper@amaniprep.ac.ke",
+    password: "School#2026",
+    destination: "/inventory/dashboard",
+    role: "storekeeper",
+  },
+  librarian: {
+    identifier: "librarian@amaniprep.ac.ke",
+    password: "School#2026",
+    destination: "/library/dashboard",
+    role: "librarian",
+  },
+  admissions: {
+    identifier: "admissions@barakaacademy.sch.ke",
+    password: "School#2026",
+    destination: "/dashboard",
+    role: "admissions",
+  },
   admin: {
     identifier: "+254712345678",
     password: "School#2026",
@@ -87,6 +105,7 @@ function parseSeededSchoolEmail(identifier: string) {
     admin: { role: "admin", label: "Operations Admin" },
     bursar: { role: "bursar", label: "Bursar" },
     storekeeper: { role: "storekeeper", label: "Storekeeper" },
+    librarian: { role: "librarian", label: "Librarian" },
     admissions: { role: "admissions", label: "Admissions Officer" },
   };
   const directRole = seededRoleMap[localPart];

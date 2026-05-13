@@ -6,14 +6,10 @@ import { useMemo, useState } from "react";
 
 import { AuthCard } from "@/components/auth/auth-card";
 import { AuthCheckbox } from "@/components/auth/auth-checkbox";
-import { AuthDemoCredentials } from "@/components/auth/auth-demo-credentials";
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthMessage } from "@/components/auth/auth-message";
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
-import {
-  schoolDemoCredentials,
-} from "@/lib/auth/demo-credentials";
 import type { SchoolBrandingResolution } from "@/lib/auth/school-branding";
 import { useExperienceSession } from "@/lib/auth/use-experience-session";
 
@@ -56,7 +52,7 @@ export function SchoolLoginView({
       tone: "info" as const,
       title: "Review school workspace",
       description:
-        "No tenant subdomain was detected, so this review environment is showing the default school branding profile.",
+        "No tenant subdomain was detected, so this environment is showing the default school branding profile.",
     };
   }, [resolution.status]);
 
@@ -158,37 +154,6 @@ export function SchoolLoginView({
             error={fieldErrors.password}
           />
         </div>
-
-        <AuthDemoCredentials
-          title="Review staff access"
-          subtitle="Choose a school role below to inspect the tenant workspace with controlled credentials."
-          credentials={[
-            {
-              id: "principal",
-              label: "Principal",
-              identifier: schoolDemoCredentials.principal.identifier,
-              password: schoolDemoCredentials.principal.password,
-            },
-            {
-              id: "bursar",
-              label: "Bursar",
-              identifier: schoolDemoCredentials.bursar.identifier,
-              password: schoolDemoCredentials.bursar.password,
-            },
-            {
-              id: "teacher",
-              label: "Teacher",
-              identifier: schoolDemoCredentials.teacher.identifier,
-              password: schoolDemoCredentials.teacher.password,
-            },
-            {
-              id: "Admin",
-              label: "Admin staff",
-              identifier: schoolDemoCredentials.admin.identifier,
-              password: schoolDemoCredentials.admin.password,
-            },
-          ]}
-        />
 
         <div className="flex items-center justify-between gap-3">
           <AuthCheckbox

@@ -50,6 +50,50 @@ export class UsersRepository {
     return this.mapUser(result.rows[0]);
   }
 
+  async ensureGlobalUserForInvitation(input: {
+    email: string;
+    password_hash: string;
+    display_name: string;
+  }): Promise<UserEntity> {
+    const result = await this.databaseService.query<UserRow>(
+      `
+        SELECT id, tenant_id, email, password_hash, display_name, status, created_at, updated_at
+        FROM app.ensure_global_user_for_invitation($1, $2, $3)
+      `,
+      [input.email, input.password_hash, input.display_name],
+    );
+
+    return this.mapUser(result.rows[0]);
+  }
+
+  async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
+    await this.databaseService.query(
+      `
+        SELECT app.update_global_user_password_for_reset($1, $2)
+      `,
+      [userId, passwordHash],
+    );
+  }
+
+  async findActiveTenantUserByEmail(tenantId: string, email: string): Promise<UserEntity | null> {
+    const result = await this.databaseService.query<UserRow>(
+      `
+        SELECT u.id, u.tenant_id, u.email, u.password_hash, u.display_name, u.status, u.created_at, u.updated_at
+        FROM users u
+        INNER JOIN tenant_memberships tm
+          ON tm.user_id = u.id
+         AND tm.tenant_id = $1
+         AND tm.status = 'active'
+        WHERE lower(u.email) = lower($2)
+          AND u.status = 'active'
+        LIMIT 1
+      `,
+      [tenantId, email],
+    );
+
+    return result.rows[0] ? this.mapUser(result.rows[0]) : null;
+  }
+
   async findByEmail(email: string): Promise<UserEntity | null> {
     const result = await this.databaseService.query<UserRow>(
       `

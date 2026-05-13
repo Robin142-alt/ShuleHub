@@ -12,7 +12,7 @@ import { renderWithProviders } from "./test-utils";
 
 jest.setTimeout(15_000);
 
-describe("auth review credentials", () => {
+describe("production authentication surfaces", () => {
   const fetchMock = jest.fn();
 
   beforeEach(() => {
@@ -20,16 +20,16 @@ describe("auth review credentials", () => {
     global.fetch = fetchMock as unknown as typeof fetch;
   });
 
-  test("shows super admin review credentials and signs in with the documented password", async () => {
+  test("does not advertise super admin demo credentials and signs in with a valid platform account", async () => {
     const user = userEvent.setup();
 
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
-        redirectTo: "/superadmin",
+        redirectTo: "/superadmin/dashboard",
         session: {
           audience: "superadmin",
-          homePath: "/superadmin",
+          homePath: "/superadmin/dashboard",
           userLabel: "Platform owner",
         },
       }),
@@ -37,10 +37,9 @@ describe("auth review credentials", () => {
 
     renderWithProviders(<SuperadminLoginView />);
 
-    expect(screen.getByText(/review access/i)).toBeVisible();
-    expect(screen.getByText(/owner@shulehub\.com/i)).toBeVisible();
-    expect(screen.getByText(/Platform#2026/i)).toBeVisible();
-    expect(screen.getByText(/246810/i)).toBeVisible();
+    expect(screen.queryByText(/review access/i)).toBeNull();
+    expect(screen.queryByText(/Platform#2026/i)).toBeNull();
+    expect(screen.queryByText(/246810/i)).toBeNull();
 
     await user.type(screen.getByLabelText(/^email$/i), "owner@shulehub.com");
     await user.type(
@@ -62,7 +61,7 @@ describe("auth review credentials", () => {
     );
 
     await waitFor(() =>
-      expect(routerPushMock).toHaveBeenCalledWith("/superadmin"),
+      expect(routerPushMock).toHaveBeenCalledWith("/superadmin/dashboard"),
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/login",
@@ -72,16 +71,16 @@ describe("auth review credentials", () => {
     );
   });
 
-  test("shows school staff review credentials and routes bursar access from the documented password", async () => {
+  test("does not advertise school review credentials and routes bursar access to finance", async () => {
     const user = userEvent.setup();
 
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
-        redirectTo: "/school/bursar",
+        redirectTo: "/finance/dashboard",
         session: {
           audience: "school",
-          homePath: "/school/bursar",
+          homePath: "/finance/dashboard",
           role: "bursar",
           tenantSlug: "barakaacademy",
           userLabel: "bursar@barakaacademy.sch.ke",
@@ -95,9 +94,8 @@ describe("auth review credentials", () => {
       />,
     );
 
-    expect(screen.getByText(/review staff access/i)).toBeVisible();
-    expect(screen.getByText(/bursar@barakaacademy\.sch\.ke/i)).toBeVisible();
-    expect(screen.getAllByText(/School#2026/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/review staff access/i)).toBeNull();
+    expect(screen.queryByText(/School#2026/i)).toBeNull();
 
     await user.type(
       screen.getByLabelText(/email or phone number/i),
@@ -110,7 +108,7 @@ describe("auth review credentials", () => {
     await user.click(screen.getByRole("button", { name: /sign in securely/i }));
 
     await waitFor(() =>
-      expect(routerPushMock).toHaveBeenCalledWith("/school/bursar"),
+      expect(routerPushMock).toHaveBeenCalledWith("/finance/dashboard"),
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/login",
@@ -120,16 +118,58 @@ describe("auth review credentials", () => {
     );
   });
 
-  test("shows parent and student review credentials and signs a student in with the documented password", async () => {
+  test("keeps school role credentials off-screen while still routing authenticated storekeepers", async () => {
     const user = userEvent.setup();
 
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
-        redirectTo: "/portal/student",
+        redirectTo: "/inventory/dashboard",
+        session: {
+          audience: "school",
+          homePath: "/inventory/dashboard",
+          role: "storekeeper",
+          tenantSlug: "amani-prep",
+          userLabel: "storekeeper@amaniprep.ac.ke",
+        },
+      }),
+    });
+
+    renderWithProviders(
+      <SchoolLoginView
+        resolution={resolveSchoolBranding("barakaacademy.app.com")}
+      />,
+    );
+
+    expect(screen.queryByText(/principal@amaniprep\.ac\.ke/i)).toBeNull();
+    expect(screen.queryByText(/storekeeper@amaniprep\.ac\.ke/i)).toBeNull();
+    expect(screen.queryByText(/School#2026/i)).toBeNull();
+
+    await user.type(
+      screen.getByLabelText(/email or phone number/i),
+      "storekeeper@amaniprep.ac.ke",
+    );
+    await user.type(
+      screen.getByLabelText(/^password$/i),
+      "School#2026",
+    );
+    await user.click(screen.getByRole("button", { name: /sign in securely/i }));
+
+    await waitFor(() =>
+      expect(routerPushMock).toHaveBeenCalledWith("/inventory/dashboard"),
+    );
+  });
+
+  test("does not advertise portal demo credentials and signs a student into the portal dashboard", async () => {
+    const user = userEvent.setup();
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        redirectTo: "/portal/dashboard",
         session: {
           audience: "portal",
-          homePath: "/portal/student",
+          homePath: "/portal/dashboard",
           viewer: "student",
           userLabel: "SH-24011",
         },
@@ -138,9 +178,8 @@ describe("auth review credentials", () => {
 
     renderWithProviders(<PortalLoginView />);
 
-    expect(screen.getByText(/review portal access/i)).toBeVisible();
-    expect(screen.getByText(/SH-24011/i)).toBeVisible();
-    expect(screen.getAllByText(/Portal#2026/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/review portal access/i)).toBeNull();
+    expect(screen.queryByText(/Portal#2026/i)).toBeNull();
 
     await user.type(
       screen.getByLabelText(/admission number or phone/i),
@@ -153,7 +192,7 @@ describe("auth review credentials", () => {
     await user.click(screen.getByRole("button", { name: /open portal/i }));
 
     await waitFor(() =>
-      expect(routerPushMock).toHaveBeenCalledWith("/portal/student"),
+      expect(routerPushMock).toHaveBeenCalledWith("/portal/dashboard"),
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/login",
@@ -169,10 +208,10 @@ describe("auth review credentials", () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
-        redirectTo: "/school/bursar",
+        redirectTo: "/finance/dashboard",
         session: {
           audience: "school",
-          homePath: "/school/bursar",
+          homePath: "/finance/dashboard",
           role: "bursar",
           tenantSlug: "baraka-academy",
           userLabel: "bursar@barakaacademy.sch.ke",
@@ -205,7 +244,7 @@ describe("auth review credentials", () => {
     await user.click(screen.getByRole("button", { name: /sign in securely/i }));
 
     await waitFor(() =>
-      expect(routerPushMock).toHaveBeenCalledWith("/school/bursar"),
+      expect(routerPushMock).toHaveBeenCalledWith("/finance/dashboard"),
     );
   });
 });

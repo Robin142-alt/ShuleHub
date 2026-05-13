@@ -9,6 +9,8 @@ export class MpesaTransactionEntity extends BaseEntity {
   result_code!: number;
   result_desc!: string;
   status!: MpesaTransactionStatus;
+  transaction_id!: string | null;
+  mpesa_short_code!: string | null;
   mpesa_receipt_number!: string | null;
   amount_minor!: string | null;
   phone_number!: string | null;

@@ -33,14 +33,21 @@ export const buildRedisClientOptions = (
   const redisUrl = resolveRedisUrl(configService);
   const useTls = requiresRedisTls(redisUrl);
   const connectTimeout = Number(configService.get<number>('redis.connectTimeoutMs') ?? 10000);
+  const isServerlessRuntime = Boolean(configService.get<boolean>('app.isServerlessRuntime'));
 
   const sharedOptions: RedisOptions = {
     lazyConnect: true,
     connectTimeout,
-    maxRetriesPerRequest: null,
+    maxRetriesPerRequest: isServerlessRuntime ? 0 : null,
+    enableOfflineQueue: !isServerlessRuntime,
     enableReadyCheck: false,
     tls: useTls ? {} : undefined,
     retryStrategy: (attempt) => {
+      if (isServerlessRuntime) {
+        logger.warn('Redis reconnect disabled for serverless runtime');
+        return null;
+      }
+
       const delay = Math.min(250 * 2 ** Math.min(attempt, 4), RETRY_DELAY_CEILING_MS);
       logger.warn(`Redis reconnect scheduled in ${delay}ms (attempt ${attempt})`);
       return delay;

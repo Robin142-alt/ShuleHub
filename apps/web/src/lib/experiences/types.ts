@@ -8,6 +8,7 @@ export type SchoolExperienceRole =
   | "teacher"
   | "admin"
   | "storekeeper"
+  | "librarian"
   | "admissions";
 export type PortalViewer = "parent" | "student";
 

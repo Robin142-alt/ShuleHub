@@ -3,6 +3,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { AuthSchemaService } from '../../auth/auth-schema.service';
 import { DatabaseService } from '../../database/database.service';
 import { FinanceSchemaService } from '../finance/finance-schema.service';
+import { TenantFinanceSchemaService } from '../tenant-finance/tenant-finance-schema.service';
 
 @Injectable()
 export class PaymentsSchemaService implements OnModuleInit {
@@ -12,11 +13,13 @@ export class PaymentsSchemaService implements OnModuleInit {
     private readonly databaseService: DatabaseService,
     private readonly authSchemaService: AuthSchemaService,
     private readonly financeSchemaService: FinanceSchemaService,
+    private readonly tenantFinanceSchemaService: TenantFinanceSchemaService,
   ) {}
 
   async onModuleInit(): Promise<void> {
     await this.authSchemaService.onModuleInit();
     await this.financeSchemaService.onModuleInit();
+    await this.tenantFinanceSchemaService.onModuleInit();
 
     await this.databaseService.runSchemaBootstrap(`
       CREATE TABLE IF NOT EXISTS payment_intents (
@@ -32,6 +35,13 @@ export class PaymentsSchemaService implements OnModuleInit {
         phone_number text NOT NULL,
         amount_minor bigint NOT NULL,
         currency_code char(3) NOT NULL DEFAULT 'KES',
+        payment_owner text NOT NULL DEFAULT 'tenant',
+        mpesa_config_id uuid,
+        payment_channel_id uuid,
+        mpesa_short_code text,
+        payment_channel_type text,
+        ledger_debit_account_code text,
+        ledger_credit_account_code text,
         status text NOT NULL DEFAULT 'pending',
         merchant_request_id text,
         checkout_request_id text,
@@ -49,6 +59,7 @@ export class PaymentsSchemaService implements OnModuleInit {
         updated_at timestamptz NOT NULL DEFAULT NOW(),
         CONSTRAINT ck_payment_intents_amount_minor CHECK (amount_minor > 0),
         CONSTRAINT ck_payment_intents_currency_code CHECK (currency_code ~ '^[A-Z]{3}$'),
+        CONSTRAINT ck_payment_intents_owner CHECK (payment_owner IN ('tenant', 'platform')),
         CONSTRAINT ck_payment_intents_status CHECK (
           status IN ('pending', 'stk_requested', 'callback_received', 'processing', 'completed', 'failed', 'cancelled', 'expired')
         ),
@@ -75,6 +86,7 @@ export class PaymentsSchemaService implements OnModuleInit {
         tenant_id text NOT NULL,
         merchant_request_id text,
         checkout_request_id text,
+        mpesa_short_code text,
         delivery_id text NOT NULL,
         request_fingerprint text NOT NULL,
         event_timestamp timestamptz,
@@ -109,6 +121,8 @@ export class PaymentsSchemaService implements OnModuleInit {
         result_code integer NOT NULL,
         result_desc text NOT NULL,
         status text NOT NULL,
+        transaction_id text,
+        mpesa_short_code text,
         mpesa_receipt_number text,
         amount_minor bigint,
         phone_number text,
@@ -139,8 +153,30 @@ export class PaymentsSchemaService implements OnModuleInit {
       ALTER TABLE payment_intents
       ADD COLUMN IF NOT EXISTS student_id uuid;
 
+      ALTER TABLE payment_intents
+      ADD COLUMN IF NOT EXISTS payment_owner text NOT NULL DEFAULT 'tenant';
+      ALTER TABLE payment_intents
+      ADD COLUMN IF NOT EXISTS mpesa_config_id uuid;
+      ALTER TABLE payment_intents
+      ADD COLUMN IF NOT EXISTS payment_channel_id uuid;
+      ALTER TABLE payment_intents
+      ADD COLUMN IF NOT EXISTS mpesa_short_code text;
+      ALTER TABLE payment_intents
+      ADD COLUMN IF NOT EXISTS payment_channel_type text;
+      ALTER TABLE payment_intents
+      ADD COLUMN IF NOT EXISTS ledger_debit_account_code text;
+      ALTER TABLE payment_intents
+      ADD COLUMN IF NOT EXISTS ledger_credit_account_code text;
+
+      ALTER TABLE callback_logs
+      ADD COLUMN IF NOT EXISTS mpesa_short_code text;
+
       ALTER TABLE mpesa_transactions
       ADD COLUMN IF NOT EXISTS raw_payload jsonb;
+      ALTER TABLE mpesa_transactions
+      ADD COLUMN IF NOT EXISTS transaction_id text;
+      ALTER TABLE mpesa_transactions
+      ADD COLUMN IF NOT EXISTS mpesa_short_code text;
 
       DO $$
       BEGIN
@@ -159,6 +195,44 @@ export class PaymentsSchemaService implements OnModuleInit {
       END;
       $$;
 
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'ck_payment_intents_owner'
+        ) THEN
+          ALTER TABLE payment_intents
+          ADD CONSTRAINT ck_payment_intents_owner
+            CHECK (payment_owner IN ('tenant', 'platform'));
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'fk_payment_intents_mpesa_config'
+        ) THEN
+          ALTER TABLE payment_intents
+          ADD CONSTRAINT fk_payment_intents_mpesa_config
+            FOREIGN KEY (tenant_id, mpesa_config_id)
+            REFERENCES tenant_mpesa_configs (tenant_id, id)
+            ON DELETE RESTRICT;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'fk_payment_intents_payment_channel'
+        ) THEN
+          ALTER TABLE payment_intents
+          ADD CONSTRAINT fk_payment_intents_payment_channel
+            FOREIGN KEY (tenant_id, payment_channel_id)
+            REFERENCES tenant_payment_channels (tenant_id, id)
+            ON DELETE RESTRICT;
+        END IF;
+      END;
+      $$;
+
       CREATE INDEX IF NOT EXISTS ix_payment_intents_status_created_at
         ON payment_intents (tenant_id, status, created_at DESC);
       CREATE INDEX IF NOT EXISTS ix_payment_intents_status_expires_at
@@ -169,6 +243,15 @@ export class PaymentsSchemaService implements OnModuleInit {
       CREATE INDEX IF NOT EXISTS ix_payment_intents_student_id
         ON payment_intents (tenant_id, student_id, created_at DESC)
         WHERE student_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS ix_payment_intents_mpesa_short_code
+        ON payment_intents (tenant_id, mpesa_short_code, created_at DESC)
+        WHERE mpesa_short_code IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_payment_intents_checkout_request_id
+        ON payment_intents (checkout_request_id)
+        WHERE checkout_request_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_payment_intents_merchant_request_id
+        ON payment_intents (merchant_request_id)
+        WHERE merchant_request_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS ix_callback_logs_processing_status
         ON callback_logs (tenant_id, processing_status, created_at DESC);
       CREATE INDEX IF NOT EXISTS ix_callback_logs_checkout_request_id
@@ -179,6 +262,9 @@ export class PaymentsSchemaService implements OnModuleInit {
         ON mpesa_transactions (tenant_id, status, created_at DESC);
       CREATE INDEX IF NOT EXISTS ix_mpesa_transactions_receipt_number
         ON mpesa_transactions (tenant_id, mpesa_receipt_number);
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_mpesa_transactions_transaction_id
+        ON mpesa_transactions (transaction_id)
+        WHERE transaction_id IS NOT NULL;
 
       ALTER TABLE payment_intents ENABLE ROW LEVEL SECURITY;
       ALTER TABLE payment_intents FORCE ROW LEVEL SECURITY;

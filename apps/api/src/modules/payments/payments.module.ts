@@ -6,6 +6,7 @@ import { EventsModule } from '../events/events.module';
 import { FinanceModule } from '../finance/finance.module';
 import { ObservabilityModule } from '../observability/observability.module';
 import { SecurityModule } from '../security/security.module';
+import { TenantFinanceModule } from '../tenant-finance/tenant-finance.module';
 import { MpesaCallbackController } from './controllers/mpesa-callback.controller';
 import { PaymentsController } from './controllers/payments.controller';
 import { PaymentsSchemaService } from './payments-schema.service';
@@ -20,6 +21,7 @@ import { MpesaReconciliationService } from './services/mpesa-reconciliation.serv
 import { MpesaReplayProtectionService } from './services/mpesa-replay-protection.service';
 import { MpesaService } from './services/mpesa.service';
 import { MpesaSignatureService } from './services/mpesa-signature.service';
+import { PaymentAllocationService } from './services/payment-allocation.service';
 
 @Module({
   imports: [
@@ -28,6 +30,7 @@ import { MpesaSignatureService } from './services/mpesa-signature.service';
     EventsModule,
     ObservabilityModule,
     SecurityModule,
+    TenantFinanceModule,
     PaymentsQueueModule,
     forwardRef(() => BillingModule),
   ],
@@ -40,6 +43,7 @@ import { MpesaSignatureService } from './services/mpesa-signature.service';
     MpesaReconciliationService,
     MpesaPaymentRecoveryService,
     MpesaCallbackProcessorService,
+    PaymentAllocationService,
     PaymentIntentIdempotencyRepository,
     PaymentIntentsRepository,
     CallbackLogsRepository,
@@ -50,6 +54,7 @@ import { MpesaSignatureService } from './services/mpesa-signature.service';
     MpesaCallbackProcessorService,
     MpesaReconciliationService,
     MpesaPaymentRecoveryService,
+    PaymentAllocationService,
     PaymentsQueueModule,
   ],
 })

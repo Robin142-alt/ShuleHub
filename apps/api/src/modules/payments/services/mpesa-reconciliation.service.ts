@@ -1,12 +1,14 @@
 import {
   BadRequestException,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { RequestContextService } from '../../../common/request-context/request-context.service';
 import { DatabaseService } from '../../../database/database.service';
+import { TenantFinanceConfigService } from '../../tenant-finance/tenant-finance-config.service';
 import {
   GenerateMpesaReconciliationReportInput,
   MpesaReconciliationDiscrepancy,
@@ -64,6 +66,7 @@ export class MpesaReconciliationService {
     private readonly configService: ConfigService,
     private readonly requestContext: RequestContextService,
     private readonly databaseService: DatabaseService,
+    @Optional() private readonly tenantFinanceConfigService?: TenantFinanceConfigService,
   ) {}
 
   async generateDailyReport(
@@ -74,13 +77,14 @@ export class MpesaReconciliationService {
     const { windowStart, windowEnd } = this.buildReportWindow(reportDate);
     const graceMinutes = this.normalizeGraceMinutes(input.missing_callback_grace_minutes);
     const missingCallbackCutoff = new Date(Date.now() - graceMinutes * 60_000);
+    const mpesaLedgerAccountCodes = await this.getMpesaLedgerAccountCodes(tenantId);
 
     const [successfulMpesaRows, missingCallbackRows, duplicateReceiptRows, unmatchedLedgerRows] =
       await Promise.all([
         this.loadSuccessfulMpesaRows(tenantId, windowStart, windowEnd),
         this.loadMissingCallbackRows(tenantId, windowStart, windowEnd, missingCallbackCutoff),
         this.loadDuplicateReceiptRows(tenantId, windowStart, windowEnd),
-        this.loadUnmatchedLedgerRows(tenantId, windowStart, windowEnd),
+        this.loadUnmatchedLedgerRows(tenantId, windowStart, windowEnd, mpesaLedgerAccountCodes),
       ]);
 
     const discrepancies: MpesaReconciliationDiscrepancy[] = [];
@@ -363,6 +367,7 @@ export class MpesaReconciliationService {
     tenantId: string,
     windowStart: Date,
     windowEnd: Date,
+    mpesaLedgerAccountCodes: string[],
   ): Promise<UnmatchedLedgerRow[]> {
     const result = await this.databaseService.query<UnmatchedLedgerRow>(
       `
@@ -419,7 +424,7 @@ export class MpesaReconciliationService {
         tenantId,
         windowStart.toISOString(),
         windowEnd.toISOString(),
-        this.getMpesaLedgerAccountCodes(),
+        mpesaLedgerAccountCodes,
       ],
     );
 
@@ -491,7 +496,17 @@ export class MpesaReconciliationService {
     };
   }
 
-  private getMpesaLedgerAccountCodes(): string[] {
+  private async getMpesaLedgerAccountCodes(tenantId: string): Promise<string[]> {
+    if (this.tenantFinanceConfigService) {
+      try {
+        const config = await this.tenantFinanceConfigService.resolveMpesaConfigForTenant(tenantId);
+
+        return [config.ledger_debit_account_code, config.ledger_credit_account_code];
+      } catch {
+        // Fall back to legacy configured codes so reconciliation remains available during migration.
+      }
+    }
+
     return [
       this.configService.get<string>('mpesa.ledgerDebitAccountCode') ?? '1100-MPESA-CLEARING',
       this.configService.get<string>('mpesa.ledgerCreditAccountCode') ??

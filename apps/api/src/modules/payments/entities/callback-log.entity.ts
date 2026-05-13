@@ -4,6 +4,7 @@ import { CallbackLogStatus } from '../payments.types';
 export class CallbackLogEntity extends BaseEntity {
   merchant_request_id!: string | null;
   checkout_request_id!: string | null;
+  mpesa_short_code!: string | null;
   delivery_id!: string;
   request_fingerprint!: string;
   event_timestamp!: Date | null;

@@ -9,6 +9,7 @@ export type PaymentIntentStatus =
   | 'expired';
 
 export type MpesaTransactionStatus = 'succeeded' | 'failed';
+export type PaymentOwner = 'tenant' | 'platform';
 export type CallbackLogStatus =
   | 'received'
   | 'queued'
@@ -25,6 +26,9 @@ export interface PaymentIntentResponse {
   status: PaymentIntentStatus;
   amount_minor: string;
   currency_code: string;
+  payment_owner: PaymentOwner;
+  mpesa_short_code: string | null;
+  payment_channel_type: string | null;
   phone_number: string;
   account_reference: string;
   external_reference: string | null;

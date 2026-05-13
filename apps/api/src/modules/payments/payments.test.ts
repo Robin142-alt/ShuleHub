@@ -12,6 +12,7 @@ import { MpesaCallbackProcessorService } from './services/mpesa-callback-process
 import { MpesaService } from './services/mpesa.service';
 import { MpesaSignatureService } from './services/mpesa-signature.service';
 import { ParsedMpesaCallback } from './payments.types';
+import { TenantFinanceConfigService } from '../tenant-finance/tenant-finance-config.service';
 
 const makeAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity =>
   Object.assign(new AccountEntity(), {
@@ -45,6 +46,13 @@ const makePaymentIntent = (
     phone_number: overrides.phone_number ?? '254700000001',
     amount_minor: overrides.amount_minor ?? '10000',
     currency_code: overrides.currency_code ?? 'KES',
+    payment_owner: overrides.payment_owner ?? 'tenant',
+    mpesa_config_id: overrides.mpesa_config_id ?? '00000000-0000-0000-0000-000000000901',
+    payment_channel_id: overrides.payment_channel_id ?? '00000000-0000-0000-0000-000000000902',
+    mpesa_short_code: overrides.mpesa_short_code ?? '247247',
+    payment_channel_type: overrides.payment_channel_type ?? 'mpesa_paybill',
+    ledger_debit_account_code: overrides.ledger_debit_account_code ?? '1110-MPESA-CLEARING',
+    ledger_credit_account_code: overrides.ledger_credit_account_code ?? '1100-AR-FEES',
     status: overrides.status ?? 'stk_requested',
     merchant_request_id: overrides.merchant_request_id ?? 'merchant-1',
     checkout_request_id: overrides.checkout_request_id ?? 'checkout-1',
@@ -197,7 +205,241 @@ test('MpesaService parses a successful STK callback payload', () => {
       PhoneNumber: 254700000001,
     },
   });
+});
+
+test('TenantFinanceConfigService resolves only the active tenant-owned MPESA config', async () => {
+  const service = new TenantFinanceConfigService(
+    {
+      findActiveMpesaConfigForTenant: async (tenantId: string) => ({
+        id: '00000000-0000-0000-0000-000000000901',
+        tenant_id: tenantId,
+        shortcode: '247247',
+        paybill_number: '247247',
+        till_number: null,
+        consumer_key: 'school-consumer-key',
+        consumer_secret: 'school-consumer-secret',
+        passkey: 'school-passkey',
+        initiator_name: 'school-api',
+        environment: 'sandbox',
+        callback_url: 'https://green-valley.example.com/payments/mpesa/callback',
+        status: 'active',
+        created_at: new Date(),
+        updated_at: new Date(),
+      }),
+      findFinancialAccountsForTenant: async (tenantId: string) => ({
+        tenant_id: tenantId,
+        mpesa_clearing_account_code: '1110-MPESA-CLEARING',
+        fee_control_account_code: '1100-AR-FEES',
+        currency_code: 'KES',
+      }),
+      findActivePaymentChannelForMpesaConfig: async () => ({
+        id: '00000000-0000-0000-0000-000000000902',
+        channel_type: 'mpesa_paybill',
+        status: 'active',
+      }),
+    } as never,
+    {
+      get: (key: string): string | undefined => {
+        if (key === 'mpesa.baseUrl') {
+          return 'https://sandbox.safaricom.co.ke';
+        }
+
+        return undefined;
+      },
+    } as never,
+  );
+
+  const config = await service.resolveMpesaConfigForTenant('tenant-a');
+
+  assert.equal(config.tenant_id, 'tenant-a');
+  assert.equal(config.shortcode, '247247');
+  assert.equal(config.consumer_key, 'school-consumer-key');
+  assert.equal(config.consumer_secret, 'school-consumer-secret');
+  assert.equal(config.passkey, 'school-passkey');
+  assert.equal(config.transaction_type, 'CustomerPayBillOnline');
+  assert.equal(config.ledger_debit_account_code, '1110-MPESA-CLEARING');
+  assert.equal(config.ledger_credit_account_code, '1100-AR-FEES');
+});
+
+test('MpesaService sends STK push with the resolved school shortcode and credentials', async () => {
+  const requestContext = new RequestContextService();
+  const paymentIntent = makePaymentIntent({
+    status: 'pending',
+    merchant_request_id: null,
+    checkout_request_id: null,
   });
+  const fetchCalls: Array<{ url: string; authorization: string | null; body: Record<string, unknown> | null }> = [];
+  const previousFetch = global.fetch;
+
+  global.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    fetchCalls.push({
+      url: String(url),
+      authorization:
+        init?.headers && typeof init.headers === 'object'
+          ? String((init.headers as Record<string, unknown>).Authorization ?? '')
+          : null,
+      body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null,
+    });
+
+    if (String(url).includes('/oauth/v1/generate')) {
+      return new Response(JSON.stringify({ access_token: 'tenant-token', expires_in: 3599 }), {
+        status: 200,
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        MerchantRequestID: 'school-merchant-1',
+        CheckoutRequestID: 'school-checkout-1',
+        ResponseCode: '0',
+        ResponseDescription: 'Accepted',
+        CustomerMessage: 'STK pushed',
+      }),
+      { status: 200 },
+    );
+  }) as typeof fetch;
+
+  try {
+    const service = new MpesaService(
+      {
+        get: (key: string): string | number | undefined => {
+          if (key === 'finance.idempotencyTtlSeconds') {
+            return 86400;
+          }
+
+          if (key === 'mpesa.paymentIntentExpirySeconds') {
+            return 1800;
+          }
+
+          if (key === 'mpesa.requestTimeoutMs') {
+            return 15000;
+          }
+
+          return undefined;
+        },
+      } as never,
+      requestContext,
+      {
+        withRequestTransaction: async <T>(callbackFn: () => Promise<T>): Promise<T> => callbackFn(),
+      } as never,
+      {
+        getClient: () => ({
+          get: async (): Promise<string | null> => null,
+          set: async (): Promise<void> => undefined,
+        }),
+      } as never,
+      {
+        inspectPaymentIntentCreation: async (): Promise<void> => undefined,
+      } as never,
+      {
+        createPending: async (): Promise<PaymentIntentEntity> => paymentIntent,
+        markStkRequested: async (
+          _tenantId: string,
+          _paymentIntentId: string,
+          response: {
+            merchant_request_id: string;
+            checkout_request_id: string;
+            response_code: string;
+            response_description: string;
+            customer_message: string;
+          },
+        ): Promise<PaymentIntentEntity> =>
+          makePaymentIntent({
+            ...paymentIntent,
+            status: 'stk_requested',
+            merchant_request_id: response.merchant_request_id,
+            checkout_request_id: response.checkout_request_id,
+            response_code: response.response_code,
+            response_description: response.response_description,
+            customer_message: response.customer_message,
+          }),
+      } as never,
+      {
+        lockRequest: async () => ({
+          id: '00000000-0000-0000-0000-000000000301',
+          tenant_id: 'tenant-a',
+          user_id: null,
+          scope: 'mpesa.payment_intent',
+          idempotency_key: 'idem-tenant-a',
+          request_method: 'POST',
+          request_path: '/payments/mpesa/payment-intents',
+          request_hash: 'hash',
+          status: 'in_progress',
+          response_status_code: null,
+          response_body: null,
+          locked_at: null,
+          completed_at: null,
+          expires_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }),
+        markCompleted: async (): Promise<void> => undefined,
+      } as never,
+      undefined,
+      {
+        resolveMpesaConfigForTenant: async () => ({
+          owner: 'tenant',
+          tenant_id: 'tenant-a',
+          mpesa_config_id: '00000000-0000-0000-0000-000000000901',
+          payment_channel_id: '00000000-0000-0000-0000-000000000902',
+          shortcode: '247247',
+          paybill_number: '247247',
+          till_number: null,
+          consumer_key: 'school-consumer-key',
+          consumer_secret: 'school-consumer-secret',
+          passkey: 'school-passkey',
+          initiator_name: 'school-api',
+          environment: 'sandbox',
+          base_url: 'https://sandbox.safaricom.co.ke',
+          callback_url: 'https://green-valley.example.com/payments/mpesa/callback',
+          transaction_type: 'CustomerPayBillOnline',
+          ledger_debit_account_code: '1110-MPESA-CLEARING',
+          ledger_credit_account_code: '1100-AR-FEES',
+        }),
+      } as never,
+    );
+
+    const response = await requestContext.run(
+      {
+        request_id: 'request-tenant-a',
+        tenant_id: 'tenant-a',
+        user_id: '00000000-0000-0000-0000-000000000499',
+        role: 'admin',
+        session_id: 'session-tenant-a',
+        permissions: ['*:*'],
+        is_authenticated: true,
+        client_ip: '127.0.0.1',
+        user_agent: 'payments-test',
+        method: 'POST',
+        path: '/payments/mpesa/payment-intents',
+        started_at: new Date().toISOString(),
+      },
+      () =>
+        service.createPaymentIntent({
+          idempotency_key: 'idem-tenant-a',
+          amount_minor: '10000',
+          phone_number: '0712345678',
+          account_reference: 'ADM-2025-001',
+          transaction_desc: 'School fees',
+        }),
+    );
+
+    const oauthCall = fetchCalls.find((call) => call.url.includes('/oauth/v1/generate'));
+    const stkCall = fetchCalls.find((call) => call.url.includes('/mpesa/stkpush/v1/processrequest'));
+
+    assert.equal(response.checkout_request_id, 'school-checkout-1');
+    assert.equal(
+      oauthCall?.authorization,
+      `Basic ${Buffer.from('school-consumer-key:school-consumer-secret').toString('base64')}`,
+    );
+    assert.equal(stkCall?.body?.BusinessShortCode, '247247');
+    assert.equal(stkCall?.body?.PartyB, '247247');
+    assert.equal(stkCall?.body?.CallBackURL, 'https://green-valley.example.com/payments/mpesa/callback');
+    assert.equal(stkCall?.body?.TransactionType, 'CustomerPayBillOnline');
+  } finally {
+    global.fetch = previousFetch;
+  }
+});
 
 test('MpesaCallbackController stores raw payload and enqueues a payments job by checkout request id', async () => {
   const requestContext = new RequestContextService();

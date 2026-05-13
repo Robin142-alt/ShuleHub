@@ -1,4 +1,4 @@
-import { PaymentIntentStatus } from '../payments.types';
+import { PaymentIntentStatus, PaymentOwner } from '../payments.types';
 
 export class PaymentIntentResponseDto {
   payment_intent_id!: string;
@@ -7,6 +7,9 @@ export class PaymentIntentResponseDto {
   status!: PaymentIntentStatus;
   amount_minor!: string;
   currency_code!: string;
+  payment_owner!: PaymentOwner;
+  mpesa_short_code!: string | null;
+  payment_channel_type!: string | null;
   phone_number!: string;
   account_reference!: string;
   external_reference!: string | null;

@@ -5,14 +5,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AuthCard } from "@/components/auth/auth-card";
-import { AuthDemoCredentials } from "@/components/auth/auth-demo-credentials";
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthMessage } from "@/components/auth/auth-message";
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
-import {
-  portalDemoCredentials,
-} from "@/lib/auth/demo-credentials";
 import { useExperienceSession } from "@/lib/auth/use-experience-session";
 
 function wait(ms: number) {
@@ -107,25 +103,6 @@ export function PortalLoginView() {
             error={fieldErrors.secret}
           />
         </div>
-
-        <AuthDemoCredentials
-          title="Review portal access"
-          subtitle="Parents and students can both use these review credentials to inspect the portal safely."
-          credentials={[
-            {
-              id: "parent",
-              label: "Parent account",
-              identifier: portalDemoCredentials.parent.identifier,
-              password: portalDemoCredentials.parent.password,
-            },
-            {
-              id: "student",
-              label: "Student account",
-              identifier: portalDemoCredentials.student.identifier,
-              password: portalDemoCredentials.student.password,
-            },
-          ]}
-        />
 
         {generalError ? (
           <AuthMessage

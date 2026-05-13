@@ -6,7 +6,6 @@ import { useState } from "react";
 
 import { AuthCard } from "@/components/auth/auth-card";
 import { AuthCheckbox } from "@/components/auth/auth-checkbox";
-import { AuthDemoCredentials } from "@/components/auth/auth-demo-credentials";
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthMessage } from "@/components/auth/auth-message";
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
@@ -57,7 +56,7 @@ export function SuperadminLoginView() {
       password !== superadminDemoCredentials.password
     ) {
       setGeneralError(
-        "Use the listed platform owner review credentials to enter this secured workspace.",
+        "Enter a valid platform owner email and password to continue.",
       );
       return;
     }
@@ -85,7 +84,7 @@ export function SuperadminLoginView() {
 
     if (verificationCode.trim() !== superadminDemoCredentials.verificationCode) {
       setGeneralError(
-        "Use the listed verification code to complete the protected sign-in.",
+        "Enter the verification code from your authenticator app.",
       );
       return;
     }
@@ -149,21 +148,6 @@ export function SuperadminLoginView() {
                 error={fieldErrors.password}
               />
             </div>
-
-            <AuthDemoCredentials
-              title="Review access"
-              subtitle="Use these controlled review credentials to inspect the platform owner workspace."
-              credentials={[
-                {
-                  id: "platform-owner",
-                  label: "Platform owner",
-                  identifier: superadminDemoCredentials.email,
-                  password: superadminDemoCredentials.password,
-                  auxiliaryLabel: "Verification code",
-                  auxiliaryValue: superadminDemoCredentials.verificationCode,
-                },
-              ]}
-            />
 
             <div className="rounded-2xl border border-border bg-surface-muted px-4 py-4">
               <p className="text-sm font-semibold text-foreground">Recent sign-in</p>

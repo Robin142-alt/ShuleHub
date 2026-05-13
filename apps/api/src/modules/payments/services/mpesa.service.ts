@@ -15,6 +15,8 @@ import { DatabaseService } from '../../../database/database.service';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { FraudDetectionService } from '../../security/fraud-detection.service';
 import { SloMetricsService } from '../../observability/slo-metrics.service';
+import { TenantFinanceConfigService } from '../../tenant-finance/tenant-finance-config.service';
+import { ResolvedTenantMpesaConfig } from '../../tenant-finance/tenant-finance.types';
 import { CreatePaymentIntentDto } from '../dto/create-payment-intent.dto';
 import { PaymentIntentResponseDto } from '../dto/payment-intent-response.dto';
 import { PaymentIntentEntity } from '../entities/payment-intent.entity';
@@ -41,6 +43,10 @@ interface OAuthTokenResponse {
   expires_in?: string | number;
 }
 
+interface CreatePaymentIntentOptions {
+  payment_owner?: 'tenant' | 'platform';
+}
+
 @Injectable()
 export class MpesaService {
   constructor(
@@ -52,14 +58,20 @@ export class MpesaService {
     private readonly paymentIntentsRepository: PaymentIntentsRepository,
     private readonly paymentIntentIdempotencyRepository: PaymentIntentIdempotencyRepository,
     @Optional() private readonly sloMetrics?: SloMetricsService,
+    @Optional() private readonly tenantFinanceConfigService?: TenantFinanceConfigService,
   ) {}
 
-  async createPaymentIntent(dto: CreatePaymentIntentDto): Promise<PaymentIntentResponseDto> {
+  async createPaymentIntent(
+    dto: CreatePaymentIntentDto,
+    options: CreatePaymentIntentOptions = {},
+  ): Promise<PaymentIntentResponseDto> {
     return this.databaseService.withRequestTransaction(async () => {
       const requestContext = this.requestContext.requireStore();
       const tenantId = this.requireTenantId();
       const normalizedPhoneNumber = this.normalizePhoneNumber(dto.phone_number);
       const amountMinor = this.normalizeMinorAmount(dto.amount_minor);
+      const paymentOwner = options.payment_owner ?? 'tenant';
+      const mpesaConfig = await this.resolveMpesaConfig(tenantId, paymentOwner);
       const idempotencyRecord = await this.paymentIntentIdempotencyRepository.lockRequest({
         tenant_id: tenantId,
         user_id:
@@ -99,6 +111,13 @@ export class MpesaService {
         phone_number: normalizedPhoneNumber,
         amount_minor: amountMinor,
         currency_code: MPESA_DEFAULT_CURRENCY_CODE,
+        payment_owner: paymentOwner,
+        mpesa_config_id: mpesaConfig.mpesa_config_id,
+        payment_channel_id: mpesaConfig.payment_channel_id,
+        mpesa_short_code: mpesaConfig.shortcode,
+        payment_channel_type: mpesaConfig.till_number ? 'mpesa_till' : 'mpesa_paybill',
+        ledger_debit_account_code: mpesaConfig.ledger_debit_account_code,
+        ledger_credit_account_code: mpesaConfig.ledger_credit_account_code,
         metadata: dto.metadata ?? {},
       });
       await this.fraudDetectionService.inspectPaymentIntentCreation({
@@ -113,7 +132,7 @@ export class MpesaService {
       let stkResponse: StkPushResponse;
 
       try {
-        stkResponse = await this.sendStkPush(paymentIntent);
+        stkResponse = await this.sendStkPush(paymentIntent, mpesaConfig);
         this.sloMetrics?.recordMpesaStkPush({
           outcome: 'success',
           duration_ms: performance.now() - stkStartedAt,
@@ -155,6 +174,10 @@ export class MpesaService {
     });
   }
 
+  async createPlatformPaymentIntent(dto: CreatePaymentIntentDto): Promise<PaymentIntentResponseDto> {
+    return this.createPaymentIntent(dto, { payment_owner: 'platform' });
+  }
+
   parseCallbackPayload(payload: unknown): ParsedMpesaCallback {
     const callbackPayload = payload as MpesaCallbackPayload;
     const stkCallback = callbackPayload?.Body?.stkCallback;
@@ -189,11 +212,14 @@ export class MpesaService {
     };
   }
 
-  private async sendStkPush(paymentIntent: PaymentIntentEntity): Promise<StkPushResponse> {
-    const accessToken = await this.getAccessToken();
-    const request = this.buildStkPushRequest(paymentIntent);
+  private async sendStkPush(
+    paymentIntent: PaymentIntentEntity,
+    mpesaConfig: ResolvedTenantMpesaConfig,
+  ): Promise<StkPushResponse> {
+    const accessToken = await this.getAccessToken(mpesaConfig);
+    const request = this.buildStkPushRequest(paymentIntent, mpesaConfig);
     const response = await fetch(
-      new URL('/mpesa/stkpush/v1/processrequest', this.getBaseUrl()).toString(),
+      new URL('/mpesa/stkpush/v1/processrequest', mpesaConfig.base_url).toString(),
       {
         method: 'POST',
         headers: {
@@ -233,19 +259,26 @@ export class MpesaService {
     return responseBody;
   }
 
-  private async getAccessToken(): Promise<string> {
+  private async getAccessToken(mpesaConfig: ResolvedTenantMpesaConfig): Promise<string> {
     const redisClient = this.redisService.getClient();
-    const cachedToken = await redisClient.get(MPESA_ACCESS_TOKEN_CACHE_KEY);
+    const cacheKey = [
+      MPESA_ACCESS_TOKEN_CACHE_KEY,
+      mpesaConfig.owner,
+      mpesaConfig.tenant_id,
+      mpesaConfig.environment,
+      mpesaConfig.shortcode,
+    ].join(':');
+    const cachedToken = await redisClient.get(cacheKey);
 
     if (cachedToken) {
       return cachedToken;
     }
 
     const basicCredentials = Buffer.from(
-      `${this.requireConfig('mpesa.consumerKey')}:${this.requireConfig('mpesa.consumerSecret')}`,
+      `${mpesaConfig.consumer_key}:${mpesaConfig.consumer_secret}`,
     ).toString('base64');
     const response = await fetch(
-      new URL('/oauth/v1/generate?grant_type=client_credentials', this.getBaseUrl()).toString(),
+      new URL('/oauth/v1/generate?grant_type=client_credentials', mpesaConfig.base_url).toString(),
       {
         method: 'GET',
         headers: {
@@ -267,15 +300,18 @@ export class MpesaService {
 
     const expiresInSeconds = Number(responseBody.expires_in ?? 3599);
     const ttlSeconds = Math.max(60, expiresInSeconds - 60);
-    await redisClient.set(MPESA_ACCESS_TOKEN_CACHE_KEY, responseBody.access_token, 'EX', ttlSeconds);
+    await redisClient.set(cacheKey, responseBody.access_token, 'EX', ttlSeconds);
 
     return responseBody.access_token;
   }
 
-  private buildStkPushRequest(paymentIntent: PaymentIntentEntity): StkPushRequest {
+  private buildStkPushRequest(
+    paymentIntent: PaymentIntentEntity,
+    mpesaConfig: ResolvedTenantMpesaConfig,
+  ): StkPushRequest {
     const timestamp = this.buildNairobiTimestamp();
-    const shortCode = this.requireConfig('mpesa.shortCode');
-    const password = Buffer.from(`${shortCode}${this.requireConfig('mpesa.passkey')}${timestamp}`).toString(
+    const shortCode = mpesaConfig.shortcode;
+    const password = Buffer.from(`${shortCode}${mpesaConfig.passkey}${timestamp}`).toString(
       'base64',
     );
 
@@ -283,12 +319,12 @@ export class MpesaService {
       BusinessShortCode: shortCode,
       Password: password,
       Timestamp: timestamp,
-      TransactionType: this.requireConfig('mpesa.transactionType'),
+      TransactionType: mpesaConfig.transaction_type,
       Amount: this.convertMinorToStkAmount(paymentIntent.amount_minor),
       PartyA: paymentIntent.phone_number,
       PartyB: shortCode,
       PhoneNumber: paymentIntent.phone_number,
-      CallBackURL: this.requireConfig('mpesa.callbackUrl'),
+      CallBackURL: mpesaConfig.callback_url,
       AccountReference: paymentIntent.account_reference,
       TransactionDesc: paymentIntent.transaction_desc,
     };
@@ -452,6 +488,25 @@ export class MpesaService {
     return this.requireConfig('mpesa.baseUrl');
   }
 
+  private async resolveMpesaConfig(
+    tenantId: string,
+    paymentOwner: 'tenant' | 'platform',
+  ): Promise<ResolvedTenantMpesaConfig> {
+    if (paymentOwner === 'platform') {
+      return this.requireTenantFinanceConfigService().resolvePlatformMpesaConfig(tenantId);
+    }
+
+    return this.requireTenantFinanceConfigService().resolveMpesaConfigForTenant(tenantId);
+  }
+
+  private requireTenantFinanceConfigService(): TenantFinanceConfigService {
+    if (!this.tenantFinanceConfigService) {
+      throw new BadGatewayException('Tenant finance configuration service is not available');
+    }
+
+    return this.tenantFinanceConfigService;
+  }
+
   private toPaymentIntentResponse(paymentIntent: PaymentIntentEntity): PaymentIntentResponse {
     return {
       payment_intent_id: paymentIntent.id,
@@ -460,6 +515,9 @@ export class MpesaService {
       status: paymentIntent.status,
       amount_minor: paymentIntent.amount_minor,
       currency_code: paymentIntent.currency_code,
+      payment_owner: paymentIntent.payment_owner,
+      mpesa_short_code: paymentIntent.mpesa_short_code,
+      payment_channel_type: paymentIntent.payment_channel_type,
       phone_number: paymentIntent.phone_number,
       account_reference: paymentIntent.account_reference,
       external_reference: paymentIntent.external_reference,

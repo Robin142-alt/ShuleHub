@@ -245,8 +245,14 @@ export class BillingSchemaService implements OnModuleInit {
       DROP POLICY IF EXISTS subscriptions_rls_policy ON subscriptions;
       CREATE POLICY subscriptions_rls_policy ON subscriptions
       FOR ALL
-      USING (tenant_id = current_setting('app.tenant_id', true))
-      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+      USING (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR current_setting('app.role', true) IN ('platform_owner', 'superadmin', 'system')
+      )
+      WITH CHECK (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR current_setting('app.role', true) IN ('platform_owner', 'superadmin', 'system')
+      );
 
       DROP POLICY IF EXISTS invoices_rls_policy ON invoices;
       CREATE POLICY invoices_rls_policy ON invoices

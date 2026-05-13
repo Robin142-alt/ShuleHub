@@ -84,4 +84,16 @@ describe("STEP 4: Role tests", () => {
       "/admissions",
     );
   });
+
+  it("opens a public librarian school workspace with library-only navigation", () => {
+    renderWithProviders(createElement(SchoolPages, { role: "librarian" }));
+
+    expect(screen.getByText(/Librarian/i)).toBeVisible();
+    expect(screen.getByRole("link", { name: /Library/i })).toHaveAttribute(
+      "href",
+      "/library",
+    );
+    expect(screen.queryByRole("link", { name: /Finance/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Settings/i })).not.toBeInTheDocument();
+  });
 });

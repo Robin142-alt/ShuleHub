@@ -99,8 +99,51 @@ export class TenantMembershipsRepository {
     return hydratedMembership;
   }
 
+  async activateInvitedMembership(input: {
+    tenant_id: string;
+    user_id: string;
+    role_code: string;
+    email: string;
+  }): Promise<TenantMembershipEntity> {
+    const roleResult = await this.databaseService.query<{ id: string }>(
+      `
+        SELECT id
+        FROM roles
+        WHERE tenant_id = $1
+          AND code = $2
+        LIMIT 1
+      `,
+      [input.tenant_id, input.role_code],
+    );
+    const roleId = roleResult.rows[0]?.id;
+
+    if (!roleId) {
+      throw new Error(`Role "${input.role_code}" was not found for tenant "${input.tenant_id}"`);
+    }
+
+    await this.databaseService.query(
+      `
+        INSERT INTO tenant_memberships (tenant_id, user_id, role_id, status)
+        VALUES ($1, $2, $3, 'active')
+        ON CONFLICT (tenant_id, user_id)
+        DO UPDATE SET
+          role_id = EXCLUDED.role_id,
+          status = 'active',
+          updated_at = NOW()
+      `,
+      [input.tenant_id, input.user_id, roleId],
+    );
+
+    const membership = await this.findMembershipByUserAndTenant(input.user_id, input.tenant_id);
+
+    if (!membership) {
+      throw new Error(`Membership for "${input.email}" could not be activated`);
+    }
+
+    return membership;
+  }
+
   private mapTenantMembership(row: TenantMembershipRow): TenantMembershipEntity {
     return Object.assign(new TenantMembershipEntity(), row);
   }
 }
-

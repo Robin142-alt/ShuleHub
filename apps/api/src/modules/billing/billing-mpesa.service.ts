@@ -53,7 +53,7 @@ export class BillingMpesaService {
         throw new ConflictException('A billing phone number is required to initiate MPESA payment');
       }
 
-      const paymentIntent = await this.mpesaService.createPaymentIntent({
+      const paymentIntent = await this.mpesaService.createPlatformPaymentIntent({
         idempotency_key: dto.idempotency_key.trim(),
         amount_minor: invoice.total_amount_minor,
         phone_number: phoneNumber,

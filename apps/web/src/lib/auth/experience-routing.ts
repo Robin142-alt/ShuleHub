@@ -145,6 +145,10 @@ function isStorekeeperInventoryPath(pathname: string) {
   return pathname === "/inventory" || pathname.startsWith("/inventory/");
 }
 
+function isLibrarianLibraryPath(pathname: string) {
+  return pathname === "/library" || pathname.startsWith("/library/");
+}
+
 function getInternalPrefix(experience: Exclude<PlatformExperience, "public">) {
   switch (experience) {
     case "superadmin":
@@ -202,6 +206,11 @@ function mapProtectedPathToInternal(
       return `${prefix}/dashboard`;
     }
 
+    const roleDashboardSection = pathname.match(/^\/(finance|academics)\/dashboard$/)?.[1];
+    if (roleDashboardSection && isSchoolSection(roleDashboardSection)) {
+      return `${prefix}/${roleDashboardSection}`;
+    }
+
     if (pathname === "/students") {
       return `${prefix}/students`;
     }
@@ -240,8 +249,12 @@ function resolveLegacyCompatibilityPath(
     if (pathname.startsWith("/superadmin/")) {
       const section = pathname.slice("/superadmin/".length);
 
-      if (section === "login" || section === "forgot-password" || section === "reset-password") {
+    if (section === "login" || section === "forgot-password" || section === "reset-password") {
         return `/${section}`;
+      }
+
+      if (section === "dashboard") {
+        return toSuperadminPath("dashboard");
       }
 
       if (section === "tenants") {
@@ -474,6 +487,29 @@ export function evaluateExperienceRouting(input: {
     }
 
     if (session.experience !== "school" || session.role !== "storekeeper") {
+      return {
+        action: "redirect",
+        location: "/forbidden",
+        headers,
+      };
+    }
+
+    return {
+      action: "next",
+      headers,
+    };
+  }
+
+  if (experience === "school" && isLibrarianLibraryPath(input.pathname)) {
+    if (!session) {
+      return {
+        action: "redirect",
+        location: getLoginPath(),
+        headers,
+      };
+    }
+
+    if (session.experience !== "school" || session.role !== "librarian") {
       return {
         action: "redirect",
         location: "/forbidden",

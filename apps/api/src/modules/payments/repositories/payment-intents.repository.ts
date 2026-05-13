@@ -17,6 +17,13 @@ interface PaymentIntentRow {
   phone_number: string;
   amount_minor: string;
   currency_code: string;
+  payment_owner: 'tenant' | 'platform';
+  mpesa_config_id: string | null;
+  payment_channel_id: string | null;
+  mpesa_short_code: string | null;
+  payment_channel_type: string | null;
+  ledger_debit_account_code: string | null;
+  ledger_credit_account_code: string | null;
   status: PaymentIntentEntity['status'];
   merchant_request_id: string | null;
   checkout_request_id: string | null;
@@ -46,6 +53,13 @@ interface CreatePaymentIntentInput {
   phone_number: string;
   amount_minor: string;
   currency_code: string;
+  payment_owner?: 'tenant' | 'platform';
+  mpesa_config_id?: string | null;
+  payment_channel_id?: string | null;
+  mpesa_short_code?: string | null;
+  payment_channel_type?: string | null;
+  ledger_debit_account_code?: string;
+  ledger_credit_account_code?: string;
   metadata: Record<string, unknown>;
 }
 
@@ -71,6 +85,13 @@ export class PaymentIntentsRepository {
           phone_number,
           amount_minor,
           currency_code,
+          payment_owner,
+          mpesa_config_id,
+          payment_channel_id,
+          mpesa_short_code,
+          payment_channel_type,
+          ledger_debit_account_code,
+          ledger_credit_account_code,
           status,
           metadata
         )
@@ -86,8 +107,15 @@ export class PaymentIntentsRepository {
           $9,
           $10::bigint,
           $11,
+          $12,
+          $13::uuid,
+          $14::uuid,
+          $15,
+          $16,
+          $17,
+          $18,
           'pending',
-          $12::jsonb
+          $19::jsonb
         )
         RETURNING
           id,
@@ -102,6 +130,13 @@ export class PaymentIntentsRepository {
           phone_number,
           amount_minor::text,
           currency_code,
+          payment_owner,
+          mpesa_config_id,
+          payment_channel_id,
+          mpesa_short_code,
+          payment_channel_type,
+          ledger_debit_account_code,
+          ledger_credit_account_code,
           status,
           merchant_request_id,
           checkout_request_id,
@@ -133,6 +168,13 @@ export class PaymentIntentsRepository {
         ),
         input.amount_minor,
         input.currency_code,
+        input.payment_owner ?? 'tenant',
+        input.mpesa_config_id ?? null,
+        input.payment_channel_id ?? null,
+        input.mpesa_short_code ?? null,
+        input.payment_channel_type ?? null,
+        input.ledger_debit_account_code ?? '1110-MPESA-CLEARING',
+        input.ledger_credit_account_code ?? '1100-AR-FEES',
         JSON.stringify(input.metadata ?? {}),
       ],
     );
@@ -180,6 +222,13 @@ export class PaymentIntentsRepository {
           phone_number,
           amount_minor::text,
           currency_code,
+          payment_owner,
+          mpesa_config_id,
+          payment_channel_id,
+          mpesa_short_code,
+          payment_channel_type,
+          ledger_debit_account_code,
+          ledger_credit_account_code,
           status,
           merchant_request_id,
           checkout_request_id,
@@ -231,6 +280,13 @@ export class PaymentIntentsRepository {
           phone_number,
           amount_minor::text,
           currency_code,
+          payment_owner,
+          mpesa_config_id,
+          payment_channel_id,
+          mpesa_short_code,
+          payment_channel_type,
+          ledger_debit_account_code,
+          ledger_credit_account_code,
           status,
           merchant_request_id,
           checkout_request_id,
@@ -381,6 +437,13 @@ export class PaymentIntentsRepository {
           pi.phone_number,
           pi.amount_minor::text,
           pi.currency_code,
+          pi.payment_owner,
+          pi.mpesa_config_id,
+          pi.payment_channel_id,
+          pi.mpesa_short_code,
+          pi.payment_channel_type,
+          pi.ledger_debit_account_code,
+          pi.ledger_credit_account_code,
           pi.status,
           pi.merchant_request_id,
           pi.checkout_request_id,
@@ -422,6 +485,13 @@ export class PaymentIntentsRepository {
           phone_number,
           amount_minor::text,
           currency_code,
+          payment_owner,
+          mpesa_config_id,
+          payment_channel_id,
+          mpesa_short_code,
+          payment_channel_type,
+          ledger_debit_account_code,
+          ledger_credit_account_code,
           status,
           merchant_request_id,
           checkout_request_id,

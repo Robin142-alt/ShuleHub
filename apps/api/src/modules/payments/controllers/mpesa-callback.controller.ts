@@ -13,8 +13,10 @@ import { performance } from 'node:perf_hooks';
 
 import { Public } from '../../../auth/decorators/public.decorator';
 import { RequestContextService } from '../../../common/request-context/request-context.service';
+import { DatabaseService } from '../../../database/database.service';
 import { SloMetricsService } from '../../observability/slo-metrics.service';
 import { StructuredLoggerService } from '../../observability/structured-logger.service';
+import { TenantFinanceConfigService } from '../../tenant-finance/tenant-finance-config.service';
 import { MpesaCallbackResponseDto } from '../dto/mpesa-callback-response.dto';
 import {
   PAYMENTS_PROCESS_JOB,
@@ -38,18 +40,14 @@ export class MpesaCallbackController {
     private readonly paymentsJobProducerService: PaymentsJobProducerService,
     @Optional() private readonly structuredLogger?: StructuredLoggerService,
     @Optional() private readonly sloMetrics?: SloMetricsService,
+    @Optional() private readonly tenantFinanceConfigService?: TenantFinanceConfigService,
+    @Optional() private readonly databaseService?: DatabaseService,
   ) {}
 
   @Post('callback')
   @HttpCode(HttpStatus.OK)
   async handleCallback(@Req() request: Request): Promise<MpesaCallbackResponseDto> {
     const requestContext = this.requestContext.requireStore();
-    const tenantId = requestContext.tenant_id;
-
-    if (!tenantId) {
-      throw new UnauthorizedException('Tenant context is required for MPESA callbacks');
-    }
-
     const rawBody = this.getRawBody(request);
     const inspection = this.mpesaSignatureService.inspectCallback(rawBody, request.headers);
 
@@ -71,10 +69,23 @@ export class MpesaCallbackController {
       signatureError = error as Error;
     }
 
+    const resolvedTenant = await this.resolveCallbackTenant(
+      request.body,
+      parsedCallback,
+      requestContext.tenant_id,
+    );
+    const tenantId = resolvedTenant.tenant_id;
+
+    if (requestContext.tenant_id !== tenantId) {
+      this.requestContext.setTenantId(tenantId);
+      await this.databaseService?.synchronizeRequestSession(this.requestContext.requireStore());
+    }
+
     const callbackLog = await this.callbackLogsRepository.createLog({
       tenant_id: tenantId,
       merchant_request_id: parsedCallback?.merchant_request_id ?? null,
       checkout_request_id: parsedCallback?.checkout_request_id ?? null,
+      mpesa_short_code: resolvedTenant.shortcode,
       delivery_id: inspection.delivery_id,
       request_fingerprint: inspection.request_fingerprint,
       event_timestamp: inspection.event_timestamp,
@@ -105,6 +116,22 @@ export class MpesaCallbackController {
 
     if (!parsedCallback) {
       throw new BadRequestException('MPESA callback is missing required fields');
+    }
+
+    try {
+      await this.tenantFinanceConfigService?.assertCallbackBelongsToTenant({
+        tenant_id: tenantId,
+        payload: request.body,
+        checkout_request_id: parsedCallback.checkout_request_id,
+        merchant_request_id: parsedCallback.merchant_request_id,
+      });
+    } catch (error) {
+      await this.callbackLogsRepository.markRejected(
+        tenantId,
+        callbackLog.id,
+        error instanceof Error ? error.message : String(error),
+      );
+      throw error;
     }
 
     const accepted = await this.mpesaReplayProtectionService.registerDelivery(
@@ -221,5 +248,28 @@ export class MpesaCallbackController {
     }
 
     return request.ip || null;
+  }
+
+  private async resolveCallbackTenant(
+    payload: unknown,
+    parsedCallback:
+      | ReturnType<MpesaService['parseCallbackPayload']>
+      | null,
+    fallbackTenantId: string | null,
+  ): Promise<{ tenant_id: string; shortcode: string | null }> {
+    if (this.tenantFinanceConfigService) {
+      return this.tenantFinanceConfigService.resolveTenantForMpesaCallback({
+        payload,
+        checkout_request_id: parsedCallback?.checkout_request_id ?? null,
+        merchant_request_id: parsedCallback?.merchant_request_id ?? null,
+        fallback_tenant_id: fallbackTenantId,
+      });
+    }
+
+    if (!fallbackTenantId) {
+      throw new UnauthorizedException('Tenant context is required for MPESA callbacks');
+    }
+
+    return { tenant_id: fallbackTenantId, shortcode: null };
   }
 }

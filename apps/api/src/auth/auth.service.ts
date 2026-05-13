@@ -103,7 +103,7 @@ export class AuthService {
 
   async register(dto: RegisterDto, metadata: AuthRequestMetadata): Promise<AuthResponseDto> {
     const tenantId = this.requireTenantId();
-    const audience = this.requireTenantAudience('school');
+    const audience = this.requireTenantAudience('school', tenantId);
 
     await this.authorizationRepository.ensureTenantAuthorizationBaseline(tenantId);
 
@@ -148,7 +148,7 @@ export class AuthService {
 
   async login(dto: LoginDto, metadata: AuthRequestMetadata): Promise<AuthResponseDto> {
     const tenantId = this.requireTenantId();
-    const audience = this.requireTenantAudience(dto.audience);
+    const audience = this.requireTenantAudience(dto.audience, tenantId);
 
     await this.authorizationRepository.ensureTenantAuthorizationBaseline(tenantId);
 
@@ -178,7 +178,7 @@ export class AuthService {
   async refresh(dto: RefreshTokenDto, metadata: AuthRequestMetadata): Promise<AuthResponseDto> {
     const tenantId = this.requireTenantId();
     const payload = await this.tokenService.verifyRefreshToken(dto.refresh_token);
-    const audience = this.requireTenantAudience(payload.audience);
+    const audience = this.requireTenantAudience(payload.audience, tenantId);
 
     if (payload.tenant_id !== tenantId) {
       throw new UnauthorizedException('Refresh token does not belong to this tenant');
@@ -274,19 +274,26 @@ export class AuthService {
         membership,
         permissions,
         requestContext.session_id,
-        this.requireTenantAudience(requestContext.audience ?? 'school'),
+      this.requireTenantAudience(requestContext.audience ?? 'school', tenantId),
       ),
     };
   }
 
-  private requireTenantAudience(requestedAudience: AuthAudience | undefined): AuthAudience {
+  private requireTenantAudience(
+    requestedAudience: AuthAudience | undefined,
+    tenantId: string,
+  ): AuthAudience {
     const audience = requestedAudience ?? 'school';
 
-    if (audience !== 'school') {
-      throw new UnauthorizedException('Requested audience is not allowed for this tenant');
+    if (audience === 'school') {
+      return audience;
     }
 
-    return audience;
+    if (audience === 'superadmin' && tenantId === 'superadmin') {
+      return audience;
+    }
+
+    throw new UnauthorizedException('Requested audience is not allowed for this tenant');
   }
 
   private async createAuthResponse(

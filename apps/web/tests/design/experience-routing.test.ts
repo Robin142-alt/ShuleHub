@@ -105,6 +105,31 @@ describe("experience routing", () => {
     });
   });
 
+  test("rewrites role dashboard aliases into internal school sections once authenticated", () => {
+    expect(
+      evaluateExperienceRouting({
+        host: "greenfield.shulehub.test",
+        pathname: "/finance/dashboard",
+        cookies: {
+          [SCHOOL_SESSION_COOKIE]: serializeExperienceSession({
+            experience: "school",
+            homePath: "/finance/dashboard",
+            role: "bursar",
+            tenantSlug: "greenfield",
+            userLabel: "Bursar",
+          }),
+        },
+      }),
+    ).toEqual({
+      action: "next",
+      rewrittenPath: "/internal/school/finance",
+      headers: {
+        "x-platform-experience": "school",
+        "x-tenant-slug": "greenfield",
+      },
+    });
+  });
+
   test("allows authenticated storekeeper sessions to open dedicated inventory routes", () => {
     expect(
       evaluateExperienceRouting({
@@ -141,6 +166,55 @@ describe("experience routing", () => {
             role: "bursar",
             tenantSlug: "amani-prep",
             userLabel: "Bursar",
+          }),
+        },
+      }),
+    ).toEqual({
+      action: "redirect",
+      location: "/forbidden",
+      headers: {
+        "x-platform-experience": "school",
+        "x-tenant-slug": "amani-prep",
+      },
+    });
+  });
+
+  test("allows authenticated librarian sessions to open dedicated library routes", () => {
+    expect(
+      evaluateExperienceRouting({
+        host: "amani-prep.shulehub.test",
+        pathname: "/library/dashboard",
+        cookies: {
+          [SCHOOL_SESSION_COOKIE]: serializeExperienceSession({
+            experience: "school",
+            homePath: "/library/dashboard",
+            role: "librarian",
+            tenantSlug: "amani-prep",
+            userLabel: "Librarian Amani Prep",
+          }),
+        },
+      }),
+    ).toEqual({
+      action: "next",
+      headers: {
+        "x-platform-experience": "school",
+        "x-tenant-slug": "amani-prep",
+      },
+    });
+  });
+
+  test("denies dedicated library routes to non-librarian school sessions", () => {
+    expect(
+      evaluateExperienceRouting({
+        host: "amani-prep.shulehub.test",
+        pathname: "/library/dashboard",
+        cookies: {
+          [SCHOOL_SESSION_COOKIE]: serializeExperienceSession({
+            experience: "school",
+            homePath: "/dashboard",
+            role: "principal",
+            tenantSlug: "amani-prep",
+            userLabel: "Principal",
           }),
         },
       }),

@@ -329,7 +329,7 @@ test('BillingMpesaService creates a separate MPESA payment intent for an invoice
       }),
     } as never,
     {
-      createPaymentIntent: async (payload: Record<string, unknown>) => {
+      createPlatformPaymentIntent: async (payload: Record<string, unknown>) => {
         requestedMpesaPayload = payload;
         return {
           payment_intent_id: '00000000-0000-0000-0000-000000000501',

@@ -12,6 +12,7 @@ export const createApp = async (
   options: NestApplicationOptions = {},
 ): Promise<INestApplication> => {
   const applicationOptions: NestApplicationOptions = {
+    abortOnError: false,
     bufferLogs: true,
     rawBody: true,
     ...options,

@@ -136,6 +136,178 @@ test('AuthService register creates missing global users through the registration
   assert.equal(response.user.tenant_id, 'tenant-a');
 });
 
+test('AuthService login issues superadmin audience sessions only on the superadmin tenant', async () => {
+  const requestContext = new RequestContextService();
+  let createdSessionAudience: string | null = null;
+
+  const service = new AuthService(
+    requestContext,
+    {
+      findByEmail: async () => ({
+        id: 'user-platform',
+        tenant_id: 'global',
+        email: 'operator@example.test',
+        password_hash: 'hashed-password',
+        display_name: 'Platform Operator',
+        status: 'active',
+        created_at: new Date('2026-05-08T00:00:00.000Z'),
+        updated_at: new Date('2026-05-08T00:00:00.000Z'),
+      }),
+      findById: async () => null,
+      ensureGlobalUserForRegistration: async () => {
+        throw new Error('not used');
+      },
+    } as never,
+    {
+      findActiveMembership: async () => ({
+        id: 'membership-platform',
+        tenant_id: 'superadmin',
+        user_id: 'user-platform',
+        role_id: 'role-platform-owner',
+        role_code: 'platform_owner',
+        role_name: 'Platform Owner',
+        status: 'active',
+        created_at: new Date('2026-05-08T00:00:00.000Z'),
+        updated_at: new Date('2026-05-08T00:00:00.000Z'),
+      }),
+    } as never,
+    {
+      ensureTenantAuthorizationBaseline: async () => undefined,
+      getPermissionsByRoleId: async () => ['*:*'],
+    } as never,
+    {
+      compare: async () => true,
+      hash: async () => {
+        throw new Error('not used');
+      },
+    } as never,
+    {
+      issueTokenPair: async () => ({
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+        token_type: 'Bearer',
+        access_expires_in: 900,
+        refresh_expires_in: 2592000,
+        access_expires_at: '2026-05-08T01:00:00.000Z',
+        refresh_expires_at: '2026-06-08T00:00:00.000Z',
+        access_token_id: 'access-1',
+        refresh_token_id: 'refresh-1',
+        session_id: 'session-platform',
+      }),
+      verifyAccessToken: async () => {
+        throw new Error('not used');
+      },
+      verifyRefreshToken: async () => {
+        throw new Error('not used');
+      },
+    } as never,
+    {
+      createSession: async (session: { audience: string }) => {
+        createdSessionAudience = session.audience;
+      },
+      invalidateSession: async () => undefined,
+      getSession: async () => null,
+      rotateRefreshToken: async () => undefined,
+      toPrincipal: () => {
+        throw new Error('not used');
+      },
+    } as never,
+  );
+
+  const response = await requestContext.run(
+    {
+      request_id: 'req-superadmin-login',
+      tenant_id: 'superadmin',
+      user_id: 'anonymous',
+      role: 'guest',
+      audience: 'superadmin',
+      session_id: null,
+      permissions: [],
+      is_authenticated: false,
+      client_ip: '127.0.0.1',
+      user_agent: 'test-suite',
+      method: 'POST',
+      path: '/auth/login',
+      started_at: '2026-05-08T00:00:00.000Z',
+    },
+    () =>
+      service.login(
+        {
+          email: 'operator@example.test',
+          password: 'SecurePass!2026',
+          audience: 'superadmin',
+        },
+        {
+          ip_address: '127.0.0.1',
+          user_agent: 'test-suite',
+        },
+      ),
+  );
+
+  assert.equal(response.user.tenant_id, 'superadmin');
+  assert.equal(response.user.role, 'platform_owner');
+  assert.equal(response.user.audience, 'superadmin');
+  assert.equal(createdSessionAudience, 'superadmin');
+});
+
+test('AuthService login rejects superadmin audience outside the superadmin tenant', async () => {
+  const requestContext = new RequestContextService();
+
+  const service = new AuthService(
+    requestContext,
+    {
+      findByEmail: async () => {
+        throw new Error('not used');
+      },
+    } as never,
+    {} as never,
+    {
+      ensureTenantAuthorizationBaseline: async () => {
+        throw new Error('tenant baseline must not run for a rejected audience');
+      },
+    } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+  );
+
+  await assert.rejects(
+    () =>
+      requestContext.run(
+        {
+          request_id: 'req-reject-superadmin-login',
+          tenant_id: 'greenfield',
+          user_id: 'anonymous',
+          role: 'guest',
+          audience: 'school',
+          session_id: null,
+          permissions: [],
+          is_authenticated: false,
+          client_ip: '127.0.0.1',
+          user_agent: 'test-suite',
+          method: 'POST',
+          path: '/auth/login',
+          started_at: '2026-05-08T00:00:00.000Z',
+        },
+        () =>
+          service.login(
+            {
+              email: 'operator@example.test',
+              password: 'SecurePass!2026',
+              audience: 'superadmin',
+            },
+            {
+              ip_address: '127.0.0.1',
+              user_agent: 'test-suite',
+            },
+          ),
+      ),
+    (error: unknown) =>
+      error instanceof UnauthorizedException
+      && error.message === 'Requested audience is not allowed for this tenant',
+  );
+});
+
 test('AuthService authenticateAccessToken rejects access tokens when the audience does not match the session audience', async () => {
   const requestContext = new RequestContextService();
 

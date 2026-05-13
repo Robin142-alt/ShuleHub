@@ -10,6 +10,7 @@ interface CallbackLogRow {
   tenant_id: string;
   merchant_request_id: string | null;
   checkout_request_id: string | null;
+  mpesa_short_code: string | null;
   delivery_id: string;
   request_fingerprint: string;
   event_timestamp: Date | null;
@@ -32,6 +33,7 @@ interface CreateCallbackLogInput {
   tenant_id: string;
   merchant_request_id: string | null;
   checkout_request_id: string | null;
+  mpesa_short_code?: string | null;
   delivery_id: string;
   request_fingerprint: string;
   event_timestamp: string | null;
@@ -57,6 +59,7 @@ export class CallbackLogsRepository {
           tenant_id,
           merchant_request_id,
           checkout_request_id,
+          mpesa_short_code,
           delivery_id,
           request_fingerprint,
           event_timestamp,
@@ -74,13 +77,14 @@ export class CallbackLogsRepository {
           $3,
           $4,
           $5,
-          $6::timestamptz,
-          $7,
+          $6,
+          $7::timestamptz,
           $8,
-          $9::jsonb,
-          $10,
-          $11::jsonb,
-          $12::inet,
+          $9,
+          $10::jsonb,
+          $11,
+          $12::jsonb,
+          $13::inet,
           'received'
         )
         RETURNING
@@ -88,6 +92,7 @@ export class CallbackLogsRepository {
           tenant_id,
           merchant_request_id,
           checkout_request_id,
+          mpesa_short_code,
           delivery_id,
           request_fingerprint,
           event_timestamp,
@@ -109,6 +114,7 @@ export class CallbackLogsRepository {
         input.tenant_id,
         input.merchant_request_id,
         input.checkout_request_id,
+        input.mpesa_short_code ?? null,
         input.delivery_id,
         input.request_fingerprint,
         input.event_timestamp,
@@ -135,6 +141,7 @@ export class CallbackLogsRepository {
           tenant_id,
           merchant_request_id,
           checkout_request_id,
+          mpesa_short_code,
           delivery_id,
           request_fingerprint,
           event_timestamp,
@@ -173,6 +180,7 @@ export class CallbackLogsRepository {
           tenant_id,
           merchant_request_id,
           checkout_request_id,
+          mpesa_short_code,
           delivery_id,
           request_fingerprint,
           event_timestamp,

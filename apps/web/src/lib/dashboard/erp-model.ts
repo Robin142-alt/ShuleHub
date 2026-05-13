@@ -201,6 +201,46 @@ export interface UserManagementRow {
   statusTone: StatusTone;
 }
 
+export interface PaymentChannelView {
+  id: string;
+  type: string;
+  name: string;
+  identifier: string;
+  accountInstruction: string;
+  settlement: string;
+  status: string;
+  statusTone: StatusTone;
+}
+
+export interface BankAccountView {
+  id: string;
+  bankName: string;
+  branchName: string;
+  accountName: string;
+  accountNumber: string;
+  currency: string;
+  status: string;
+  statusTone: StatusTone;
+}
+
+export interface TenantFinanceConfigView {
+  paybillNumber: string;
+  tillNumber: string;
+  accountReferenceExample: string;
+  mpesaStatus: string;
+  mpesaStatusTone: StatusTone;
+  reconciliationStatus: string;
+  reconciliationStatusTone: StatusTone;
+  darajaEnvironment: string;
+  callbackUrl: string;
+  todayCollections: string;
+  pendingReconciliations: string;
+  failedCallbacks: string;
+  unmatchedPayments: string;
+  channels: PaymentChannelView[];
+  bankAccounts: BankAccountView[];
+}
+
 export interface DashboardHomeData {
   kpis: KpiCard[];
   mpesaFeed: DashboardMpesaRow[];
@@ -268,6 +308,7 @@ export interface SchoolErpModel {
   communication: CommunicationPageData;
   reports: ReportsPageData;
   settings: SettingsPageData;
+  tenantFinance: TenantFinanceConfigView;
 }
 
 type BaseStudent = {
@@ -632,6 +673,80 @@ const systemUsersBase = [
   },
 ];
 
+function buildTenantFinanceConfig(tenant: TenantOption): TenantFinanceConfigView {
+  const primarySettlement = `${tenant.name} Main Fees - KCB Westlands`;
+
+  return {
+    paybillNumber: "247247",
+    tillNumber: "837492",
+    accountReferenceExample: "ADM-2025-001",
+    mpesaStatus: "Live",
+    mpesaStatusTone: "ok",
+    reconciliationStatus: "Balanced to 09:00",
+    reconciliationStatusTone: "ok",
+    darajaEnvironment: "Production",
+    callbackUrl: "https://api.shulehub.co.ke/mpesa/callback/barakaacademy",
+    todayCollections: formatCurrency(248_500),
+    pendingReconciliations: "3",
+    failedCallbacks: "1",
+    unmatchedPayments: "2",
+    channels: [
+      {
+        id: "channel-paybill",
+        type: "MPESA Paybill",
+        name: "School fees paybill",
+        identifier: "247247",
+        accountInstruction: "Use learner admission number, e.g. ADM-2025-001",
+        settlement: primarySettlement,
+        status: "Active",
+        statusTone: "ok",
+      },
+      {
+        id: "channel-till",
+        type: "MPESA Till",
+        name: "Onsite bursar till",
+        identifier: "837492",
+        accountInstruction: "Use receipt reference from bursar desk",
+        settlement: primarySettlement,
+        status: "Active",
+        statusTone: "ok",
+      },
+      {
+        id: "channel-bank",
+        type: "Bank deposit",
+        name: "Direct bank transfer",
+        identifier: "KCB 0134 5221 9087",
+        accountInstruction: "Narration must include admission number",
+        settlement: primarySettlement,
+        status: "Active",
+        statusTone: "ok",
+      },
+    ],
+    bankAccounts: [
+      {
+        id: "bank-main-fees",
+        bankName: "KCB Bank Kenya",
+        branchName: "Westlands",
+        accountName: `${tenant.name} Main Fees Account`,
+        accountNumber: "0134 5221 9087",
+        currency: "KES",
+        status: "Active",
+        statusTone: "ok",
+      },
+      {
+        id: "bank-development",
+        bankName: "Co-operative Bank",
+        branchName: "Nairobi CBD",
+        accountName: `${tenant.name} Development Fund`,
+        accountNumber: "0112 8840 7752",
+        currency: "KES",
+        status: "Review",
+        statusTone: "warning",
+      },
+    ],
+  };
+}
+
 function roleVisibleStudentIds(role: DashboardRole) {
   if (role === "parent") {
     return ["learner-aisha-njeri", "learner-brian-otieno"];
@@ -903,6 +1018,7 @@ export function buildSchoolErpModel({
   );
   const studentRows = buildStudentRows(role);
   const studentProfiles = buildStudentProfiles(role);
+  const tenantFinance = buildTenantFinanceConfig(tenant);
 
   const defaulters = visibleStudents
     .filter((student) => student.balance > 0)
@@ -1179,6 +1295,7 @@ export function buildSchoolErpModel({
       })),
       users: systemUsersBase,
     },
+    tenantFinance,
   };
 }
 

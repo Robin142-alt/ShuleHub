@@ -2,14 +2,30 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRight, FileSpreadsheet, Printer, Send, UserPlus } from "lucide-react";
+import {
+  ArrowRight,
+  FileSpreadsheet,
+  KeyRound,
+  Landmark,
+  Power,
+  Printer,
+  RefreshCw,
+  Send,
+  ShieldCheck,
+  SmartphoneCharging,
+  UserPlus,
+} from "lucide-react";
 
 import { ActivityListCard, SimpleListCard } from "@/components/experience/activity-list-card";
 import { MetricGrid } from "@/components/experience/metric-grid";
 import { QuickActionBar } from "@/components/experience/quick-action-bar";
 import { AdmissionsModuleScreen } from "@/components/modules/admissions/admissions-module-screen";
+import { ExamsModuleScreen } from "@/components/modules/exams/exams-module-screen";
 import { InventoryModuleScreen } from "@/components/modules/inventory/inventory-module-screen";
 import { ErpShell } from "@/components/school/erp-shell";
+import { SessionManagementPanel } from "@/components/school/session-management-panel";
+import { UserManagementPanel } from "@/components/school/user-management-panel";
+import { SupportCenterWorkspace } from "@/components/support/support-center-workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -21,6 +37,7 @@ import {
   downloadTextFile,
   openPrintDocument,
 } from "@/lib/dashboard/export";
+import type { TenantFinanceConfigView } from "@/lib/dashboard/erp-model";
 import type { ExperienceNotificationItem } from "@/lib/experiences/types";
 import { getSchoolKpiSummary, getSchoolWorkspace, schoolSectionLabels, type SchoolExperienceRole, type SchoolSubscriptionView } from "@/lib/experiences/school-data";
 import { toSchoolPath, toSchoolStudentPath } from "@/lib/routing/experience-routes";
@@ -250,6 +267,200 @@ function SubscriptionLifecyclePanel({
         </div>
       </Modal>
     </>
+  );
+}
+
+function TenantFinanceSnapshot({ finance }: { finance: TenantFinanceConfigView }) {
+  const mainBank = finance.bankAccounts[0];
+  const healthItems = [
+    { id: "today", label: "Today's collections", value: finance.todayCollections },
+    { id: "pending", label: "Pending reconciliations", value: finance.pendingReconciliations },
+    { id: "failed", label: "Failed callbacks", value: finance.failedCallbacks },
+    { id: "unmatched", label: "Unmatched payments", value: finance.unmatchedPayments },
+  ];
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+      <Card className="p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-foreground">
+                <ShieldCheck className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-lg font-semibold text-foreground">School-owned collection channels</p>
+                <p className="mt-1 text-sm text-muted">
+                  Student fees settle directly to this school&apos;s MPESA and bank accounts.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <StatusPill label={finance.mpesaStatus} tone={finance.mpesaStatusTone} />
+            <StatusPill label={finance.reconciliationStatus} tone={finance.reconciliationStatusTone} />
+          </div>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-border bg-surface-muted px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Paybill</p>
+            <p className="mt-2 text-2xl font-bold text-foreground">{finance.paybillNumber}</p>
+            <p className="mt-1 text-sm text-muted">Account {finance.accountReferenceExample}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-muted px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Till</p>
+            <p className="mt-2 text-2xl font-bold text-foreground">{finance.tillNumber}</p>
+            <p className="mt-1 text-sm text-muted">Bursar counter collection</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-muted px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Settlement</p>
+            <p className="mt-2 text-sm font-semibold text-foreground">{mainBank?.bankName ?? "School bank"}</p>
+            <p className="mt-1 text-sm text-muted">{mainBank?.accountNumber ?? "Configured bank account"}</p>
+          </div>
+        </div>
+      </Card>
+      <Card className="p-5">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-foreground">
+            <Landmark className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-lg font-semibold text-foreground">Reconciliation status</p>
+            <p className="mt-1 text-sm text-muted">MPESA, ERP payments, and bank settlement checks.</p>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {healthItems.map((item) => (
+            <div key={item.id} className="rounded-xl border border-border bg-surface-muted px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{item.label}</p>
+              <p className="mt-2 text-xl font-bold text-foreground">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function TenantMpesaOperations({ finance }: { finance: TenantFinanceConfigView }) {
+  return (
+    <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+      <Card className="p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-foreground">
+              <SmartphoneCharging className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-lg font-semibold text-foreground">Tenant MPESA configuration</p>
+              <p className="mt-1 text-sm text-muted">Daraja requests route through the school&apos;s shortcode.</p>
+            </div>
+          </div>
+          <StatusPill label={finance.mpesaStatus} tone={finance.mpesaStatusTone} />
+        </div>
+        <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+          {[
+            ["Shortcode", finance.paybillNumber],
+            ["Till", finance.tillNumber],
+            ["Environment", finance.darajaEnvironment],
+            ["Callback", finance.callbackUrl],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-xl border border-border bg-surface-muted px-4 py-3">
+              <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{label}</dt>
+              <dd className="mt-2 break-words text-sm font-semibold text-foreground">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
+      <DataTable
+        title="Payment channels"
+        subtitle="Active routes owned by the school tenant."
+        columns={[
+          { id: "type", header: "Channel", render: (row) => row.type },
+          { id: "identifier", header: "Identifier", render: (row) => row.identifier },
+          { id: "settlement", header: "Settlement", render: (row) => row.settlement },
+          { id: "status", header: "Status", render: (row) => <StatusPill label={row.status} tone={row.statusTone} /> },
+        ]}
+        rows={finance.channels}
+        getRowKey={(row) => row.id}
+      />
+    </div>
+  );
+}
+
+function FinanceSettingsChannels({ finance }: { finance: TenantFinanceConfigView }) {
+  return (
+    <div className="space-y-6">
+      <Card className="p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Finance Settings</p>
+            <h3 className="mt-2 text-xl font-bold text-foreground">Payment Channels</h3>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              Configure the school&apos;s MPESA paybill, till, bank accounts, and credential lifecycle.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm">
+              <RefreshCw className="h-4 w-4" />
+              Test MPESA
+            </Button>
+            <Button size="sm">
+              <KeyRound className="h-4 w-4" />
+              Rotate credentials
+            </Button>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          {[
+            ["Paybill", finance.paybillNumber],
+            ["Till", finance.tillNumber],
+            ["Daraja", finance.darajaEnvironment],
+            ["Callback", finance.mpesaStatus],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-xl border border-border bg-surface-muted px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{label}</p>
+              <p className="mt-2 break-words text-sm font-semibold text-foreground">{value}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <DataTable
+          title="Configured payment channels"
+          subtitle="School admins control which routes are active for parents and bursars."
+          columns={[
+            { id: "name", header: "Name", render: (row) => row.name },
+            { id: "identifier", header: "Identifier", render: (row) => row.identifier },
+            { id: "instruction", header: "Instruction", render: (row) => row.accountInstruction },
+            { id: "status", header: "Status", render: (row) => <StatusPill label={row.status} tone={row.statusTone} /> },
+            {
+              id: "action",
+              header: "Action",
+              render: () => (
+                <Button variant="secondary" size="sm">
+                  <Power className="h-4 w-4" />
+                  Deactivate
+                </Button>
+              ),
+            },
+          ]}
+          rows={finance.channels}
+          getRowKey={(row) => row.id}
+        />
+        <DataTable
+          title="Bank accounts"
+          subtitle="Settlement accounts scoped to this school tenant."
+          columns={[
+            { id: "bank", header: "Bank", render: (row) => row.bankName },
+            { id: "account", header: "Account", render: (row) => row.accountNumber },
+            { id: "status", header: "Status", render: (row) => <StatusPill label={row.status} tone={row.statusTone} /> },
+          ]}
+          rows={finance.bankAccounts}
+          getRowKey={(row) => row.id}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -766,6 +977,7 @@ function SchoolFinancePage({
   routeMode: SchoolRouteMode;
 }) {
   const { model, subscription } = getSchoolWorkspace(role, tenantSlug);
+  const tenantFinance = model.tenantFinance;
   const [rows, setRows] = useState(model.finance.rows);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -897,6 +1109,7 @@ function SchoolFinancePage({
           {financeMessage}
         </div>
       ) : null}
+      <TenantFinanceSnapshot finance={tenantFinance} />
       <MetricGrid
         items={model.finance.summary.map((item) => ({
           id: item.id,
@@ -1047,6 +1260,7 @@ function SchoolMpesaPage({
   tenantSlug?: string | null;
 }) {
   const { model } = getSchoolWorkspace(role, tenantSlug);
+  const tenantFinance = model.tenantFinance;
   const [rows, setRows] = useState(model.mpesa.rows);
   const [showReconcileModal, setShowReconcileModal] = useState(false);
   const [receiptCode, setReceiptCode] = useState(model.mpesa.rows[0]?.code ?? "");
@@ -1125,6 +1339,7 @@ function SchoolMpesaPage({
           helper: item.helper,
         }))}
       />
+      <TenantMpesaOperations finance={tenantFinance} />
       <DataTable
         title="MPESA transactions"
         subtitle="Phone, amount, receipt code, status, and matched learner."
@@ -1652,7 +1867,24 @@ export function SchoolPages({
       {!studentId && section === "academics" ? <SchoolAcademicsPage role={role} tenantSlug={tenantSlug} /> : null}
       {!studentId && section === "reports" ? <SchoolReportsPage role={role} tenantSlug={tenantSlug} /> : null}
       {!studentId && section === "communication" ? <SchoolCommunicationPage role={role} tenantSlug={tenantSlug} /> : null}
+      {!studentId && (
+        section === "support-new-ticket"
+        || section === "support-my-tickets"
+        || section === "support-knowledge-base"
+        || section === "support-system-status"
+      ) ? (
+        <SupportCenterWorkspace
+          tenantSlug={tenantSlug}
+          defaultView={section as "support-new-ticket" | "support-my-tickets" | "support-knowledge-base" | "support-system-status"}
+        />
+      ) : null}
       {!studentId && section === "exams" ? (
+        <ExamsModuleScreen
+          role={role}
+          schoolName={workspace.branding.name}
+        />
+      ) : null}
+      {!studentId && section === "__legacy-exams" ? (
         <SchoolBasicCardPage
           eyebrow="Exams"
           title="Exam operations"
@@ -1699,8 +1931,9 @@ export function SchoolPages({
           <SchoolPageHeader
             eyebrow="Settings"
             title="School settings"
-            description="School profile, fee structure, and user management in one trusted admin area."
+            description="School profile, fee structure, finance settings, and user management in one trusted admin area."
           />
+          <FinanceSettingsChannels finance={workspace.model.tenantFinance} />
           <div className="grid gap-6 lg:grid-cols-3">
             <DataTable
               title="School profile"
@@ -1721,18 +1954,9 @@ export function SchoolPages({
               rows={workspace.model.settings.feeStructure}
               getRowKey={(row) => row.id}
             />
-            <DataTable
-              title="Users"
-              columns={[
-                { id: "name", header: "User", render: (row) => row.name },
-                { id: "role", header: "Role", render: (row) => row.role },
-                { id: "phone", header: "Phone", render: (row) => row.phone },
-                { id: "status", header: "Status", render: (row) => <StatusPill label={row.status} tone={row.statusTone} /> },
-              ]}
-              rows={workspace.model.settings.users}
-              getRowKey={(row) => row.id}
-            />
           </div>
+          <UserManagementPanel />
+          <SessionManagementPanel />
         </div>
       ) : null}
     </ErpShell>

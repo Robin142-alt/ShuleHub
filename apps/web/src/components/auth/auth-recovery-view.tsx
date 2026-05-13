@@ -9,10 +9,6 @@ import { AuthMessage } from "@/components/auth/auth-message";
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
 
-function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
 export function ForgotPasswordView({
   title,
   subtitle,
@@ -36,16 +32,38 @@ export function ForgotPasswordView({
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    if (identifier.trim().length < 4) {
-      setError("Enter the email, phone number, or admission number tied to this account.");
+    if (!/\S+@\S+\.\S+/.test(identifier.trim())) {
+      setError("Enter the email address tied to this account.");
       return;
     }
 
     setError(null);
     setBusy(true);
-    await wait(800);
-    setBusy(false);
-    setSuccess(true);
+
+    try {
+      const response = await fetch("/api/auth/password/forgot", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: identifier.trim() }),
+      });
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? "Unable to start password recovery.");
+      }
+
+      setSuccess(true);
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to start password recovery.",
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -98,22 +116,27 @@ export function ResetPasswordView({
   secretPlaceholder: string;
   backHref: string;
 }) {
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : new URLSearchParams(window.location.search).get("token") ?? "",
+  );
   const [secret, setSecret] = useState("");
   const [confirmSecret, setConfirmSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState(false);
+  const [generalError, setGeneralError] = useState<string | null>(null);
 
   const submit = async () => {
     const nextErrors: Record<string, string> = {};
 
     if (code.trim().length < 4) {
-      nextErrors.code = "Enter the reset code or token from your recovery message.";
+      nextErrors.code = "Enter the reset token from your recovery message.";
     }
 
-    if (secret.trim().length < 4) {
-      nextErrors.secret = "Enter your new secret.";
+    if (secret.trim().length < 12) {
+      nextErrors.secret = "Use at least 12 characters.";
     }
 
     if (confirmSecret !== secret) {
@@ -121,15 +144,41 @@ export function ResetPasswordView({
     }
 
     setFieldErrors(nextErrors);
+    setGeneralError(null);
 
     if (Object.keys(nextErrors).length > 0) {
       return;
     }
 
     setBusy(true);
-    await wait(850);
-    setBusy(false);
-    setSuccess(true);
+
+    try {
+      const response = await fetch("/api/auth/password/reset", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: code.trim(),
+          password: secret,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? "Unable to reset this password.");
+      }
+
+      setSuccess(true);
+    } catch (submitError) {
+      setGeneralError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to reset this password.",
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -149,8 +198,8 @@ export function ResetPasswordView({
         ) : (
           <div className="space-y-4">
             <AuthField
-              label="Recovery code"
-              placeholder="Enter the code you received"
+              label="Recovery token"
+              placeholder="Paste the token from your reset link"
               value={code}
               onChange={(event) => setCode(event.target.value)}
               error={fieldErrors.code}
@@ -163,14 +212,21 @@ export function ResetPasswordView({
               error={fieldErrors.secret}
             />
             <AuthPasswordField
-              label="Confirm new secret"
-              placeholder="Re-enter your new secret"
+              label="Confirm new password"
+              placeholder="Re-enter your new password"
               value={confirmSecret}
               onChange={(event) => setConfirmSecret(event.target.value)}
               error={fieldErrors.confirmSecret}
             />
+            {generalError ? (
+              <AuthMessage
+                tone="error"
+                title="Reset failed"
+                description={generalError}
+              />
+            ) : null}
             <AuthSubmitButton busy={busy} onClick={submit}>
-              Save new secret
+              Save new password
             </AuthSubmitButton>
           </div>
         )}
