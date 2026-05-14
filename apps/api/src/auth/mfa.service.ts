@@ -27,7 +27,7 @@ const HIGH_PRIVILEGE_ROLES = new Set([
 
 @Injectable()
 export class MfaService {
-  constructor(private readonly databaseService: Pick<DatabaseService, 'query'>) {}
+  constructor(private readonly databaseService: DatabaseService) {}
 
   async enforceLoginChallenge(input: EnforceMfaLoginInput): Promise<EnforceMfaLoginResult> {
     if (!this.requiresChallenge(input.role, input.permissions)) {

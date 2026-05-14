@@ -12,7 +12,7 @@ export interface ConsumedMagicLink {
 
 @Injectable()
 export class MagicLinkService {
-  constructor(private readonly databaseService: Pick<DatabaseService, 'query'>) {}
+  constructor(private readonly databaseService: DatabaseService) {}
 
   async consumeLoginLink(input: {
     token: string;

@@ -16,7 +16,7 @@ export interface TrustDeviceInput extends TrustedDeviceTokenInput {
 
 @Injectable()
 export class TrustedDeviceService {
-  constructor(private readonly databaseService: Pick<DatabaseService, 'query'>) {}
+  constructor(private readonly databaseService: DatabaseService) {}
 
   async trustDevice(input: TrustDeviceInput): Promise<{ trusted: boolean }> {
     const result = await this.databaseService.query<{ trusted: boolean }>(

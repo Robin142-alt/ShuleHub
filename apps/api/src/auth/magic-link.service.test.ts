@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import 'reflect-metadata';
 
+import { DatabaseService } from '../database/database.service';
 import { MagicLinkService } from './magic-link.service';
+import { MfaService } from './mfa.service';
+import { TrustedDeviceService } from './trusted-device.service';
+
+test('auth challenge services expose concrete DatabaseService dependency metadata', () => {
+  for (const service of [MagicLinkService, MfaService, TrustedDeviceService]) {
+    assert.deepEqual(Reflect.getMetadata('design:paramtypes', service), [DatabaseService]);
+  }
+});
 
 test('MagicLinkService consumes a login token exactly once', async () => {
   const queries: Array<{ text: string; values: unknown[] }> = [];
