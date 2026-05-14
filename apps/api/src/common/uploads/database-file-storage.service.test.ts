@@ -556,3 +556,102 @@ test('S3CompatibleObjectStorageService rejects object keys outside the tenant na
   );
   assert.equal(fetchCalls, 0);
 });
+
+test('S3CompatibleObjectStorageService deletes tenant-scoped objects with signed DELETE requests', async () => {
+  const env: Record<string, string> = {
+    UPLOAD_OBJECT_STORAGE_PROVIDER: 'r2',
+    UPLOAD_OBJECT_STORAGE_ENDPOINT: 'https://objects.example.test',
+    UPLOAD_OBJECT_STORAGE_BUCKET: 'shule-hub-files',
+    UPLOAD_OBJECT_STORAGE_REGION: 'auto',
+    UPLOAD_OBJECT_STORAGE_ACCESS_KEY_ID: 'access-key',
+    UPLOAD_OBJECT_STORAGE_SECRET_ACCESS_KEY: 'secret-key',
+  };
+  const requests: Array<{
+    url: string;
+    init: Parameters<ObjectStorageFetch>[1];
+  }> = [];
+  const storage = new S3CompatibleObjectStorageService({
+    get: (key: string) => env[key],
+  } as never);
+
+  await storage.deleteObject({
+    tenantId: 'tenant-a',
+    storagePath: 'tenant/tenant-a/support/ticket-1/file.pdf',
+    now: '2026-05-14T14:45:00.000Z',
+  }, async (url, init) => {
+    requests.push({ url, init });
+    return {
+      ok: true,
+      status: 204,
+    };
+  });
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, 'https://objects.example.test/shule-hub-files/tenant/tenant-a/support/ticket-1/file.pdf');
+  assert.equal(requests[0].init.method, 'DELETE');
+  assert.equal(requests[0].init.headers['x-amz-content-sha256'], 'UNSIGNED-PAYLOAD');
+  assert.equal(requests[0].init.headers['x-amz-date'], '20260514T144500Z');
+  assert.match(
+    requests[0].init.headers.Authorization,
+    /^AWS4-HMAC-SHA256 Credential=access-key\/20260514\/auto\/s3\/aws4_request, SignedHeaders=/,
+  );
+  assert.doesNotMatch(requests[0].init.headers.Authorization, /secret-key/);
+});
+
+test('S3CompatibleObjectStorageService rejects object keys outside the tenant namespace before delete', async () => {
+  const env: Record<string, string> = {
+    UPLOAD_OBJECT_STORAGE_ENDPOINT: 'https://objects.example.test',
+    UPLOAD_OBJECT_STORAGE_BUCKET: 'shule-hub-files',
+    UPLOAD_OBJECT_STORAGE_ACCESS_KEY_ID: 'access-key',
+    UPLOAD_OBJECT_STORAGE_SECRET_ACCESS_KEY: 'secret-key',
+  };
+  const storage = new S3CompatibleObjectStorageService({
+    get: (key: string) => env[key],
+  } as never);
+  let fetchCalls = 0;
+
+  await assert.rejects(
+    () =>
+      storage.deleteObject(
+        {
+          tenantId: 'tenant-a',
+          storagePath: 'tenant/tenant-b/support/ticket-1/file.pdf',
+          now: '2026-05-14T14:45:00.000Z',
+        },
+        async () => {
+          fetchCalls += 1;
+          throw new Error('cross-tenant delete should not reach object storage');
+        },
+      ),
+    /tenant-scoped storage path/i,
+  );
+  assert.equal(fetchCalls, 0);
+});
+
+test('S3CompatibleObjectStorageService reports failed object deletes as unavailable', async () => {
+  const env: Record<string, string> = {
+    UPLOAD_OBJECT_STORAGE_ENDPOINT: 'https://objects.example.test',
+    UPLOAD_OBJECT_STORAGE_BUCKET: 'shule-hub-files',
+    UPLOAD_OBJECT_STORAGE_ACCESS_KEY_ID: 'access-key',
+    UPLOAD_OBJECT_STORAGE_SECRET_ACCESS_KEY: 'secret-key',
+  };
+  const storage = new S3CompatibleObjectStorageService({
+    get: (key: string) => env[key],
+  } as never);
+
+  await assert.rejects(
+    () =>
+      storage.deleteObject(
+        {
+          tenantId: 'tenant-a',
+          storagePath: 'tenant/tenant-a/support/ticket-1/file.pdf',
+          now: '2026-05-14T14:45:00.000Z',
+        },
+        async () => ({
+          ok: false,
+          status: 503,
+        }),
+      ),
+    /Object storage delete failed/,
+  );
+});

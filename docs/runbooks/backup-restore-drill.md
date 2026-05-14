@@ -8,6 +8,7 @@ Use this runbook for scheduled disaster-recovery drills, backup artifact verific
 - Tenant-scoped restore for one corrupted tenant without disturbing other tenants.
 - Point-in-time restore using the recovery journal.
 - Backup artifact checksum verification through `checksum_sha256`.
+- File-object metadata restore for external object storage rows, including tenant-scoped `object_storage_key` and `storage_backend='object'`.
 - RTO and RPO measurement for full restore, tenant restore, and point-in-time restore.
 - Tenant isolation checks using tenant digests before and after restore.
 
@@ -36,8 +37,9 @@ Use this runbook for scheduled disaster-recovery drills, backup artifact verific
 5. Confirm full schema restore recreates all expected tenants and matches pre-loss tenant digests.
 6. Confirm tenant-scoped restore repairs only the selected tenant and preserves untouched tenant digests.
 7. Confirm point-in-time restore replays only journal entries up to the requested timestamp.
-8. Record measured RTO and RPO against current launch targets.
-9. Drop all sandbox schemas created during the drill.
+8. Confirm restored file-object records still point to tenant-scoped object keys and do not restore object bytes into database-backed `content` columns.
+9. Record measured RTO and RPO against current launch targets.
+10. Drop all sandbox schemas created during the drill.
 
 ## Exams and Retired Modules
 
@@ -55,4 +57,5 @@ Record:
 - Output from `npm run dr:backup-restore`.
 - RTO and RPO values.
 - Tenant digest comparison result.
+- File-object metadata digest and object-storage tenant-prefix check.
 - Any restore failure, root cause, and follow-up owner.

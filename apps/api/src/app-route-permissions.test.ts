@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, sep } from 'node:path';
 import test from 'node:test';
@@ -64,14 +64,14 @@ test('all HTTP route handlers declare explicit access metadata', () => {
   );
 });
 
-function listControllerFiles(directory: string): string[] {
+function listControllerFiles(directory: string, compiledRoot = directory): string[] {
   const files: string[] = [];
 
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const entryPath = join(directory, entry.name);
 
     if (entry.isDirectory()) {
-      files.push(...listControllerFiles(entryPath));
+      files.push(...listControllerFiles(entryPath, compiledRoot));
       continue;
     }
 
@@ -80,12 +80,20 @@ function listControllerFiles(directory: string): string[] {
       && entry.name.endsWith('.controller.js')
       && !entry.name.endsWith('.spec.controller.js')
       && !entry.name.endsWith('.test.controller.js')
+      && hasSourceController(compiledRoot, entryPath)
     ) {
       files.push(entryPath);
     }
   }
 
   return files.sort();
+}
+
+function hasSourceController(compiledRoot: string, compiledFilePath: string): boolean {
+  const workspaceRoot = join(compiledRoot, '..', '..', '..', '..');
+  const sourceRelativePath = relative(compiledRoot, compiledFilePath).replace(/\.js$/, '.ts');
+
+  return existsSync(join(workspaceRoot, 'apps/api/src', sourceRelativePath));
 }
 
 function getControllerClasses(moduleExports: Record<string, unknown>): ControllerClass[] {

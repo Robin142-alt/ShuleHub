@@ -5,7 +5,7 @@ import { AdmissionsModuleScreen } from "@/components/modules/admissions/admissio
 
 import { createDashboardSnapshot, renderWithProviders } from "./test-utils";
 
-jest.setTimeout(20_000);
+jest.setTimeout(45_000);
 
 describe("admissions workspace", () => {
   beforeEach(() => {

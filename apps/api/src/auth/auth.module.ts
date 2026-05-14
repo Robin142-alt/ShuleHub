@@ -12,6 +12,7 @@ import { AuthRecoveryService } from './auth-recovery.service';
 import { AuthSchemaService } from './auth-schema.service';
 import { AuthService } from './auth.service';
 import { MagicLinkService } from './magic-link.service';
+import { MonitoringServiceAccountService } from './monitoring-service-account.service';
 import { MfaService } from './mfa.service';
 import { TenantInvitationsService } from './tenant-invitations.service';
 import { TrustedDeviceService } from './trusted-device.service';
@@ -35,6 +36,7 @@ import { AbacPolicyEngine } from './policies/abac-policy.engine';
     AuthRecoveryService,
     AuthService,
     MagicLinkService,
+    MonitoringServiceAccountService,
     MfaService,
     TenantInvitationsService,
     TrustedDeviceService,
@@ -54,6 +56,7 @@ import { AbacPolicyEngine } from './policies/abac-policy.engine';
     AuthRecoveryService,
     AuthService,
     MagicLinkService,
+    MonitoringServiceAccountService,
     MfaService,
     TenantInvitationsService,
     TrustedDeviceService,

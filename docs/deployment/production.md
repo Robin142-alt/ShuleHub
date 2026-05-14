@@ -60,13 +60,15 @@ Services:
 
 ## Railway
 
-Create three Railway services in the same project:
+Create five Railway services in the same project:
 
 1. `api`
 2. `payments-worker`
 3. `events-worker`
+4. `sms-relay`
+5. `malware-scanner`
 
-Attach the same repository to all three services.
+Attach the same repository to all five services.
 
 ### API service
 
@@ -86,6 +88,32 @@ Attach the same repository to all three services.
 - Config file: `/deploy/railway/events-worker.railway.json`
 - Build command: `npm run build`
 - Start command: `node dist/apps/api/src/events-worker.js`
+
+### SMS relay service
+
+- Config file: `/deploy/railway/sms-relay.railway.json`
+- Build command: `npm run build:sms-relay`
+- Start command: `node dist/server.js`
+- Healthcheck path: `/health`
+- Required variables:
+  - `SMS_RELAY_AUTH_TOKEN`
+  - `SMS_PROVIDER=africastalking`
+  - `SMS_PROVIDER_API_URL`
+  - `SMS_PROVIDER_API_KEY`
+  - `SMS_PROVIDER_USERNAME`
+  - `SMS_PROVIDER_SENDER_ID`
+  - `SMS_DRY_RUN=false`
+
+### Malware scanner service
+
+- Config file: `/deploy/railway/malware-scanner.railway.json`
+- Build command: `npm run build:malware-scanner`
+- Start command: `node dist/server.js`
+- Healthcheck path: `/health`
+- Required variables:
+  - `MALWARE_SCANNER_AUTH_TOKEN`
+  - `MALWARE_SCANNER_MAX_BYTES=10485760`
+  - `MALWARE_SCANNER_EICAR_TEST_ENABLED=true`
 
 ### Shared Railway variables
 
@@ -107,6 +135,24 @@ Set service-specific variables:
   - `EVENTS_DISPATCHER_ENABLED=false`
   - `EVENTS_WORKER_ENABLED=false`
   - `OBSERVABILITY_SLO_BACKGROUND_ENABLED=false`
+  - `SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL`
+  - `SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL`
+  - `SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN`
+  - `SUPPORT_NOTIFICATION_SMS_RECIPIENTS`
+  - `SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS=true`
+  - `SUPPORT_PROVIDER_SMOKE_LIVE=true`
+  - `UPLOAD_MALWARE_SCAN_PROVIDER=clamav`
+  - `UPLOAD_MALWARE_SCAN_API_URL`
+  - `UPLOAD_MALWARE_SCAN_HEALTH_URL`
+  - `UPLOAD_MALWARE_SCAN_API_TOKEN`
+  - `UPLOAD_MALWARE_SCAN_REQUIRED=true`
+  - `UPLOAD_OBJECT_STORAGE_ENABLED=true`
+  - `UPLOAD_OBJECT_STORAGE_PROVIDER=r2`
+  - `UPLOAD_OBJECT_STORAGE_ENDPOINT`
+  - `UPLOAD_OBJECT_STORAGE_BUCKET`
+  - `UPLOAD_OBJECT_STORAGE_REGION=auto`
+  - `UPLOAD_OBJECT_STORAGE_ACCESS_KEY_ID`
+  - `UPLOAD_OBJECT_STORAGE_SECRET_ACCESS_KEY`
 - Payments worker:
   - `APP_RUNTIME=worker`
   - `EVENTS_DISPATCHER_ENABLED=false`
@@ -157,6 +203,17 @@ npm run load:high-volume-workflows
 ```
 
 `fixture:pilot-school` refuses remote mutation unless `ALLOW_REMOTE_FIXTURE_MUTATION=true`. Keep it pointed at sandbox data unless a release manager explicitly approves a non-production remote target.
+
+Implementation 7 provider validation:
+
+```bash
+npm run smoke:providers
+npm run monitor:synthetic
+npm run load:core-api
+npm run perf:query-plan-review
+```
+
+Production scheduled monitoring is managed by [.github/workflows/production-operability.yml](/C:/Users/user/Desktop/PROJECTS/Shule%20hub/.github/workflows/production-operability.yml). Store all production URLs and tokens as GitHub or Railway secrets only.
 
 ## Queue verification
 

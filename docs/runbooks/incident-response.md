@@ -9,6 +9,8 @@ This runbook is for production incidents affecting Shule Hub schools, support op
 - Confirm public status subscriptions are accepting consented requests and that status notification attempts are queued for active subscribers.
 - Review observability alerts and queue lag from the health dashboard.
 - Run `npm run smoke:providers` in the affected environment to verify transactional email, support email recipients, optional SMS webhook settings, and retry-worker configuration without printing secrets.
+- For Implementation 7 provider incidents, confirm `live-support-sms-provider`, `live-upload-malware-scan-provider`, and `live-upload-object-storage` are passing before declaring provider recovery.
+- Check the `Production Operability` GitHub Actions workflow for recent synthetic, core-load, provider, query-plan, and readiness failures.
 - Review support notification dead-letter deliveries from the support command center.
 - Review SLA breach alerts and unresolved critical support tickets.
 - Confirm whether the release readiness gate passed before the active deployment.
@@ -32,6 +34,8 @@ This runbook is for production incidents affecting Shule Hub schools, support op
 
 - For database or queue failure, pause risky write-heavy operations and verify readiness before resuming.
 - For support notification failure, inspect email/SMS provider readiness with `npm run smoke:providers`, process retry queues, and triage support notification dead-letter records.
+- For malware-scanner failure, keep `UPLOAD_MALWARE_SCAN_REQUIRED=true`; pause file-upload workflows if clean scanning cannot be verified.
+- For object-storage failure, pause new file uploads if provider smoke cannot write/read/delete a tenant-scoped smoke object.
 - For public incident subscription failure, pause outbound status notification attempts only if they are leaking unsafe content, then verify hashed subscribers remain active and retryable.
 - For MPESA issues, stop duplicate callback processing, verify signature and amount mismatch logs, then replay only idempotent jobs.
 - For export issues, move large exports to the report export queue and avoid browser-generated artifacts for audit workflows.
@@ -57,5 +61,6 @@ Exams is active through the implemented exams workspace. If an academic incident
 - Confirm `GET /support/public/system-status` reflects the current incident state.
 - Verify failed support notifications are either delivered, queued for retry, or documented as dead-letter records.
 - Re-run `npm test` and `npm run release:readiness` for release-related incidents.
+- Re-run `npm run monitor:synthetic`, `npm run load:core-api`, and `npm run smoke:providers` for Implementation 7 operability incidents.
 - Run `npm run load:high-volume-workflows` when an incident follows scale-sensitive changes to reports, Exams, billing, or support status.
 - Record the timeline, root cause, customer impact, mitigation, follow-up owner, and any test or runbook gaps found during the incident.

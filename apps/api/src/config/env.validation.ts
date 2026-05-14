@@ -17,7 +17,11 @@ export function validateEnv(env: Record<string, unknown>): Record<string, unknow
     const value = env[key];
     return typeof value !== 'string' || value.trim().length === 0;
   });
-  const invalidEnvVars = validateUploadObjectStorageEnv(env);
+  const invalidEnvVars = [
+    ...validateSupportSmsEnv(env),
+    ...validateUploadMalwareScanEnv(env),
+    ...validateUploadObjectStorageEnv(env),
+  ];
 
   const hasJwtSecret =
     typeof env.JWT_SECRET === 'string' && env.JWT_SECRET.trim().length > 0;
@@ -41,6 +45,86 @@ export function validateEnv(env: Record<string, unknown>): Record<string, unknow
   }
 
   return env;
+}
+
+function validateSupportSmsEnv(env: Record<string, unknown>): string[] {
+  const errors: string[] = [];
+  const webhookUrl = getString(env, 'SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL');
+  const healthUrl = getString(env, 'SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL');
+  const token = getString(env, 'SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN');
+  const recipients = getString(env, 'SUPPORT_NOTIFICATION_SMS_RECIPIENTS');
+  const required = parseBoolean(getString(env, 'SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS'), false);
+  const live = parseBoolean(getString(env, 'SUPPORT_PROVIDER_SMOKE_LIVE'), false);
+  const shouldValidate = required || Boolean(webhookUrl || healthUrl || token || recipients);
+
+  if (!shouldValidate) {
+    return [];
+  }
+
+  if (!webhookUrl) {
+    errors.push('SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL is required');
+  } else if (!isHttpsUrl(webhookUrl)) {
+    errors.push('SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL must be an HTTPS URL');
+  }
+
+  if (!token) {
+    errors.push('SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN is required');
+  }
+
+  if (!recipients) {
+    errors.push('SUPPORT_NOTIFICATION_SMS_RECIPIENTS is required');
+  }
+
+  if (live) {
+    if (!healthUrl) {
+      errors.push('SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL is required for live provider smoke');
+    } else if (!isHttpsUrl(healthUrl)) {
+      errors.push('SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL must be an HTTPS URL');
+    }
+  }
+
+  return errors;
+}
+
+function validateUploadMalwareScanEnv(env: Record<string, unknown>): string[] {
+  const errors: string[] = [];
+  const provider = getString(env, 'UPLOAD_MALWARE_SCAN_PROVIDER');
+  const apiUrl = getString(env, 'UPLOAD_MALWARE_SCAN_API_URL');
+  const healthUrl = getString(env, 'UPLOAD_MALWARE_SCAN_HEALTH_URL');
+  const apiToken = getString(env, 'UPLOAD_MALWARE_SCAN_API_TOKEN');
+  const required = parseBoolean(getString(env, 'UPLOAD_MALWARE_SCAN_REQUIRED'), false);
+  const live = parseBoolean(getString(env, 'SUPPORT_PROVIDER_SMOKE_LIVE'), false);
+  const shouldValidate = required || Boolean(provider || apiUrl || healthUrl || apiToken);
+
+  if (!shouldValidate) {
+    return [];
+  }
+
+  if (!provider) {
+    errors.push('UPLOAD_MALWARE_SCAN_PROVIDER is required');
+  } else if (!['clamav', 'generic', 'provider'].includes(provider)) {
+    errors.push('UPLOAD_MALWARE_SCAN_PROVIDER must be clamav, generic, or provider');
+  }
+
+  if (!apiUrl) {
+    errors.push('UPLOAD_MALWARE_SCAN_API_URL is required');
+  } else if (!isHttpsUrl(apiUrl)) {
+    errors.push('UPLOAD_MALWARE_SCAN_API_URL must be an HTTPS URL');
+  }
+
+  if (!apiToken) {
+    errors.push('UPLOAD_MALWARE_SCAN_API_TOKEN is required');
+  }
+
+  if (live) {
+    if (!healthUrl) {
+      errors.push('UPLOAD_MALWARE_SCAN_HEALTH_URL is required for live provider smoke');
+    } else if (!isHttpsUrl(healthUrl)) {
+      errors.push('UPLOAD_MALWARE_SCAN_HEALTH_URL must be an HTTPS URL');
+    }
+  }
+
+  return errors;
 }
 
 function validateUploadObjectStorageEnv(env: Record<string, unknown>): string[] {

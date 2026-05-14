@@ -10,6 +10,7 @@
     "test:design": "jest --config jest.config.ts --runInBand",
     "test:design:watch": "jest --config jest.config.ts --watch",
     "test:design:e2e": "playwright test -c playwright.config.ts",
+    "test:e2e:production-pilot": "playwright test -c tests/e2e/production-pilot.config.ts",
     "test:design:e2e:list": "playwright test -c playwright.config.ts --list"
   },
   "dependencies": {
@@ -17,7 +18,7 @@
     "@tanstack/react-query": "^5.100.5",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.11.0",
-    "next": "16.2.4",
+    "next": "^16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.75.0",
