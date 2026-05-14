@@ -45,6 +45,17 @@ Score movement after this implementation: system maturity 72/100, production rea
 
 Remaining release risk: environment-bound smoke, synthetic, core-load, and query-plan scripts must be run in a configured staging or production-like environment before promotion.
 
+Merge-to-main verification on 2026-05-14:
+
+- Implementation 6 was merged into `main` with merge commit `bb510dd2`.
+- `npm.cmd test` passed after the merge: 303 backend/API tests.
+- `npm.cmd --prefix apps/web run test:design` passed after the merge: 28 suites, 140 tests.
+- `npm.cmd --prefix apps/web run build` passed after the merge.
+- `npm.cmd run release:readiness` passed all 11 release-readiness checks after the merge.
+- Conflict marker scan passed.
+- Source scan confirmed no remaining hardcoded/demo credential module or seeded login credential references in production source.
+- Railway production source branch was restored to `main`; production deployment verification follows this merge evidence commit.
+
 ---
 
 # 1. Baseline From Implementation 5
