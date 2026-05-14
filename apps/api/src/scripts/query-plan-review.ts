@@ -217,7 +217,7 @@ export const QUERY_PLAN_REVIEWS: readonly QueryPlanReview[] = [
       FROM support_tickets
       WHERE tenant_id = $1
         AND to_tsvector(
-          'simple',
+          'simple'::regconfig,
           ticket_number || ' ' ||
           subject || ' ' ||
           category || ' ' ||

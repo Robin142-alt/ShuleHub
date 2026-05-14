@@ -352,7 +352,7 @@ export class SupportSchemaService implements OnModuleInit {
         ON support_tickets
         USING GIN (
           to_tsvector(
-            'simple',
+            'simple'::regconfig,
             ticket_number || ' ' ||
             subject || ' ' ||
             category || ' ' ||
@@ -376,13 +376,15 @@ export class SupportSchemaService implements OnModuleInit {
         ON support_kb_articles
         USING GIN (
           to_tsvector(
-            'simple',
+            'simple'::regconfig,
             title || ' ' ||
             summary || ' ' ||
-            body || ' ' ||
-            COALESCE(array_to_string(tags, ' '), '')
+            body
           )
         );
+      CREATE INDEX IF NOT EXISTS ix_support_kb_articles_tags
+        ON support_kb_articles
+        USING GIN (tags);
       CREATE INDEX IF NOT EXISTS ix_support_incidents_status
         ON support_incidents (tenant_id, status, started_at DESC);
       CREATE INDEX IF NOT EXISTS ix_support_status_subscriptions_rate_limit

@@ -157,6 +157,8 @@ test('SupportSchemaService adds full-text indexes for ticket and knowledge-base 
   assert.match(schemaSql, /description/);
   assert.match(schemaSql, /CREATE INDEX IF NOT EXISTS ix_support_kb_articles_search_vector/);
   assert.match(schemaSql, /ON support_kb_articles\s+USING GIN/);
+  assert.match(schemaSql, /CREATE INDEX IF NOT EXISTS ix_support_kb_articles_tags/);
+  assert.doesNotMatch(schemaSql, /array_to_string\(tags/);
   assert.doesNotMatch(schemaSql, /attendance/i);
 });
 
