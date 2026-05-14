@@ -6,7 +6,7 @@ import { DatabaseService } from '../../database/database.service';
 export class TimetableSchemaService implements OnModuleInit {
   private readonly logger = new Logger(TimetableSchemaService.name);
 
-  constructor(private readonly databaseService: Pick<DatabaseService, 'runSchemaBootstrap'>) {}
+  constructor(private readonly databaseService: DatabaseService) {}
 
   async onModuleInit(): Promise<void> {
     await this.databaseService.runSchemaBootstrap(`

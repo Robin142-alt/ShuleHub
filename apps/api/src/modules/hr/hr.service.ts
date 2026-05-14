@@ -12,10 +12,7 @@ import { HrRepository } from './repositories/hr.repository';
 export class HrService {
   constructor(
     private readonly requestContext: RequestContextService,
-    private readonly hrRepository: Pick<
-      HrRepository,
-      'appendAuditLog' | 'approveContract' | 'approveLeaveRequest' | 'changeStaffStatus' | 'findLeaveBalance' | 'findOverlappingActiveContract' | 'listStaffDirectory'
-    >,
+    private readonly hrRepository: HrRepository,
   ) {}
 
   async approveContract(dto: ApproveStaffContractDto) {

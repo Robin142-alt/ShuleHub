@@ -18,7 +18,7 @@ const HR_TABLES = [
 export class HrSchemaService implements OnModuleInit {
   private readonly logger = new Logger(HrSchemaService.name);
 
-  constructor(private readonly databaseService: Pick<DatabaseService, 'runSchemaBootstrap'>) {}
+  constructor(private readonly databaseService: DatabaseService) {}
 
   async onModuleInit(): Promise<void> {
     await this.databaseService.runSchemaBootstrap(`

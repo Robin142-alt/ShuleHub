@@ -22,10 +22,7 @@ interface LibraryBillingHandoff {
 export class LibraryService {
   constructor(
     private readonly requestContext: RequestContextService,
-    private readonly libraryRepository: Pick<
-      LibraryRepository,
-      'appendLedger' | 'createFine' | 'createReservation' | 'findCopyForUpdate' | 'findLoanForReturn' | 'issueCopy' | 'listCirculation' | 'returnCopy'
-    >,
+    private readonly libraryRepository: LibraryRepository,
     @Optional() private readonly billingService?: LibraryBillingHandoff,
   ) {}
 

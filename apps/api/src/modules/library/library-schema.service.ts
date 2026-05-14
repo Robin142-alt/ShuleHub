@@ -19,7 +19,7 @@ const LIBRARY_TABLES = [
 export class LibrarySchemaService implements OnModuleInit {
   private readonly logger = new Logger(LibrarySchemaService.name);
 
-  constructor(private readonly databaseService: Pick<DatabaseService, 'runSchemaBootstrap'>) {}
+  constructor(private readonly databaseService: DatabaseService) {}
 
   async onModuleInit(): Promise<void> {
     await this.databaseService.runSchemaBootstrap(`

@@ -2,11 +2,23 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { PATH_METADATA } from '@nestjs/common/constants';
+import 'reflect-metadata';
 
 import { PERMISSIONS_KEY } from '../../auth/auth.constants';
+import { RequestContextService } from '../../common/request-context/request-context.service';
+import { DatabaseService } from '../../database/database.service';
 import { LibraryController } from './library.controller';
 import { LibrarySchemaService } from './library-schema.service';
 import { LibraryService } from './library.service';
+import { LibraryRepository } from './repositories/library.repository';
+
+test('Library providers expose concrete Nest dependency metadata', () => {
+  assert.deepEqual(Reflect.getMetadata('design:paramtypes', LibrarySchemaService), [DatabaseService]);
+  assert.deepEqual(
+    Reflect.getMetadata('design:paramtypes', LibraryService).slice(0, 2),
+    [RequestContextService, LibraryRepository],
+  );
+});
 
 test('LibrarySchemaService creates tenant-scoped circulation tables with forced RLS', async () => {
   let schemaSql = '';

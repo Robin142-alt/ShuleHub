@@ -2,11 +2,23 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { PATH_METADATA } from '@nestjs/common/constants';
+import 'reflect-metadata';
 
 import { PERMISSIONS_KEY } from '../../auth/auth.constants';
+import { RequestContextService } from '../../common/request-context/request-context.service';
+import { DatabaseService } from '../../database/database.service';
 import { HrController } from './hr.controller';
 import { HrSchemaService } from './hr-schema.service';
 import { HrService } from './hr.service';
+import { HrRepository } from './repositories/hr.repository';
+
+test('HR providers expose concrete Nest dependency metadata', () => {
+  assert.deepEqual(Reflect.getMetadata('design:paramtypes', HrSchemaService), [DatabaseService]);
+  assert.deepEqual(Reflect.getMetadata('design:paramtypes', HrService), [
+    RequestContextService,
+    HrRepository,
+  ]);
+});
 
 test('HrSchemaService creates staff management tables with forced RLS', async () => {
   let schemaSql = '';

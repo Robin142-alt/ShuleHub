@@ -8,10 +8,7 @@ import { TimetableRepository } from './repositories/timetable.repository';
 export class TimetableService {
   constructor(
     private readonly requestContext: RequestContextService,
-    private readonly timetableRepository: Pick<
-      TimetableRepository,
-      'appendAuditLog' | 'createSlot' | 'findSlotConflicts' | 'findVersionConflicts' | 'listPublishedSchedules' | 'publishVersion'
-    >,
+    private readonly timetableRepository: TimetableRepository,
   ) {}
 
   async createSlot(dto: CreateTimetableSlotDto) {

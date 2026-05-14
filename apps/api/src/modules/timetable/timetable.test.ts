@@ -2,11 +2,23 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { PATH_METADATA } from '@nestjs/common/constants';
+import 'reflect-metadata';
 
 import { PERMISSIONS_KEY } from '../../auth/auth.constants';
+import { RequestContextService } from '../../common/request-context/request-context.service';
+import { DatabaseService } from '../../database/database.service';
 import { TimetableController } from './timetable.controller';
 import { TimetableSchemaService } from './timetable-schema.service';
 import { TimetableService } from './timetable.service';
+import { TimetableRepository } from './repositories/timetable.repository';
+
+test('Timetable providers expose concrete Nest dependency metadata', () => {
+  assert.deepEqual(Reflect.getMetadata('design:paramtypes', TimetableSchemaService), [DatabaseService]);
+  assert.deepEqual(Reflect.getMetadata('design:paramtypes', TimetableService), [
+    RequestContextService,
+    TimetableRepository,
+  ]);
+});
 
 test('TimetableSchemaService creates tenant-scoped timetable tables with forced RLS', async () => {
   let schemaSql = '';
