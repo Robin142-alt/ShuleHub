@@ -59,6 +59,8 @@ test('StudentsSchemaService adds a full-text index for active student directory 
   assert.match(schemaSql, /to_tsvector\(\s*'simple'/);
   assert.match(schemaSql, /admission_number/);
   assert.match(schemaSql, /primary_guardian_phone/);
+  assert.match(schemaSql, /ALTER TABLE student_guardians ADD COLUMN IF NOT EXISTS email text/);
+  assert.match(schemaSql, /ALTER TABLE student_guardians ADD COLUMN IF NOT EXISTS invitation_id uuid/);
   assert.doesNotMatch(schemaSql, /attendance/i);
 });
 

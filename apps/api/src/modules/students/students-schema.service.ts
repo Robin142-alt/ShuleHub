@@ -97,7 +97,7 @@ export class StudentsSchemaService implements OnModuleInit {
         ON students
         USING GIN (
           to_tsvector(
-            'simple',
+            'simple'::regconfig,
             admission_number || ' ' ||
             first_name || ' ' ||
             COALESCE(middle_name, '') || ' ' ||
@@ -106,6 +106,13 @@ export class StudentsSchemaService implements OnModuleInit {
             COALESCE(primary_guardian_phone, '')
           )
         );
+      ALTER TABLE student_guardians ADD COLUMN IF NOT EXISTS user_id uuid;
+      ALTER TABLE student_guardians ADD COLUMN IF NOT EXISTS invitation_id uuid;
+      ALTER TABLE student_guardians ADD COLUMN IF NOT EXISTS display_name text;
+      ALTER TABLE student_guardians ADD COLUMN IF NOT EXISTS email text;
+      ALTER TABLE student_guardians ADD COLUMN IF NOT EXISTS phone text;
+      ALTER TABLE student_guardians ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'invited';
+      ALTER TABLE student_guardians ADD COLUMN IF NOT EXISTS accepted_at timestamptz;
       CREATE UNIQUE INDEX IF NOT EXISTS ux_student_guardians_student_email
         ON student_guardians (tenant_id, student_id, lower(email));
       CREATE INDEX IF NOT EXISTS ix_student_guardians_user_status
