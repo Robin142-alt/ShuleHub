@@ -378,9 +378,14 @@ async function main(): Promise<void> {
   await client.connect();
 
   try {
+    await client.query('BEGIN');
+    await client.query('SET LOCAL enable_seqscan = off');
+
     const result = await runQueryPlanReview({
       query: async (sql, values) => client.query(sql, [...values]),
     });
+
+    await client.query('COMMIT');
 
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 
