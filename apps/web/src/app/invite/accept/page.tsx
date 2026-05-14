@@ -1,38 +1,46 @@
-import { headers } from "next/headers";
-
 import { AuthShell } from "@/components/auth/auth-shell";
-import { InvitationAcceptanceView } from "@/components/auth/invitation-acceptance-view";
-import { resolveSchoolBranding } from "@/lib/auth/school-branding";
+import { InviteAcceptanceView } from "@/components/auth/auth-invitation-view";
+import { readResetToken, type ResetSearchParams } from "@/lib/auth/reset-token";
 
-export default async function AcceptInvitationPage({
+export default async function InviteAcceptancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string }>;
+  searchParams?: ResetSearchParams;
 }) {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
-  const resolution = resolveSchoolBranding(host);
-  const params = await searchParams;
+  const initialToken = await readResetToken(searchParams);
 
   return (
     <AuthShell
-      eyebrow="Invitation activation"
-      heroTitle={resolution.branding.name}
-      heroDescription="Your school administrator invited you into a tenant-isolated ERP workspace."
-      badge="Secure account setup"
-      logoMark={resolution.branding.logoMark}
-      helper="Invitations expire automatically and can only be used once."
+      eyebrow="Invite acceptance"
+      heroTitle="Secure school onboarding starts from a verified invitation."
+      heroDescription="New administrators create their own password from a signed, short-lived invitation link before entering a tenant workspace."
+      badge="User onboarding"
+      logoMark="SH"
+      helper="Invitation links bind the school, role, email address, and first password setup without exposing credentials."
       highlights={[
-        { id: "invited-role", title: "Role assigned", description: "Your dashboard is determined by the role your school assigned." },
-        { id: "private-password", title: "Private password", description: "You create your password yourself. Administrators never see it." },
-        { id: "tenant-safe", title: "Tenant safe", description: "Activation is bound to this school's workspace." },
+        {
+          id: "tenant",
+          title: "Tenant bound",
+          description: "The invitation activates access only for the school selected by the platform owner.",
+        },
+        {
+          id: "email",
+          title: "Email issued",
+          description: "Users receive real email invitations and create passwords themselves.",
+        },
+        {
+          id: "audit",
+          title: "Audit ready",
+          description: "Acceptance consumes the token and records activation in the auth system.",
+        },
       ]}
       trustNotes={[
-        { id: "single-use", label: "Single-use invitation", icon: "lock" },
-        { id: "tenant", label: "Tenant isolated", icon: "shield" },
+        { id: "secure", label: "Signed token", icon: "lock" },
+        { id: "scoped", label: "Tenant scoped", icon: "shield" },
+        { id: "verified", label: "Email verified", icon: "check" },
       ]}
     >
-      <InvitationAcceptanceView initialToken={params.token ?? ""} />
+      <InviteAcceptanceView initialToken={initialToken} />
     </AuthShell>
   );
 }

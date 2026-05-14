@@ -1,4 +1,4 @@
-import { Activity, MessageSquare, ReceiptText, UserPlus } from "lucide-react";
+import { MessageSquare, ReceiptText, UserPlus } from "lucide-react";
 import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
@@ -6,7 +6,6 @@ import type { ActivityItem } from "@/lib/dashboard/types";
 
 const iconMap = {
   payment: ReceiptText,
-  attendance: Activity,
   student: UserPlus,
   communication: MessageSquare,
 } as const;

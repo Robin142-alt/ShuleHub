@@ -5,7 +5,14 @@ import { ConfigService } from '@nestjs/config';
 export class TenantService {
   constructor(private readonly configService: ConfigService) {}
 
-  resolveTenantId(hostHeader?: string): string {
+  resolveTenantId(hostHeader?: string, forwardedTenantId?: string | string[]): string {
+    const explicitTenantId = this.normalizeForwardedTenantId(forwardedTenantId);
+
+    if (explicitTenantId) {
+      this.assertTenantId(explicitTenantId);
+      return explicitTenantId;
+    }
+
     const host = this.normalizeHost(hostHeader);
     const baseDomain = String(this.configService.get<string>('app.baseDomain') ?? 'localhost').toLowerCase();
     const defaultTenantId = this.configService.get<string>('app.defaultTenantId');
@@ -51,6 +58,15 @@ export class TenantService {
     }
 
     return hostHeader.replace(/:\d+$/, '').trim().toLowerCase();
+  }
+
+  private normalizeForwardedTenantId(forwardedTenantId?: string | string[]): string | null {
+    const rawValue = Array.isArray(forwardedTenantId)
+      ? forwardedTenantId[0]
+      : forwardedTenantId;
+    const normalized = rawValue?.trim().toLowerCase() ?? '';
+
+    return normalized.length > 0 ? normalized : null;
   }
 
   private assertTenantId(tenantId: string): void {

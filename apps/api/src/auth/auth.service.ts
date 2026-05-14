@@ -1,16 +1,16 @@
 import {
-  ConflictException,
   ForbiddenException,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
 
 import { RequestContextService } from '../common/request-context/request-context.service';
 import {
-  DEFAULT_ROLE_MEMBER,
-  DEFAULT_ROLE_OWNER,
+  SUPERADMIN_ROLE_OWNER,
 } from './auth.constants';
 import {
   AuthAudience,
@@ -34,6 +34,8 @@ import { UsersRepository } from './repositories/users.repository';
 import { PasswordService } from './password.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
+import { MfaService } from './mfa.service';
+import { TrustedDeviceService } from './trusted-device.service';
 import { TenantMembershipEntity } from './entities/tenant-membership.entity';
 import { UserEntity } from './entities/user.entity';
 
@@ -47,6 +49,9 @@ export class AuthService {
     private readonly passwordService: PasswordService,
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
+    private readonly configService: ConfigService,
+    @Optional() private readonly mfaService?: MfaService,
+    @Optional() private readonly trustedDeviceService?: TrustedDeviceService,
   ) {}
 
   extractBearerToken(request: Request): string | null {
@@ -98,57 +103,24 @@ export class AuthService {
       throw new UnauthorizedException('Access token is out of sync with the active session');
     }
 
+    await this.assertEmailVerifiedForSensitiveSession(session);
+
     return this.sessionService.toPrincipal(session);
   }
 
   async register(dto: RegisterDto, metadata: AuthRequestMetadata): Promise<AuthResponseDto> {
-    const tenantId = this.requireTenantId();
-    const audience = this.requireTenantAudience('school', tenantId);
-
-    await this.authorizationRepository.ensureTenantAuthorizationBaseline(tenantId);
-
-    let user = await this.usersRepository.findByEmail(dto.email);
-
-    if (!user) {
-      user = await this.usersRepository.ensureGlobalUserForRegistration({
-        email: dto.email,
-        password_hash: await this.passwordService.hash(dto.password),
-        display_name: dto.display_name,
-      });
-    } else {
-      if (user.status !== 'active') {
-        throw new ForbiddenException('User account is disabled');
-      }
-
-      const passwordMatches = await this.passwordService.compare(dto.password, user.password_hash);
-
-      if (!passwordMatches) {
-        throw new ConflictException('A user with this email already exists');
-      }
-    }
-
-    const existingMembership = await this.tenantMembershipsRepository.findMembershipByUserAndTenant(user.id, tenantId);
-
-    if (existingMembership?.status === 'active') {
-      throw new ConflictException('User is already registered in this tenant');
-    }
-
-    const activeMembershipCount = await this.tenantMembershipsRepository.countActiveMembershipsByTenant(tenantId);
-    const roleCode = activeMembershipCount === 0 ? DEFAULT_ROLE_OWNER : DEFAULT_ROLE_MEMBER;
-    const role = await this.authorizationRepository.getRoleByCode(tenantId, roleCode);
-    const membership = await this.tenantMembershipsRepository.createOrActivateMembership({
-      tenant_id: tenantId,
-      user_id: user.id,
-      role_id: role.id,
-    });
-    const permissions = await this.authorizationRepository.getPermissionsByRoleId(tenantId, membership.role_id);
-
-    return this.createAuthResponse(user, membership, permissions, audience, metadata);
+    void dto;
+    void metadata;
+    throw new ForbiddenException('Account creation requires a valid invitation.');
   }
 
   async login(dto: LoginDto, metadata: AuthRequestMetadata): Promise<AuthResponseDto> {
+    if (dto.audience === 'superadmin') {
+      return this.loginPlatformOwner(dto, metadata);
+    }
+
     const tenantId = this.requireTenantId();
-    const audience = this.requireTenantAudience(dto.audience, tenantId);
+    const audience = this.requireTenantScopedAudience(dto.audience);
 
     await this.authorizationRepository.ensureTenantAuthorizationBaseline(tenantId);
 
@@ -170,15 +142,24 @@ export class AuthService {
       throw new UnauthorizedException('User does not have access to this tenant');
     }
 
-    const permissions = await this.authorizationRepository.getPermissionsByRoleId(tenantId, membership.role_id);
+    const permissions = this.resolveEmailVerificationPermissions(
+      user,
+      await this.authorizationRepository.getPermissionsByRoleId(tenantId, membership.role_id),
+    );
+    await this.enforceLoginSecurity(user, membership.role_code, permissions, dto, metadata);
 
     return this.createAuthResponse(user, membership, permissions, audience, metadata);
   }
 
   async refresh(dto: RefreshTokenDto, metadata: AuthRequestMetadata): Promise<AuthResponseDto> {
-    const tenantId = this.requireTenantId();
     const payload = await this.tokenService.verifyRefreshToken(dto.refresh_token);
-    const audience = this.requireTenantAudience(payload.audience, tenantId);
+
+    if (payload.audience === 'superadmin') {
+      return this.refreshPlatformOwner(dto.refresh_token, metadata);
+    }
+
+    const tenantId = this.requireTenantId();
+    const audience = this.requireTenantScopedAudience(payload.audience);
 
     if (payload.tenant_id !== tenantId) {
       throw new UnauthorizedException('Refresh token does not belong to this tenant');
@@ -213,7 +194,10 @@ export class AuthService {
       throw new UnauthorizedException('User no longer has access to this tenant');
     }
 
-    const permissions = await this.authorizationRepository.getPermissionsByRoleId(tenantId, membership.role_id);
+    const permissions = this.resolveEmailVerificationPermissions(
+      user,
+      await this.authorizationRepository.getPermissionsByRoleId(tenantId, membership.role_id),
+    );
     const tokenPair = await this.tokenService.issueTokenPair({
       user_id: user.id,
       tenant_id: tenantId,
@@ -228,6 +212,7 @@ export class AuthService {
       next_refresh_token_id: tokenPair.refresh_token_id,
       role: membership.role_code,
       permissions,
+      email_verified_at: this.formatEmailVerifiedAt(user),
       refresh_expires_at: tokenPair.refresh_expires_at,
     });
 
@@ -248,11 +233,28 @@ export class AuthService {
 
   async me(): Promise<MeResponseDto> {
     const requestContext = this.requestContext.requireStore();
-    const tenantId = this.requireTenantId();
 
     if (!requestContext.is_authenticated || !requestContext.session_id) {
       throw new UnauthorizedException('No authenticated user found');
     }
+
+    if (requestContext.audience === 'superadmin') {
+      const user = await this.usersRepository.findById(requestContext.user_id);
+
+      if (!user || user.status !== 'active') {
+        throw new UnauthorizedException('User account is no longer active');
+      }
+
+      return {
+        user: this.buildPlatformUserDto(
+          user,
+          requestContext.session_id,
+          this.resolveEmailVerificationPermissions(user, ['*:*']),
+        ),
+      };
+    }
+
+    const tenantId = this.requireTenantId();
 
     const user = await this.usersRepository.findById(requestContext.user_id);
 
@@ -266,7 +268,10 @@ export class AuthService {
       throw new UnauthorizedException('User no longer has access to this tenant');
     }
 
-    const permissions = await this.authorizationRepository.getPermissionsByRoleId(tenantId, membership.role_id);
+    const permissions = this.resolveEmailVerificationPermissions(
+      user,
+      await this.authorizationRepository.getPermissionsByRoleId(tenantId, membership.role_id),
+    );
 
     return {
       user: this.buildUserDto(
@@ -274,26 +279,19 @@ export class AuthService {
         membership,
         permissions,
         requestContext.session_id,
-      this.requireTenantAudience(requestContext.audience ?? 'school', tenantId),
+        this.requireTenantScopedAudience(requestContext.audience ?? 'school'),
       ),
     };
   }
 
-  private requireTenantAudience(
-    requestedAudience: AuthAudience | undefined,
-    tenantId: string,
-  ): AuthAudience {
+  private requireTenantScopedAudience(requestedAudience: AuthAudience | undefined): AuthAudience {
     const audience = requestedAudience ?? 'school';
 
-    if (audience === 'school') {
-      return audience;
+    if (audience === 'superadmin') {
+      throw new UnauthorizedException('Requested audience is not allowed for this tenant');
     }
 
-    if (audience === 'superadmin' && tenantId === 'superadmin') {
-      return audience;
-    }
-
-    throw new UnauthorizedException('Requested audience is not allowed for this tenant');
+    return audience;
   }
 
   private async createAuthResponse(
@@ -319,6 +317,7 @@ export class AuthService {
       permissions,
       session_id: tokenPair.session_id,
       is_authenticated: true,
+      email_verified_at: this.formatEmailVerifiedAt(user),
       refresh_token_id: tokenPair.refresh_token_id,
       refresh_expires_at: tokenPair.refresh_expires_at,
       ip_address: metadata.ip_address,
@@ -326,6 +325,167 @@ export class AuthService {
     });
 
     return this.buildAuthResponse(user, membership, permissions, tokenPair, audience);
+  }
+
+  private async loginPlatformOwner(
+    dto: LoginDto,
+    metadata: AuthRequestMetadata,
+  ): Promise<AuthResponseDto> {
+    const configuredOwnerEmail = this.configService.get<string>('auth.systemOwnerEmail')?.trim().toLowerCase();
+
+    if (!configuredOwnerEmail) {
+      throw new UnauthorizedException('System owner is not configured');
+    }
+
+    if (dto.email.trim().toLowerCase() !== configuredOwnerEmail) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const user = await this.usersRepository.findPlatformOwnerByEmail(dto.email);
+
+    if (!user || user.status !== 'active') {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const passwordMatches = await this.passwordService.compare(dto.password, user.password_hash);
+
+    if (!passwordMatches) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const permissions = this.resolveEmailVerificationPermissions(user, ['*:*']);
+    await this.enforceLoginSecurity(user, SUPERADMIN_ROLE_OWNER, permissions, dto, metadata);
+
+    return this.createPlatformAuthResponse(user, metadata);
+  }
+
+  private async refreshPlatformOwner(
+    refreshToken: string,
+    metadata: AuthRequestMetadata,
+  ): Promise<AuthResponseDto> {
+    void metadata;
+    const payload = await this.tokenService.verifyRefreshToken(refreshToken);
+
+    if (payload.tenant_id !== null || payload.audience !== 'superadmin') {
+      throw new UnauthorizedException('Refresh token does not belong to a platform session');
+    }
+
+    const session = await this.sessionService.getSession(payload.session_id);
+
+    if (!session) {
+      throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    if (
+      session.user_id !== payload.user_id ||
+      session.tenant_id !== null ||
+      session.refresh_token_id !== payload.token_id ||
+      session.audience !== 'superadmin'
+    ) {
+      await this.sessionService.invalidateSession(payload.session_id);
+      throw new UnauthorizedException('Refresh token reuse detected');
+    }
+
+    const user = await this.usersRepository.findPlatformOwnerById(payload.user_id);
+
+    if (!user || user.status !== 'active') {
+      await this.sessionService.invalidateSession(payload.session_id);
+      throw new UnauthorizedException('User account is no longer active');
+    }
+
+    const tokenPair = await this.tokenService.issueTokenPair({
+      user_id: user.id,
+      tenant_id: null,
+      role: SUPERADMIN_ROLE_OWNER,
+      audience: 'superadmin',
+      session_id: payload.session_id,
+    });
+
+    const permissions = this.resolveEmailVerificationPermissions(user, ['*:*']);
+
+    await this.sessionService.rotateRefreshToken({
+      session_id: payload.session_id,
+      current_refresh_token_id: payload.token_id,
+      next_refresh_token_id: tokenPair.refresh_token_id,
+      role: SUPERADMIN_ROLE_OWNER,
+      permissions,
+      email_verified_at: this.formatEmailVerifiedAt(user),
+      refresh_expires_at: tokenPair.refresh_expires_at,
+    });
+
+    return this.buildPlatformAuthResponse(user, tokenPair, permissions);
+  }
+
+  private async createPlatformAuthResponse(
+    user: UserEntity,
+    metadata: AuthRequestMetadata,
+  ): Promise<AuthResponseDto> {
+    const permissions = this.resolveEmailVerificationPermissions(user, ['*:*']);
+    const tokenPair = await this.tokenService.issueTokenPair({
+      user_id: user.id,
+      tenant_id: null,
+      role: SUPERADMIN_ROLE_OWNER,
+      audience: 'superadmin',
+      session_id: randomUUID(),
+    });
+
+    await this.sessionService.createSession({
+      user_id: user.id,
+      tenant_id: null,
+      role: SUPERADMIN_ROLE_OWNER,
+      audience: 'superadmin',
+      permissions,
+      session_id: tokenPair.session_id,
+      is_authenticated: true,
+      email_verified_at: this.formatEmailVerifiedAt(user),
+      refresh_token_id: tokenPair.refresh_token_id,
+      refresh_expires_at: tokenPair.refresh_expires_at,
+      ip_address: metadata.ip_address,
+      user_agent: metadata.user_agent,
+    });
+
+    return this.buildPlatformAuthResponse(user, tokenPair, permissions);
+  }
+
+  private async enforceLoginSecurity(
+    user: UserEntity,
+    role: string,
+    permissions: string[],
+    dto: LoginDto,
+    metadata: AuthRequestMetadata,
+  ): Promise<void> {
+    if (!this.mfaService) {
+      return;
+    }
+
+    const trustedDevice = dto.trusted_device_token && this.trustedDeviceService
+      ? await this.trustedDeviceService.isTrustedDevice({
+        userId: user.id,
+        rawToken: dto.trusted_device_token,
+      })
+      : false;
+    const result = await this.mfaService.enforceLoginChallenge({
+      userId: user.id,
+      role,
+      permissions,
+      mfaEnabled: Boolean(user.mfa_enabled),
+      mfaCode: dto.mfa_code,
+      trustedDevice,
+    });
+
+    if (
+      result.status === 'verified'
+      && dto.trust_device
+      && dto.trusted_device_token
+      && this.trustedDeviceService
+    ) {
+      await this.trustedDeviceService.trustDevice({
+        userId: user.id,
+        rawToken: dto.trusted_device_token,
+        ipAddress: metadata.ip_address,
+        userAgent: metadata.user_agent,
+      });
+    }
   }
 
   private buildAuthResponse(
@@ -365,9 +525,100 @@ export class AuthService {
       audience,
       email: user.email,
       display_name: user.display_name,
+      email_verified: this.isEmailVerified(user),
+      email_verified_at: this.formatEmailVerifiedAt(user),
       permissions,
       session_id: sessionId,
     };
+  }
+
+  private buildPlatformAuthResponse(
+    user: UserEntity,
+    tokenPair: IssuedTokenPair,
+    permissions: string[],
+  ): AuthResponseDto {
+    const tokens: AuthTokensDto = {
+      access_token: tokenPair.access_token,
+      refresh_token: tokenPair.refresh_token,
+      token_type: tokenPair.token_type,
+      access_expires_in: tokenPair.access_expires_in,
+      refresh_expires_in: tokenPair.refresh_expires_in,
+      access_expires_at: tokenPair.access_expires_at,
+      refresh_expires_at: tokenPair.refresh_expires_at,
+    };
+
+    return {
+      tokens,
+      user: this.buildPlatformUserDto(user, tokenPair.session_id, permissions),
+    };
+  }
+
+  private buildPlatformUserDto(
+    user: UserEntity,
+    sessionId: string,
+    permissions: string[],
+  ): AuthenticatedUserDto {
+    return {
+      user_id: user.id,
+      tenant_id: null,
+      role: SUPERADMIN_ROLE_OWNER,
+      audience: 'superadmin',
+      email: user.email,
+      display_name: user.display_name,
+      email_verified: this.isEmailVerified(user),
+      email_verified_at: this.formatEmailVerifiedAt(user),
+      permissions,
+      session_id: sessionId,
+    };
+  }
+
+  private resolveEmailVerificationPermissions(
+    user: UserEntity,
+    permissions: string[],
+  ): string[] {
+    if (!this.hasSensitivePermission(permissions) || this.isEmailVerified(user)) {
+      return permissions;
+    }
+
+    return ['auth:read'];
+  }
+
+  private async assertEmailVerifiedForSensitiveSession(
+    session: { permissions: string[]; session_id: string; email_verified_at?: string | null },
+  ): Promise<void> {
+    if (!this.hasSensitivePermission(session.permissions)) {
+      return;
+    }
+
+    if (!session.email_verified_at) {
+      await this.sessionService.invalidateSession(session.session_id);
+      throw new UnauthorizedException('Verify your email before accessing sensitive workspace actions');
+    }
+  }
+
+  private hasSensitivePermission(permissions: string[]): boolean {
+    return permissions.some((permission) =>
+      permission === '*:*'
+      || permission.endsWith(':write')
+      || permission.endsWith(':manage')
+      || permission.endsWith(':create')
+      || permission.endsWith(':delete')
+      || permission.endsWith(':*'),
+    );
+  }
+
+  private isEmailVerified(user: UserEntity): boolean {
+    return Boolean(user.email_verified_at);
+  }
+
+  private formatEmailVerifiedAt(user: UserEntity): string | null {
+    if (!user.email_verified_at) {
+      return null;
+    }
+
+    return user.email_verified_at instanceof Date
+      ? user.email_verified_at.toISOString()
+      : user.email_verified_at;
   }
 
   private requireTenantId(): string {

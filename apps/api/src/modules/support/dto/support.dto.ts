@@ -11,7 +11,6 @@ import {
 export const SUPPORT_CATEGORIES = [
   'Finance',
   'MPESA',
-  'Attendance',
   'Exams',
   'Timetable',
   'Inventory',

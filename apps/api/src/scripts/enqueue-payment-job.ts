@@ -14,11 +14,14 @@ async function main(): Promise<void> {
 
   try {
     const paymentsJobProducer = app.get(PaymentsJobProducerService);
-    const tenantId = process.env.TEST_PAYMENT_TENANT_ID ?? 'tenant-demo';
+    const tenantId = process.env.TEST_PAYMENT_TENANT_ID;
     const checkoutRequestId = process.env.TEST_PAYMENT_CHECKOUT_REQUEST_ID;
 
     if (!checkoutRequestId) {
       throw new Error('TEST_PAYMENT_CHECKOUT_REQUEST_ID is required to enqueue a payment job');
+    }
+    if (!tenantId) {
+      throw new Error('TEST_PAYMENT_TENANT_ID is required to enqueue a payment job');
     }
 
     const result = await paymentsJobProducer.enqueuePayment({

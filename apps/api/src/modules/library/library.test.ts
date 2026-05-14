@@ -1,201 +1,151 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { RequestContextService } from '../../common/request-context/request-context.service';
+import { PATH_METADATA } from '@nestjs/common/constants';
+
+import { PERMISSIONS_KEY } from '../../auth/auth.constants';
+import { LibraryController } from './library.controller';
+import { LibrarySchemaService } from './library-schema.service';
 import { LibraryService } from './library.service';
 
-test('LibraryService issues a book, decrements available stock, and logs activity', async () => {
-  const requestContext = new RequestContextService();
-  const stockUpdates: Array<Record<string, unknown>> = [];
-  const activityLogs: Array<Record<string, unknown>> = [];
-
-  const service = new LibraryService(
-    requestContext,
-    {
-      withRequestTransaction: async <T>(callback: () => Promise<T>): Promise<T> => callback(),
-    } as never,
-    {
-      findMemberById: async () => ({
-        id: '00000000-0000-0000-0000-000000000111',
-        tenant_id: 'tenant-a',
-        member_type: 'student',
-        admission_or_staff_no: 'SH-24011',
-        full_name: 'Akinyi Wanjiru',
-        class_or_department: 'Grade 7 Hope',
-        contact: '+254711111111',
-        status: 'active',
-      }),
-      findBookById: async () => ({
-        id: '00000000-0000-0000-0000-000000000222',
-        tenant_id: 'tenant-a',
-        accession_number: 'LIB-MATH-0007',
-        isbn: '9789966561113',
-        title: 'Spotlight Mathematics Grade 7',
-        category: 'Mathematics',
-        quantity_total: 18,
-        quantity_available: 14,
-        quantity_damaged: 1,
-        quantity_lost: 0,
-        status: 'available',
-      }),
-      findOpenBorrowingForBookAndMember: async () => null,
-      createBorrowing: async (input: Record<string, unknown>) => ({
-        id: '00000000-0000-0000-0000-000000000333',
-        ...input,
-        status: 'borrowed',
-      }),
-      updateBookQuantities: async (_tenantId: string, bookId: string, input: Record<string, unknown>) => {
-        stockUpdates.push({ bookId, ...input });
-      },
-      logActivity: async (input: Record<string, unknown>) => {
-        activityLogs.push(input);
-      },
-    } as never,
-  );
-
-  const response = await requestContext.run(
-    {
-      request_id: 'req-library-issue-1',
-      tenant_id: 'tenant-a',
-      user_id: '00000000-0000-0000-0000-000000000001',
-      role: 'librarian',
-      session_id: 'session-1',
-      permissions: ['library:*'],
-      is_authenticated: true,
-      client_ip: '127.0.0.1',
-      user_agent: 'test-suite',
-      method: 'POST',
-      path: '/library/borrowings',
-      started_at: '2026-05-07T08:00:00.000Z',
+test('LibrarySchemaService creates tenant-scoped circulation tables with forced RLS', async () => {
+  let schemaSql = '';
+  const service = new LibrarySchemaService({
+    runSchemaBootstrap: async (sql: string) => {
+      schemaSql += sql;
     },
-    () =>
-      service.issueBook({
-        member_id: '00000000-0000-0000-0000-000000000111',
-        book_id: '00000000-0000-0000-0000-000000000222',
-        due_date: '2026-05-21',
-        submission_id: 'borrow-001',
-      }),
-  );
+  } as never);
 
-  assert.match(response.receipt.reference, /^LIB-ISS-/);
-  assert.equal(response.receipt.borrower, 'Akinyi Wanjiru');
-  assert.equal(response.receipt.title, 'Spotlight Mathematics Grade 7');
-  assert.deepEqual(stockUpdates, [
-    {
-      bookId: '00000000-0000-0000-0000-000000000222',
-      quantity_available: 13,
-      status: 'available',
-    },
-  ]);
-  assert.equal(activityLogs.length, 1);
-  assert.equal(activityLogs[0]?.action, 'issued book');
-  assert.equal(activityLogs[0]?.affected_item, 'Spotlight Mathematics Grade 7');
+  await service.onModuleInit();
+
+  assert.match(schemaSql, /CREATE TABLE IF NOT EXISTS library_catalog_items/);
+  assert.match(schemaSql, /CREATE TABLE IF NOT EXISTS library_circulation_ledger/);
+  assert.match(schemaSql, /ALTER TABLE library_copies FORCE ROW LEVEL SECURITY/);
 });
 
-test('LibraryService returns an overdue book, applies a pending fine, and restores stock', async () => {
-  const requestContext = new RequestContextService();
-  const createdFines: Array<Record<string, unknown>> = [];
-  const stockUpdates: Array<Record<string, unknown>> = [];
-  const closedBorrowings: Array<Record<string, unknown>> = [];
-
+test('LibraryService prevents issuing an already issued copy', async () => {
   const service = new LibraryService(
-    requestContext,
+    { getStore: () => ({ tenant_id: 'tenant-a', user_id: 'user-1' }) } as never,
     {
-      withRequestTransaction: async <T>(callback: () => Promise<T>): Promise<T> => callback(),
+      findCopyForUpdate: async () => ({ id: 'copy-1', status: 'issued' }),
+      issueCopy: async () => {
+        throw new Error('issued copy must not be issued again');
+      },
     } as never,
-    {
-      findBorrowingById: async () => ({
-        id: '00000000-0000-0000-0000-000000000333',
-        tenant_id: 'tenant-a',
-        book_id: '00000000-0000-0000-0000-000000000222',
-        member_id: '00000000-0000-0000-0000-000000000111',
-        borrowed_at: '2026-04-24T08:00:00.000Z',
-        due_date: '2026-05-01',
-        returned_at: null,
-        status: 'overdue',
-        book_title: 'Blossoms of the Savannah',
-        accession_number: 'LIB-LIT-0042',
-        member_name: 'Akinyi Wanjiru',
-        admission_or_staff_no: 'SH-24011',
-        class_or_department: 'Grade 7 Hope',
-      }),
-      findBookById: async () => ({
-        id: '00000000-0000-0000-0000-000000000222',
-        tenant_id: 'tenant-a',
-        accession_number: 'LIB-LIT-0042',
-        title: 'Blossoms of the Savannah',
-        category: 'Literature',
-        quantity_total: 10,
-        quantity_available: 6,
-        quantity_damaged: 0,
-        quantity_lost: 0,
-        status: 'borrowed',
-      }),
-      createReturn: async (input: Record<string, unknown>) => ({
-        id: '00000000-0000-0000-0000-000000000444',
-        ...input,
-      }),
-      markBorrowingReturned: async (_tenantId: string, borrowingId: string, input: Record<string, unknown>) => {
-        closedBorrowings.push({ borrowingId, ...input });
-      },
-      updateBookQuantities: async (_tenantId: string, bookId: string, input: Record<string, unknown>) => {
-        stockUpdates.push({ bookId, ...input });
-      },
-      createFine: async (input: Record<string, unknown>) => {
-        createdFines.push(input);
-        return {
-          id: '00000000-0000-0000-0000-000000000555',
-          ...input,
-        };
-      },
-      logActivity: async () => undefined,
-    } as never,
+    {} as never,
   );
 
-  const response = await requestContext.run(
-    {
-      request_id: 'req-library-return-1',
-      tenant_id: 'tenant-a',
-      user_id: '00000000-0000-0000-0000-000000000001',
-      role: 'librarian',
-      session_id: 'session-1',
-      permissions: ['library:*'],
-      is_authenticated: true,
-      client_ip: '127.0.0.1',
-      user_agent: 'test-suite',
-      method: 'POST',
-      path: '/library/returns',
-      started_at: '2026-05-07T10:00:00.000Z',
-    },
+  await assert.rejects(
     () =>
-      service.returnBook({
-        borrowing_id: '00000000-0000-0000-0000-000000000333',
-        condition: 'good',
-        returned_at: '2026-05-07',
-        fine_per_overdue_day: 10,
+      service.issueCopy({
+        copy_id: 'copy-1',
+        borrower_id: 'borrower-1',
+        due_on: '2026-05-30',
       }),
+    /copy is not available/,
+  );
+});
+
+test('LibraryService preserves reservation order when reserving unavailable copies', async () => {
+  const service = new LibraryService(
+    { getStore: () => ({ tenant_id: 'tenant-a', user_id: 'user-1' }) } as never,
+    {
+      createReservation: async () => ({
+        id: 'reservation-1',
+        queue_position: 3,
+      }),
+      appendLedger: async () => undefined,
+    } as never,
+    {} as never,
   );
 
-  assert.equal(response.receipt.overdue_days, 6);
-  assert.equal(response.receipt.fine_amount, 60);
-  assert.equal(createdFines.length, 1);
-  assert.equal(createdFines[0]?.category, 'overdue');
-  assert.equal(createdFines[0]?.amount, 60);
-  assert.equal(createdFines[0]?.status, 'pending');
-  assert.deepEqual(stockUpdates, [
+  const reservation = await service.reserveCopy({
+    catalog_item_id: 'catalog-1',
+    borrower_id: 'borrower-1',
+  });
+
+  assert.equal(reservation.queue_position, 3);
+});
+
+test('LibraryService creates billing handoff for overdue fines during return', async () => {
+  const calls: string[] = [];
+  const service = new LibraryService(
+    { getStore: () => ({ tenant_id: 'tenant-a', user_id: 'user-1' }) } as never,
     {
-      bookId: '00000000-0000-0000-0000-000000000222',
-      quantity_available: 7,
-      quantity_damaged: 0,
-      quantity_lost: 0,
-      status: 'available',
-    },
-  ]);
-  assert.deepEqual(closedBorrowings, [
+      findLoanForReturn: async () => ({
+        id: 'loan-1',
+        copy_id: 'copy-1',
+        borrower_id: 'borrower-1',
+        due_on: '2026-05-01',
+      }),
+      returnCopy: async () => {
+        calls.push('return');
+        return { id: 'loan-1', status: 'returned' };
+      },
+      createFine: async () => {
+        calls.push('fine');
+        return { id: 'fine-1', amount_minor: 5000 };
+      },
+      appendLedger: async () => {
+        calls.push('ledger');
+      },
+    } as never,
     {
-      borrowingId: '00000000-0000-0000-0000-000000000333',
-      returned_at: '2026-05-07',
-      status: 'returned',
-    },
-  ]);
+      createLibraryFineCharge: async () => {
+        calls.push('billing');
+      },
+    } as never,
+  );
+
+  const returned = await service.returnCopy({
+    loan_id: 'loan-1',
+    returned_on: '2026-05-06',
+    daily_fine_minor: 1000,
+  });
+
+  assert.equal(returned.status, 'returned');
+  assert.deepEqual(calls, ['return', 'fine', 'billing', 'ledger']);
+});
+
+test('LibraryController exposes circulation ledger as a read endpoint', () => {
+  const handler = LibraryController.prototype.listCirculation as unknown as Function;
+
+  assert.equal(typeof handler, 'function');
+  assert.equal(Reflect.getMetadata(PATH_METADATA, handler), 'circulation');
+  assert.deepEqual(Reflect.getMetadata(PERMISSIONS_KEY, handler), ['library:read']);
+});
+
+test('LibraryService lists circulation ledger for the current tenant', async () => {
+  let capturedInput: Record<string, unknown> | null = null;
+  const service = new LibraryService(
+    { getStore: () => ({ tenant_id: 'tenant-a', user_id: 'user-1' }) } as never,
+    {
+      listCirculation: async (input: Record<string, unknown>) => {
+        capturedInput = input;
+        return [
+          {
+            id: 'ledger-1',
+            borrower_id: 'borrower-1',
+            action: 'issue',
+            copy_id: 'copy-1',
+          },
+        ];
+      },
+    } as never,
+    {} as never,
+  );
+
+  const rows = await (service as unknown as {
+    listCirculation: (query: Record<string, string | undefined>) => Promise<Array<Record<string, unknown>>>;
+  }).listCirculation({
+    borrower_id: ' borrower-1 ',
+    action: 'issue',
+  });
+
+  assert.deepEqual(capturedInput, {
+    tenant_id: 'tenant-a',
+    borrower_id: 'borrower-1',
+    action: 'issue',
+  });
+  assert.equal(rows[0]?.id, 'ledger-1');
 });

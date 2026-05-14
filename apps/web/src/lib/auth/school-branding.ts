@@ -19,60 +19,17 @@ export interface SchoolBrandingResolution {
 }
 
 const defaultBranding: SchoolBranding = {
-  slug: "amani-prep",
-  name: "Amani Preparatory",
-  shortName: "Amani Prep",
-  county: "Nairobi County",
-  supportEmail: "support@amaniprep.ac.ke",
-  supportPhone: "+254 712 345 801",
-  heroMessage: "Keep admissions, collections, academics, and attendance moving with one trusted school workspace.",
-  logoMark: "AP",
+  slug: "school-workspace",
+  name: "School workspace",
+  shortName: "Workspace",
+  county: "Secure tenant access",
+  supportEmail: "support@shulehub.co.ke",
+  supportPhone: "Use your invitation channel",
+  heroMessage: "Use the secure workspace code from your ShuleHub invitation to access your school operations.",
+  logoMark: "SH",
 };
 
-const schoolBrandingMap: Record<string, SchoolBranding> = {
-  "amani-prep": defaultBranding,
-  amanischool: defaultBranding,
-  "baraka-academy": {
-    slug: "baraka-academy",
-    name: "Baraka Academy",
-    shortName: "Baraka",
-    county: "Kiambu County",
-    supportEmail: "help@barakaacademy.sch.ke",
-    supportPhone: "+254 723 456 811",
-    heroMessage: "A familiar, secure workspace for bursars, principals, teachers, and school office teams.",
-    logoMark: "BA",
-  },
-  barakaacademy: {
-    slug: "baraka-academy",
-    name: "Baraka Academy",
-    shortName: "Baraka",
-    county: "Kiambu County",
-    supportEmail: "help@barakaacademy.sch.ke",
-    supportPhone: "+254 723 456 811",
-    heroMessage: "A familiar, secure workspace for bursars, principals, teachers, and school office teams.",
-    logoMark: "BA",
-  },
-  "mwangaza-junior": {
-    slug: "mwangaza-junior",
-    name: "Mwangaza Junior School",
-    shortName: "Mwangaza",
-    county: "Kisumu County",
-    supportEmail: "support@mwangazajunior.sch.ke",
-    supportPhone: "+254 734 567 822",
-    heroMessage: "School operations feel simple when collections, roll call, and reports all live in one calm workflow.",
-    logoMark: "MJ",
-  },
-  mwangaza: {
-    slug: "mwangaza-junior",
-    name: "Mwangaza Junior School",
-    shortName: "Mwangaza",
-    county: "Kisumu County",
-    supportEmail: "support@mwangazajunior.sch.ke",
-    supportPhone: "+254 734 567 822",
-    heroMessage: "School operations feel simple when collections, roll call, and reports all live in one calm workflow.",
-    logoMark: "MJ",
-  },
-};
+const schoolBrandingMap: Record<string, SchoolBranding> = {};
 
 export function getDefaultSchoolBranding() {
   return defaultBranding;
@@ -83,7 +40,14 @@ export function getSchoolBrandingBySlug(slug: string | null | undefined) {
     return defaultBranding;
   }
 
-  return schoolBrandingMap[slug.trim().toLowerCase()] ?? null;
+  const normalizedSlug = slug.trim().toLowerCase();
+  return schoolBrandingMap[normalizedSlug] ?? {
+    ...defaultBranding,
+    slug: normalizedSlug,
+    name: "School workspace",
+    shortName: "Workspace",
+    logoMark: normalizedSlug.slice(0, 2).toUpperCase(),
+  };
 }
 
 function normalizeSchoolIdentifier(identifier: string | null | undefined) {
@@ -140,21 +104,6 @@ export function resolveSchoolBranding(host: string | null | undefined) {
   }
 
   const resolvedBranding = getSchoolBrandingBySlug(requestedSlug);
-
-  if (!resolvedBranding) {
-    return {
-      status: "unknown" as const,
-      requestedSlug,
-      host: normalizedHost,
-      branding: {
-        ...defaultBranding,
-        name: "School workspace not found",
-        shortName: "Unknown school",
-        heroMessage: "We could not match this school link to an active tenant. Confirm the school address or contact support.",
-        logoMark: requestedSlug.slice(0, 2).toUpperCase(),
-      },
-    } satisfies SchoolBrandingResolution;
-  }
 
   return {
     status: "resolved" as const,

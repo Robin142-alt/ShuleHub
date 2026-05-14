@@ -20,6 +20,14 @@ export class InventorySchemaService implements OnModuleInit {
       END;
       $$ LANGUAGE plpgsql;
 
+      CREATE OR REPLACE FUNCTION prevent_inventory_movement_mutation()
+      RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'inventory stock movements are append-only and cannot be %', lower(TG_OP)
+          USING ERRCODE = '55000';
+      END;
+      $$ LANGUAGE plpgsql;
+
       CREATE TABLE IF NOT EXISTS inventory_categories (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         tenant_id text NOT NULL,
@@ -77,7 +85,56 @@ export class InventorySchemaService implements OnModuleInit {
         CONSTRAINT fk_inventory_items_supplier
           FOREIGN KEY (tenant_id, supplier_id)
           REFERENCES inventory_suppliers (tenant_id, id)
-          ON DELETE SET NULL
+          ON DELETE SET NULL,
+        CONSTRAINT ck_inventory_items_quantity_non_negative CHECK (quantity_on_hand >= 0)
+      );
+
+      CREATE TABLE IF NOT EXISTS inventory_locations (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        code text NOT NULL,
+        name text NOT NULL,
+        status text NOT NULL DEFAULT 'active',
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_inventory_locations_tenant_id_id UNIQUE (tenant_id, id),
+        CONSTRAINT uq_inventory_locations_tenant_code UNIQUE (tenant_id, code)
+      );
+
+      CREATE TABLE IF NOT EXISTS inventory_item_balances (
+        tenant_id text NOT NULL,
+        item_id uuid NOT NULL,
+        location_code text NOT NULL,
+        quantity_on_hand integer NOT NULL DEFAULT 0,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (tenant_id, item_id, location_code),
+        CONSTRAINT fk_inventory_item_balances_item
+          FOREIGN KEY (tenant_id, item_id)
+          REFERENCES inventory_items (tenant_id, id)
+          ON DELETE CASCADE,
+        CONSTRAINT ck_inventory_item_balances_quantity_non_negative CHECK (quantity_on_hand >= 0)
+      );
+
+      CREATE TABLE IF NOT EXISTS inventory_stock_count_snapshots (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        snapshot_number text NOT NULL,
+        location_code text,
+        counted_at timestamptz NOT NULL DEFAULT NOW(),
+        counted_by_user_id uuid,
+        status text NOT NULL DEFAULT 'draft',
+        lines jsonb NOT NULL DEFAULT '[]'::jsonb,
+        variance_count integer NOT NULL DEFAULT 0,
+        notes text,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_inventory_stock_counts_tenant_id_id UNIQUE (tenant_id, id),
+        CONSTRAINT uq_inventory_stock_counts_tenant_number UNIQUE (tenant_id, snapshot_number),
+        CONSTRAINT ck_inventory_stock_counts_status
+          CHECK (status IN ('draft', 'posted', 'cancelled')),
+        CONSTRAINT ck_inventory_stock_counts_variance_non_negative
+          CHECK (variance_count >= 0)
       );
 
       CREATE TABLE IF NOT EXISTS inventory_stock_movements (
@@ -150,6 +207,68 @@ export class InventorySchemaService implements OnModuleInit {
         CONSTRAINT uq_inventory_requests_tenant_number UNIQUE (tenant_id, request_number)
       );
 
+      CREATE TABLE IF NOT EXISTS inventory_reservations (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        request_id uuid NOT NULL,
+        item_id uuid NOT NULL,
+        quantity integer NOT NULL,
+        status text NOT NULL DEFAULT 'reserved',
+        reserved_by_user_id uuid,
+        reserved_at timestamptz NOT NULL DEFAULT NOW(),
+        fulfilled_at timestamptz,
+        cancelled_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_inventory_reservations_tenant_id_id UNIQUE (tenant_id, id),
+        CONSTRAINT uq_inventory_reservations_tenant_request_item_status
+          UNIQUE (tenant_id, request_id, item_id, status),
+        CONSTRAINT fk_inventory_reservations_request
+          FOREIGN KEY (tenant_id, request_id)
+          REFERENCES inventory_requests (tenant_id, id)
+          ON DELETE CASCADE,
+        CONSTRAINT fk_inventory_reservations_item
+          FOREIGN KEY (tenant_id, item_id)
+          REFERENCES inventory_items (tenant_id, id)
+          ON DELETE CASCADE,
+        CONSTRAINT ck_inventory_reservations_quantity_positive CHECK (quantity > 0),
+        CONSTRAINT ck_inventory_reservations_status
+          CHECK (status IN ('reserved', 'fulfilled', 'cancelled'))
+      );
+
+      CREATE TABLE IF NOT EXISTS inventory_request_backorders (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        request_id uuid NOT NULL,
+        item_id uuid NOT NULL,
+        requested_quantity integer NOT NULL,
+        reserved_quantity integer NOT NULL DEFAULT 0,
+        backordered_quantity integer NOT NULL,
+        status text NOT NULL DEFAULT 'open',
+        resolved_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_inventory_backorders_tenant_id_id UNIQUE (tenant_id, id),
+        CONSTRAINT uq_inventory_backorders_tenant_request_item_status
+          UNIQUE (tenant_id, request_id, item_id, status),
+        CONSTRAINT fk_inventory_backorders_request
+          FOREIGN KEY (tenant_id, request_id)
+          REFERENCES inventory_requests (tenant_id, id)
+          ON DELETE CASCADE,
+        CONSTRAINT fk_inventory_backorders_item
+          FOREIGN KEY (tenant_id, item_id)
+          REFERENCES inventory_items (tenant_id, id)
+          ON DELETE CASCADE,
+        CONSTRAINT ck_inventory_backorders_quantities
+          CHECK (
+            requested_quantity > 0
+            AND reserved_quantity >= 0
+            AND backordered_quantity > 0
+          ),
+        CONSTRAINT ck_inventory_backorders_status
+          CHECK (status IN ('open', 'resolved', 'cancelled'))
+      );
+
       CREATE TABLE IF NOT EXISTS inventory_transfers (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         tenant_id text NOT NULL,
@@ -193,8 +312,36 @@ export class InventorySchemaService implements OnModuleInit {
       );
 
       CREATE INDEX IF NOT EXISTS ix_inventory_items_status ON inventory_items (tenant_id, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS ix_inventory_items_search_vector
+        ON inventory_items
+        USING GIN (
+          to_tsvector(
+            'simple',
+            item_name || ' ' ||
+            sku || ' ' ||
+            unit || ' ' ||
+            COALESCE(storage_location, '') || ' ' ||
+            COALESCE(notes, '')
+          )
+        );
+      CREATE INDEX IF NOT EXISTS ix_inventory_suppliers_search_vector
+        ON inventory_suppliers
+        USING GIN (
+          to_tsvector(
+            'simple',
+            supplier_name || ' ' ||
+            COALESCE(contact_person, '') || ' ' ||
+            COALESCE(email, '') || ' ' ||
+            COALESCE(phone, '') || ' ' ||
+            COALESCE(county, '')
+          )
+        );
       CREATE INDEX IF NOT EXISTS ix_inventory_items_low_stock ON inventory_items (tenant_id, quantity_on_hand, reorder_level);
+      CREATE INDEX IF NOT EXISTS ix_inventory_item_balances_location ON inventory_item_balances (tenant_id, location_code, item_id);
+      CREATE INDEX IF NOT EXISTS ix_inventory_stock_counts_counted_at ON inventory_stock_count_snapshots (tenant_id, counted_at DESC);
       CREATE INDEX IF NOT EXISTS ix_inventory_movements_occurred_at ON inventory_stock_movements (tenant_id, occurred_at DESC);
+      CREATE INDEX IF NOT EXISTS ix_inventory_reservations_request ON inventory_reservations (tenant_id, request_id, status);
+      CREATE INDEX IF NOT EXISTS ix_inventory_backorders_request ON inventory_request_backorders (tenant_id, request_id, status);
 
       ALTER TABLE inventory_categories ADD COLUMN IF NOT EXISTS manager text;
       ALTER TABLE inventory_categories ADD COLUMN IF NOT EXISTS storage_zones text;
@@ -206,6 +353,19 @@ export class InventorySchemaService implements OnModuleInit {
       ALTER TABLE inventory_stock_movements ADD COLUMN IF NOT EXISTS batch_number text;
       ALTER TABLE inventory_stock_movements ADD COLUMN IF NOT EXISTS expiry_date date;
       ALTER TABLE inventory_stock_movements ADD COLUMN IF NOT EXISTS submission_id text;
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'ck_inventory_items_quantity_non_negative'
+        ) THEN
+          ALTER TABLE inventory_items
+          ADD CONSTRAINT ck_inventory_items_quantity_non_negative
+          CHECK (quantity_on_hand >= 0);
+        END IF;
+      END;
+      $$;
       CREATE INDEX IF NOT EXISTS ix_inventory_movements_submission_id ON inventory_stock_movements (tenant_id, submission_id) WHERE submission_id IS NOT NULL;
 
       ALTER TABLE inventory_categories ENABLE ROW LEVEL SECURITY;
@@ -214,12 +374,22 @@ export class InventorySchemaService implements OnModuleInit {
       ALTER TABLE inventory_suppliers FORCE ROW LEVEL SECURITY;
       ALTER TABLE inventory_items ENABLE ROW LEVEL SECURITY;
       ALTER TABLE inventory_items FORCE ROW LEVEL SECURITY;
+      ALTER TABLE inventory_locations ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE inventory_locations FORCE ROW LEVEL SECURITY;
+      ALTER TABLE inventory_item_balances ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE inventory_item_balances FORCE ROW LEVEL SECURITY;
+      ALTER TABLE inventory_stock_count_snapshots ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE inventory_stock_count_snapshots FORCE ROW LEVEL SECURITY;
       ALTER TABLE inventory_stock_movements ENABLE ROW LEVEL SECURITY;
       ALTER TABLE inventory_stock_movements FORCE ROW LEVEL SECURITY;
       ALTER TABLE inventory_purchase_orders ENABLE ROW LEVEL SECURITY;
       ALTER TABLE inventory_purchase_orders FORCE ROW LEVEL SECURITY;
       ALTER TABLE inventory_requests ENABLE ROW LEVEL SECURITY;
       ALTER TABLE inventory_requests FORCE ROW LEVEL SECURITY;
+      ALTER TABLE inventory_reservations ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE inventory_reservations FORCE ROW LEVEL SECURITY;
+      ALTER TABLE inventory_request_backorders ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE inventory_request_backorders FORCE ROW LEVEL SECURITY;
       ALTER TABLE inventory_transfers ENABLE ROW LEVEL SECURITY;
       ALTER TABLE inventory_transfers FORCE ROW LEVEL SECURITY;
       ALTER TABLE inventory_incidents ENABLE ROW LEVEL SECURITY;
@@ -243,6 +413,24 @@ export class InventorySchemaService implements OnModuleInit {
       USING (tenant_id = current_setting('app.tenant_id', true))
       WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
+      DROP POLICY IF EXISTS inventory_locations_rls_policy ON inventory_locations;
+      CREATE POLICY inventory_locations_rls_policy ON inventory_locations
+      FOR ALL
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
+      DROP POLICY IF EXISTS inventory_item_balances_rls_policy ON inventory_item_balances;
+      CREATE POLICY inventory_item_balances_rls_policy ON inventory_item_balances
+      FOR ALL
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
+      DROP POLICY IF EXISTS inventory_stock_count_snapshots_rls_policy ON inventory_stock_count_snapshots;
+      CREATE POLICY inventory_stock_count_snapshots_rls_policy ON inventory_stock_count_snapshots
+      FOR ALL
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
       DROP POLICY IF EXISTS inventory_stock_movements_rls_policy ON inventory_stock_movements;
       CREATE POLICY inventory_stock_movements_rls_policy ON inventory_stock_movements
       FOR ALL
@@ -257,6 +445,18 @@ export class InventorySchemaService implements OnModuleInit {
 
       DROP POLICY IF EXISTS inventory_requests_rls_policy ON inventory_requests;
       CREATE POLICY inventory_requests_rls_policy ON inventory_requests
+      FOR ALL
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
+      DROP POLICY IF EXISTS inventory_reservations_rls_policy ON inventory_reservations;
+      CREATE POLICY inventory_reservations_rls_policy ON inventory_reservations
+      FOR ALL
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
+      DROP POLICY IF EXISTS inventory_request_backorders_rls_policy ON inventory_request_backorders;
+      CREATE POLICY inventory_request_backorders_rls_policy ON inventory_request_backorders
       FOR ALL
       USING (tenant_id = current_setting('app.tenant_id', true))
       WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
@@ -288,10 +488,30 @@ export class InventorySchemaService implements OnModuleInit {
       BEFORE UPDATE ON inventory_items
       FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+      DROP TRIGGER IF EXISTS trg_inventory_locations_set_updated_at ON inventory_locations;
+      CREATE TRIGGER trg_inventory_locations_set_updated_at
+      BEFORE UPDATE ON inventory_locations
+      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+      DROP TRIGGER IF EXISTS trg_inventory_item_balances_set_updated_at ON inventory_item_balances;
+      CREATE TRIGGER trg_inventory_item_balances_set_updated_at
+      BEFORE UPDATE ON inventory_item_balances
+      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+      DROP TRIGGER IF EXISTS trg_inventory_stock_counts_set_updated_at ON inventory_stock_count_snapshots;
+      CREATE TRIGGER trg_inventory_stock_counts_set_updated_at
+      BEFORE UPDATE ON inventory_stock_count_snapshots
+      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
       DROP TRIGGER IF EXISTS trg_inventory_movements_set_updated_at ON inventory_stock_movements;
       CREATE TRIGGER trg_inventory_movements_set_updated_at
       BEFORE UPDATE ON inventory_stock_movements
       FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+      DROP TRIGGER IF EXISTS trg_inventory_movements_prevent_mutation ON inventory_stock_movements;
+      CREATE TRIGGER trg_inventory_movements_prevent_mutation
+      BEFORE UPDATE OR DELETE ON inventory_stock_movements
+      FOR EACH ROW EXECUTE FUNCTION prevent_inventory_movement_mutation();
 
       DROP TRIGGER IF EXISTS trg_inventory_po_set_updated_at ON inventory_purchase_orders;
       CREATE TRIGGER trg_inventory_po_set_updated_at
@@ -301,6 +521,16 @@ export class InventorySchemaService implements OnModuleInit {
       DROP TRIGGER IF EXISTS trg_inventory_requests_set_updated_at ON inventory_requests;
       CREATE TRIGGER trg_inventory_requests_set_updated_at
       BEFORE UPDATE ON inventory_requests
+      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+      DROP TRIGGER IF EXISTS trg_inventory_reservations_set_updated_at ON inventory_reservations;
+      CREATE TRIGGER trg_inventory_reservations_set_updated_at
+      BEFORE UPDATE ON inventory_reservations
+      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+      DROP TRIGGER IF EXISTS trg_inventory_backorders_set_updated_at ON inventory_request_backorders;
+      CREATE TRIGGER trg_inventory_backorders_set_updated_at
+      BEFORE UPDATE ON inventory_request_backorders
       FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
       DROP TRIGGER IF EXISTS trg_inventory_transfers_set_updated_at ON inventory_transfers;

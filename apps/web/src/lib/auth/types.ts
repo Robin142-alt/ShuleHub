@@ -92,15 +92,15 @@ export interface SuperAdminCredentials {
 }
 
 export interface SchoolCredentials {
-  identifier: string; // email or phone
+  identifier: string; // email address
   password: string;
   rememberMe?: boolean;
   tenantSlug: string;
 }
 
 export interface PortalCredentials {
-  identifier: string; // admission number or phone
-  secret: string; // password or PIN
+  identifier: string; // portal email address
+  secret: string; // password
 }
 
 /** Route guard config */

@@ -1,10 +1,66 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import 'reflect-metadata';
+import { MODULE_METADATA } from '@nestjs/common/constants';
 
 import { BillingAccessService } from '../billing/billing-access.service';
 import { RequestContextService } from '../../common/request-context/request-context.service';
-import { AttendanceService } from './attendance.service';
+import { StudentsModule } from './students.module';
+import { StudentsSchemaService } from './students-schema.service';
 import { StudentsService } from './students.service';
+
+test('StudentsModule does not expose retired attendance controllers or providers', () => {
+  const controllers =
+    (Reflect.getMetadata(MODULE_METADATA.CONTROLLERS, StudentsModule) as Array<{ name?: string }> | undefined) ?? [];
+  const providers =
+    (Reflect.getMetadata(MODULE_METADATA.PROVIDERS, StudentsModule) as Array<{ name?: string }> | undefined) ?? [];
+
+  assert.equal(
+    controllers.some((controller) => controller?.name === 'AttendanceController'),
+    false,
+  );
+  assert.equal(
+    providers.some((provider) => provider?.name === 'AttendanceService'),
+    false,
+  );
+});
+
+test('retired attendance API controller, service, and DTO source files are removed', () => {
+  for (const relativePath of [
+    'apps/api/src/modules/students/attendance.controller.ts',
+    'apps/api/src/modules/students/attendance.service.ts',
+    'apps/api/src/modules/students/dto/attendance-record-response.dto.ts',
+    'apps/api/src/modules/students/dto/list-attendance-query.dto.ts',
+    'apps/api/src/modules/students/dto/upsert-attendance-record.dto.ts',
+  ]) {
+    assert.equal(existsSync(join(process.cwd(), relativePath)), false, `${relativePath} should be removed`);
+  }
+});
+
+test('StudentsSchemaService adds a full-text index for active student directory search', async () => {
+  let schemaSql = '';
+  const service = new StudentsSchemaService(
+    {
+      runSchemaBootstrap: async (sql: string) => {
+        schemaSql += sql;
+      },
+    } as never,
+    {
+      onModuleInit: async () => undefined,
+    } as never,
+  );
+
+  await service.onModuleInit();
+
+  assert.match(schemaSql, /CREATE INDEX IF NOT EXISTS ix_students_search_vector/);
+  assert.match(schemaSql, /ON students\s+USING GIN/);
+  assert.match(schemaSql, /to_tsvector\(\s*'simple'/);
+  assert.match(schemaSql, /admission_number/);
+  assert.match(schemaSql, /primary_guardian_phone/);
+  assert.doesNotMatch(schemaSql, /attendance/i);
+});
 
 test('StudentsService creates a student and publishes student.created', async () => {
   const requestContext = new RequestContextService();
@@ -48,7 +104,7 @@ test('StudentsService creates a student and publishes student.created', async ()
           status: 'active',
           billing_phone_number: null,
           currency_code: 'KES',
-          features: ['students', 'attendance'],
+          features: ['students'],
           limits: {},
           seats_allocated: 1,
           current_period_start: new Date('2026-04-01T00:00:00.000Z'),
@@ -81,7 +137,7 @@ test('StudentsService creates a student and publishes student.created', async ()
         status: 'active',
         billing_phone_number: null,
         currency_code: 'KES',
-        features: ['students', 'attendance'],
+        features: ['students'],
         limits: {},
         seats_allocated: 1,
         current_period_start: new Date('2026-04-01T00:00:00.000Z'),
@@ -144,101 +200,4 @@ test('StudentsService creates a student and publishes student.created', async ()
   };
   assert.equal(studentCreatedPayload.student_id, '00000000-0000-0000-0000-000000000101');
   assert.equal(studentCreatedPayload.tenant_id, 'tenant-a');
-});
-
-test('AttendanceService upserts attendance and records a server sync operation', async () => {
-  const requestContext = new RequestContextService();
-  let syncPayload: Record<string, unknown> | null = null;
-
-  const service = new AttendanceService(
-    requestContext,
-    {
-      withRequestTransaction: async <T>(callback: () => Promise<T>): Promise<T> => callback(),
-    } as never,
-    {
-      findById: async () => ({
-        id: '00000000-0000-0000-0000-000000000301',
-      }),
-    } as never,
-    {
-      lockByStudentAndDate: async () => null,
-      upsertRecord: async (input: Record<string, unknown>) => ({
-        id: input.id,
-        tenant_id: input.tenant_id,
-        student_id: input.student_id,
-        attendance_date: input.attendance_date,
-        status: input.status,
-        notes: input.notes,
-        metadata: input.metadata,
-        source_device_id: input.source_device_id,
-        last_modified_at: new Date(String(input.last_modified_at)),
-        last_operation_id: input.last_operation_id,
-        sync_version: input.sync_version,
-        created_at: new Date('2026-04-26T09:00:00.000Z'),
-        updated_at: new Date('2026-04-26T09:00:00.000Z'),
-      }),
-      listByStudentAndDateRange: async () => [],
-    } as never,
-    {
-      recordServerOperation: async (
-        entity: string,
-        payload: Record<string, unknown>,
-        _tenantId?: string,
-        opId?: string,
-      ) => {
-        syncPayload = payload;
-        return {
-          op_id: opId ?? '00000000-0000-0000-0000-000000000401',
-          tenant_id: 'tenant-a',
-          device_id: 'server',
-          entity,
-          payload,
-          version: '22',
-          created_at: new Date('2026-04-26T09:00:00.000Z').toISOString(),
-          updated_at: new Date('2026-04-26T09:00:00.000Z').toISOString(),
-        };
-      },
-    } as never,
-    {
-      recordUsage: async (): Promise<void> => undefined,
-    } as never,
-  );
-
-  const response = await requestContext.run(
-    {
-      request_id: 'req-att-1',
-      tenant_id: 'tenant-a',
-      user_id: '00000000-0000-0000-0000-000000000001',
-      role: 'owner',
-      session_id: 'session-1',
-      permissions: ['*:*'],
-      is_authenticated: true,
-      client_ip: '127.0.0.1',
-      user_agent: 'test-suite',
-      method: 'PUT',
-      path: '/students/attendance',
-      started_at: '2026-04-26T00:00:00.000Z',
-    },
-    () =>
-      service.upsertStudentAttendance(
-        '00000000-0000-0000-0000-000000000301',
-        '2026-04-26',
-        {
-          status: 'present',
-          notes: 'Checked in on time',
-          last_modified_at: '2026-04-26T09:00:00.000Z',
-          metadata: { captured_by: 'teacher-1' },
-        },
-      ),
-  );
-
-  assert.equal(response.status, 'present');
-  assert.equal(response.sync_version, '22');
-  assert.ok(syncPayload);
-  const recordedSyncPayload = syncPayload as {
-    attendance_date: string;
-    source: string;
-  };
-  assert.equal(recordedSyncPayload.attendance_date, '2026-04-26');
-  assert.equal(recordedSyncPayload.source, 'server');
 });

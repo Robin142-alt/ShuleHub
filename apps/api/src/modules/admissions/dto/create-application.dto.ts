@@ -1,19 +1,26 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, Matches } from 'class-validator';
+
+const NON_BLANK_TEXT = /\S/;
 
 export class CreateApplicationDto {
   @IsString()
+  @Matches(NON_BLANK_TEXT)
   full_name!: string;
 
   @IsString()
+  @Matches(NON_BLANK_TEXT)
   date_of_birth!: string;
 
   @IsString()
+  @Matches(NON_BLANK_TEXT)
   gender!: string;
 
   @IsString()
+  @Matches(NON_BLANK_TEXT)
   birth_certificate_number!: string;
 
   @IsString()
+  @Matches(NON_BLANK_TEXT)
   nationality!: string;
 
   @IsOptional()
@@ -29,12 +36,15 @@ export class CreateApplicationDto {
   cbc_level?: string;
 
   @IsString()
+  @Matches(NON_BLANK_TEXT)
   class_applying!: string;
 
   @IsString()
+  @Matches(NON_BLANK_TEXT)
   parent_name!: string;
 
   @IsString()
+  @Matches(NON_BLANK_TEXT)
   parent_phone!: string;
 
   @IsOptional()
@@ -46,6 +56,7 @@ export class CreateApplicationDto {
   parent_occupation?: string;
 
   @IsString()
+  @Matches(NON_BLANK_TEXT)
   relationship!: string;
 
   @IsOptional()

@@ -14,7 +14,7 @@ type TopbarVariant = "platform" | "school" | "portal";
 
 const searchPlaceholderByVariant: Record<TopbarVariant, string> = {
   platform: "Search tenants, billing, or incidents",
-  school: "Search students, fees, or reports",
+  school: "Search students, fees, or support",
   portal: "Search fees, results, or messages",
 };
 

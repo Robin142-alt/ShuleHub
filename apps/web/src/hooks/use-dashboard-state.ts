@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { fetchDashboardSnapshot, fetchTenantOptions } from "@/lib/dashboard/mock-api";
+import { fetchDashboardSnapshot, fetchTenantOptions } from "@/lib/dashboard/dashboard-source";
 import {
   type ActivityItem,
   type DashboardRole,
@@ -42,7 +42,7 @@ export function useDashboardState(role: DashboardRole) {
     staleTime: 5 * 60_000,
   });
 
-  const [tenantId, setTenantId] = useState("amani-prep");
+  const [tenantId, setTenantId] = useState("");
 
   const dashboardQuery = useQuery({
     queryKey: ["dashboard", role, tenantId, online],
@@ -79,9 +79,7 @@ export function useDashboardState(role: DashboardRole) {
           href: `/dashboard/${role}/${action.href}`,
           timeLabel: "now",
           category:
-            action.id === "mark-attendance"
-              ? "attendance"
-              : action.id === "record-payment" || action.id === "create-invoice"
+            action.id === "record-payment" || action.id === "create-invoice"
                 ? "payment"
                 : action.id === "send-sms"
                   ? "communication"

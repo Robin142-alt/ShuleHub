@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Send, ShieldBan, UserCheck, UserPlus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { RotateCw, Send, ShieldBan, UserCheck, UserPlus } from "lucide-react";
 
+import { getCsrfToken } from "@/lib/auth/csrf-client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -10,30 +11,100 @@ import { StatusPill } from "@/components/ui/status-pill";
 
 type ManagedUser = {
   id: string;
+  kind: "member" | "invitation";
   name: string;
   email: string;
+  roleCode: string;
   role: string;
-  status: "Active" | "Invited" | "Suspended";
+  status: "Active" | "Invited" | "Suspended" | "Expired";
 };
 
-const initialUsers: ManagedUser[] = [
-  { id: "u-1", name: "Mary Wanjiku", email: "principal@school.ac.ke", role: "Principal", status: "Active" },
-  { id: "u-2", name: "Peter Otieno", email: "bursar@school.ac.ke", role: "Bursar", status: "Active" },
-  { id: "u-3", name: "Grace Njoroge", email: "teacher@school.ac.ke", role: "Teacher", status: "Invited" },
+type ManagedUserApi = {
+  id?: string;
+  kind?: "member" | "invitation";
+  display_name?: string;
+  email?: string;
+  role_code?: string;
+  role_name?: string;
+  status?: "active" | "suspended" | "invited" | "expired";
+};
+
+type InvitationResponse = ManagedUserApi & {
+  invitation_sent?: boolean;
+  message?: string;
+};
+
+const roleOptions = [
+  { value: "admin", label: "School admin" },
+  { value: "teacher", label: "Teacher" },
+  { value: "accountant", label: "Accountant" },
+  { value: "staff", label: "Staff" },
+  { value: "parent", label: "Parent" },
+  { value: "student", label: "Student" },
+  { value: "storekeeper", label: "Storekeeper" },
+  { value: "librarian", label: "Librarian" },
+  { value: "member", label: "Member" },
 ];
 
+function roleLabel(roleCode: string) {
+  return roleOptions.find((option) => option.value === roleCode)?.label ?? roleCode;
+}
+
 export function UserManagementPanel() {
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("teacher");
+  const [roleCode, setRoleCode] = useState("teacher");
   const [busy, setBusy] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [actionId, setActionId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadUsers() {
+      try {
+        const response = await fetch("/api/auth/invitations", {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const payload = (await response.json().catch(() => null)) as
+          | { users?: ManagedUserApi[]; message?: string }
+          | null;
+
+        if (!response.ok) {
+          throw new Error(payload?.message ?? "Unable to load tenant users.");
+        }
+
+        if (mounted) {
+          setUsers((payload?.users ?? []).map(toManagedUser));
+        }
+      } catch (error) {
+        if (mounted) {
+          setMessage(error instanceof Error ? error.message : "Unable to load tenant users.");
+        }
+      } finally {
+        if (mounted) {
+          setLoadingUsers(false);
+        }
+      }
+    }
+
+    void loadUsers();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   async function inviteUser() {
+    const displayName = name.trim();
+    const inviteEmail = email.trim().toLowerCase();
     setMessage(null);
 
-    if (!name.trim() || !/\S+@\S+\.\S+/.test(email.trim())) {
+    if (!displayName || !/\S+@\S+\.\S+/.test(inviteEmail)) {
       setMessage("Enter a name and valid email before sending an invitation.");
       return;
     }
@@ -43,32 +114,40 @@ export function UserManagementPanel() {
     try {
       const response = await fetch("/api/auth/invitations", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "x-shulehub-csrf": await getCsrfToken(),
+        },
         body: JSON.stringify({
-          display_name: name.trim(),
-          email: email.trim(),
-          role,
+          display_name: displayName,
+          email: inviteEmail,
+          role_code: roleCode,
         }),
       });
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      const payload = (await response.json().catch(() => null)) as InvitationResponse | null;
 
       if (!response.ok) {
         throw new Error(payload?.message ?? "Unable to create invitation.");
       }
 
+      const invitedUser = toManagedUser({
+        id: payload?.id ?? `invite-${Date.now()}`,
+        kind: "invitation",
+        display_name: payload?.display_name ?? displayName,
+        email: payload?.email ?? inviteEmail,
+        role_code: payload?.role_code ?? roleCode,
+        role_name: payload?.role_name ?? roleLabel(roleCode),
+        status: "invited",
+      });
+
       setUsers((current) => [
-        {
-          id: `invite-${Date.now()}`,
-          name: name.trim(),
-          email: email.trim(),
-          role: role.charAt(0).toUpperCase() + role.slice(1),
-          status: "Invited",
-        },
-        ...current,
+        invitedUser,
+        ...current.filter((user) => user.email !== invitedUser.email),
       ]);
       setName("");
       setEmail("");
-      setRole("teacher");
+      setRoleCode("teacher");
       setMessage("Invitation queued for delivery.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to create invitation.");
@@ -77,17 +156,132 @@ export function UserManagementPanel() {
     }
   }
 
-  function toggleSuspended(userId: string) {
-    setUsers((current) =>
-      current.map((user) =>
-        user.id === userId
-          ? {
-              ...user,
-              status: user.status === "Suspended" ? "Active" : "Suspended",
-            }
-          : user,
-      ),
-    );
+  async function resendInvitation(user: ManagedUser) {
+    setActionId(user.id);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/auth/invitations/${user.id}/resend`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "x-shulehub-csrf": await getCsrfToken(),
+        },
+      });
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? "Unable to resend invitation.");
+      }
+
+      setUsers((current) =>
+        current.map((currentUser) =>
+          currentUser.id === user.id ? { ...currentUser, status: "Invited" } : currentUser,
+        ),
+      );
+      setMessage("Invitation resent.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to resend invitation.");
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function revokeInvitation(user: ManagedUser) {
+    setActionId(user.id);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/auth/invitations/${user.id}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: {
+          "x-shulehub-csrf": await getCsrfToken(),
+        },
+      });
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? "Unable to revoke invitation.");
+      }
+
+      setUsers((current) => current.filter((currentUser) => currentUser.id !== user.id));
+      setMessage("Invitation revoked.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to revoke invitation.");
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function updateMembershipStatus(user: ManagedUser, status: "active" | "suspended") {
+    setActionId(user.id);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/auth/tenant-users/${user.id}/status`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "x-shulehub-csrf": await getCsrfToken(),
+        },
+        body: JSON.stringify({ status }),
+      });
+      const payload = (await response.json().catch(() => null)) as ManagedUserApi & { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? "Unable to update membership.");
+      }
+
+      setUsers((current) =>
+        current.map((currentUser) =>
+          currentUser.id === user.id ? toManagedUser(payload ?? {}) : currentUser,
+        ),
+      );
+      setMessage("Membership updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update membership.");
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function updateMembershipRole(user: ManagedUser, nextRoleCode: string) {
+    if (nextRoleCode === user.roleCode) {
+      return;
+    }
+
+    setActionId(user.id);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/auth/tenant-users/${user.id}/role`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "x-shulehub-csrf": await getCsrfToken(),
+        },
+        body: JSON.stringify({ role_code: nextRoleCode }),
+      });
+      const payload = (await response.json().catch(() => null)) as ManagedUserApi & { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? "Unable to update role.");
+      }
+
+      setUsers((current) =>
+        current.map((currentUser) =>
+          currentUser.id === user.id ? toManagedUser(payload ?? {}) : currentUser,
+        ),
+      );
+      setMessage("Role updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update role.");
+    } finally {
+      setActionId(null);
+    }
   }
 
   return (
@@ -116,16 +310,16 @@ export function UserManagementPanel() {
             onChange={(event) => setEmail(event.target.value)}
           />
           <select
+            aria-label="Role"
             className="min-h-10 w-full rounded-[var(--radius-sm)] border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-accent"
-            value={role}
-            onChange={(event) => setRole(event.target.value)}
+            value={roleCode}
+            onChange={(event) => setRoleCode(event.target.value)}
           >
-            <option value="principal">Principal</option>
-            <option value="bursar">Bursar</option>
-            <option value="teacher">Teacher</option>
-            <option value="storekeeper">Storekeeper</option>
-            <option value="librarian">Librarian</option>
-            <option value="parent">Parent</option>
+            {roleOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <Button block onClick={() => void inviteUser()} disabled={busy}>
             <Send className="h-4 w-4" />
@@ -137,18 +331,39 @@ export function UserManagementPanel() {
 
       <DataTable
         title="Tenant users"
-        subtitle="Invite, suspend, and recover tenant access from one controlled surface."
+        subtitle={loadingUsers ? "Loading tenant access..." : "Invite and recover tenant access from one controlled surface."}
         columns={[
           { id: "name", header: "Name", render: (row) => <span className="font-semibold">{row.name}</span> },
           { id: "email", header: "Email", render: (row) => row.email },
-          { id: "role", header: "Role", render: (row) => row.role },
+          {
+            id: "role",
+            header: "Role",
+            render: (row) =>
+              row.kind === "member" ? (
+                <select
+                  aria-label={`Role for ${row.name}`}
+                  className="min-h-8 rounded-[var(--radius-sm)] border border-border bg-surface px-2 text-[13px] text-foreground outline-none focus:border-accent"
+                  value={row.roleCode}
+                  disabled={actionId === row.id}
+                  onChange={(event) => void updateMembershipRole(row, event.target.value)}
+                >
+                  {roleOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                row.role
+              ),
+          },
           {
             id: "status",
             header: "Status",
             render: (row) => (
               <StatusPill
                 label={row.status}
-                tone={row.status === "Suspended" ? "critical" : row.status === "Invited" ? "warning" : "ok"}
+                tone={row.status === "Suspended" || row.status === "Expired" ? "critical" : row.status === "Invited" ? "warning" : "ok"}
               />
             ),
           },
@@ -157,10 +372,46 @@ export function UserManagementPanel() {
             header: "Actions",
             render: (row) => (
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => toggleSuspended(row.id)}>
-                  {row.status === "Suspended" ? <UserCheck className="h-4 w-4" /> : <ShieldBan className="h-4 w-4" />}
-                  {row.status === "Suspended" ? "Activate" : "Suspend"}
-                </Button>
+                {row.kind === "invitation" ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void resendInvitation(row)}
+                      disabled={actionId === row.id}
+                      aria-label={`Resend ${row.name}`}
+                    >
+                      <RotateCw className="h-4 w-4" />
+                      Resend
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void revokeInvitation(row)}
+                      disabled={actionId === row.id}
+                      aria-label={`Revoke ${row.name}`}
+                    >
+                      <ShieldBan className="h-4 w-4" />
+                      Revoke
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      void updateMembershipStatus(
+                        row,
+                        row.status === "Suspended" ? "active" : "suspended",
+                      )
+                    }
+                    disabled={actionId === row.id}
+                    aria-label={`${row.status === "Suspended" ? "Activate" : "Suspend"} ${row.name}`}
+                  >
+                    {row.status === "Suspended" ? <UserCheck className="h-4 w-4" /> : <ShieldBan className="h-4 w-4" />}
+                    {row.status === "Suspended" ? "Activate" : "Suspend"}
+                  </Button>
+                )}
               </div>
             ),
             className: "text-right",
@@ -169,7 +420,29 @@ export function UserManagementPanel() {
         ]}
         rows={users}
         getRowKey={(row) => row.id}
+        emptyMessage={loadingUsers ? "Loading tenant users..." : "No tenant users or pending invitations yet."}
       />
     </div>
   );
+}
+
+function toManagedUser(user: ManagedUserApi): ManagedUser {
+  const status =
+    user.status === "suspended"
+      ? "Suspended"
+      : user.status === "expired"
+        ? "Expired"
+        : user.status === "invited"
+          ? "Invited"
+          : "Active";
+
+  return {
+    id: user.id ?? `${user.kind ?? "member"}-${user.email ?? "unknown"}`,
+    kind: user.kind ?? (status === "Invited" || status === "Expired" ? "invitation" : "member"),
+    name: user.display_name ?? user.email ?? "Unknown user",
+    email: user.email ?? "unknown",
+    roleCode: user.role_code ?? "member",
+    role: user.role_name ?? roleLabel(user.role_code ?? "member"),
+    status,
+  };
 }

@@ -20,12 +20,12 @@ describe("STEP 5: Interaction tests", () => {
     );
   });
 
-  it("routes alerts into their resolution flows", () => {
+  it("keeps alert resolution links absent until live alerts exist", () => {
     renderDashboardScreen({ role: "admin" });
 
     expect(
-      screen.getByRole("link", { name: /outstanding fees need follow-up/i }),
-    ).toHaveAttribute("href", "/dashboard/admin/finance");
+      screen.queryByRole("link", { name: /outstanding fees need follow-up/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("executes quick actions in one click", async () => {
@@ -55,21 +55,16 @@ describe("STEP 5: Interaction tests", () => {
     expect(routerPushMock).toHaveBeenCalledWith("/dashboard/admin/mpesa");
   });
 
-  it("supports instant learner search for admissions by parent phone", async () => {
+  it("does not expose learner search results before real admissions data exists", async () => {
     const user = userEvent.setup();
     renderDashboardScreen({ role: "admissions" });
 
     await user.click(screen.getByLabelText("Global search"));
     await user.type(screen.getByLabelText("Global search"), "300401");
     const searchPanel = await screen.findByTestId("search-panel");
-    const learnerResult = await within(searchPanel).findByRole("button", {
-      name: /brenda atieno/i,
-    });
-
-    await user.click(learnerResult);
-
-    expect(routerPushMock).toHaveBeenCalledWith(
-      "/dashboard/admissions/admissions?view=student-directory&student=stu-001",
+    expect(within(searchPanel).getByText(/no results for/i)).toBeVisible();
+    expect(routerPushMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("student=stu-001"),
     );
   });
 

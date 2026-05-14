@@ -7,6 +7,7 @@ import { AuthSessionRecord, AuthenticatedPrincipal } from './auth.interfaces';
 const AUTH_USER_SESSION_PREFIX = 'auth:user-sessions';
 
 interface CreateSessionInput extends AuthenticatedPrincipal {
+  email_verified_at: string | null;
   refresh_token_id: string;
   refresh_expires_at: string;
   ip_address: string | null;
@@ -44,6 +45,7 @@ export class SessionService {
       permissions: input.permissions,
       session_id: input.session_id,
       is_authenticated: true,
+      email_verified_at: input.email_verified_at,
       refresh_token_id: input.refresh_token_id,
       created_at: now,
       updated_at: now,
@@ -115,6 +117,7 @@ export class SessionService {
     next_refresh_token_id: string;
     role: string;
     permissions: string[];
+    email_verified_at: string | null;
     refresh_expires_at: string;
   }): Promise<AuthSessionRecord> {
     const redis = this.redisService.getClient();
@@ -142,6 +145,7 @@ export class SessionService {
         ...currentSession,
         role: input.role,
         permissions: input.permissions,
+        email_verified_at: input.email_verified_at,
         refresh_token_id: input.next_refresh_token_id,
         refresh_expires_at: input.refresh_expires_at,
         updated_at: new Date().toISOString(),

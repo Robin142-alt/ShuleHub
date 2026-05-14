@@ -14,7 +14,6 @@ import { QueueModule } from './queue/queue.module';
 import { HealthModule } from './modules/health/health.module';
 import { EventsModule } from './modules/events/events.module';
 import { FinanceModule } from './modules/finance/finance.module';
-import { TenantFinanceModule } from './modules/tenant-finance/tenant-finance.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { StudentsModule } from './modules/students/students.module';
@@ -35,10 +34,14 @@ import { ComplianceModule } from './modules/compliance/compliance.module';
 import { ObservabilityModule } from './modules/observability/observability.module';
 import { SecurityModule } from './modules/security/security.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
-import { LibraryModule } from './modules/library/library.module';
 import { AdmissionsModule } from './modules/admissions/admissions.module';
-import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { SupportModule } from './modules/support/support.module';
+import { PlatformModule } from './modules/platform/platform.module';
+import { AcademicsModule } from './modules/academics/academics.module';
+import { ExamsModule } from './modules/exams/exams.module';
+import { HrModule } from './modules/hr/hr.module';
+import { LibraryModule } from './modules/library/library.module';
+import { TimetableModule } from './modules/timetable/timetable.module';
 
 @Module({
   imports: [
@@ -61,12 +64,15 @@ import { SupportModule } from './modules/support/support.module';
     ObservabilityModule,
     SecurityModule,
     InventoryModule,
-    LibraryModule,
     AdmissionsModule,
-    OnboardingModule,
     SupportModule,
+    PlatformModule,
+    AcademicsModule,
+    ExamsModule,
+    HrModule,
+    LibraryModule,
+    TimetableModule,
     FinanceModule,
-    TenantFinanceModule,
     SyncModule,
     StudentsModule,
     PaymentsModule,

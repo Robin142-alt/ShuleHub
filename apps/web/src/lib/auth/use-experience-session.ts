@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { getCsrfToken } from "@/lib/auth/csrf-client";
 import type { ExperienceAudience } from "@/lib/auth/experience-audience";
 import type { ExperienceGatewaySession } from "@/lib/auth/server-session";
 
@@ -119,6 +120,7 @@ export function useExperienceSession(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-shulehub-csrf": await getCsrfToken(),
         },
         credentials: "same-origin",
         body: JSON.stringify({
@@ -151,6 +153,7 @@ export function useExperienceSession(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-shulehub-csrf": await getCsrfToken(),
         },
         credentials: "same-origin",
         body: JSON.stringify({ audience }),
@@ -171,6 +174,7 @@ export function useExperienceSession(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-shulehub-csrf": await getCsrfToken(),
         },
         credentials: "same-origin",
         body: JSON.stringify({

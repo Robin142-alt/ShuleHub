@@ -145,28 +145,9 @@ const sectionCopy: Record<
   },
 };
 
-const departments = [
-  "Exams Office",
-  "Science Lab",
-  "Lower School",
-  "Kitchen",
-  "Boarding",
-  "Games Department",
-  "Maintenance",
-];
-
-const recipients = [
-  "Lucy Wambui",
-  "Moses Otieno",
-  "Chef Ruth Nduta",
-  "Games Master",
-  "Matron Akinyi",
-  "Maintenance Lead",
-];
-
 const reportFilterDefaults: ReportFilters = {
-  dateFrom: "2026-05-01",
-  dateTo: "2026-05-07",
+  dateFrom: "",
+  dateTo: "",
   department: "",
   item: "",
   supplier: "",
@@ -175,19 +156,19 @@ const reportFilterDefaults: ReportFilters = {
 };
 
 const initialIssueForm: IssueFormState = {
-  department: "Exams Office",
-  recipient: "Lucy Wambui",
-  itemId: "item-paper",
-  quantity: "4",
+  department: "",
+  recipient: "",
+  itemId: "",
+  quantity: "",
 };
 
 const initialReceiveForm: ReceiveFormState = {
-  supplier: "Crown Office Supplies",
-  purchaseReference: "PO-2026-031",
-  itemId: "item-paper",
-  quantity: "12",
-  unitCost: "690",
-  batchNumber: "COS-A4-0526",
+  supplier: "",
+  purchaseReference: "",
+  itemId: "",
+  quantity: "",
+  unitCost: "",
+  batchNumber: "",
   expiryDate: "",
 };
 
@@ -473,8 +454,8 @@ function NotePreview({
 
 export function StorekeeperWorkspace({
   section,
-  userLabel = "Storekeeper Amani Prep",
-  tenantSlug = "amani-prep",
+  userLabel = "Storekeeper",
+  tenantSlug = "",
 }: {
   section: StorekeeperSectionId;
   userLabel?: string;
@@ -499,6 +480,8 @@ export function StorekeeperWorkspace({
   const [reportFilters, setReportFilters] = useState<ReportFilters>(reportFilterDefaults);
   const [isIssuePending, startIssueTransition] = useTransition();
   const [isReceivePending, startReceiveTransition] = useTransition();
+  const [isIssueSyncing, setIssueSyncing] = useState(false);
+  const [isReceiveSyncing, setReceiveSyncing] = useState(false);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const activeCopy = sectionCopy[section];
   const ActiveIcon = activeCopy.icon;
@@ -510,6 +493,8 @@ export function StorekeeperWorkspace({
   const alerts = buildStorekeeperAlerts(dataset);
   const stats = buildStorekeeperStats(dataset);
   const reports = buildStorekeeperReports(dataset);
+  const isIssueBusy = isIssuePending || isIssueSyncing;
+  const isReceiveBusy = isReceivePending || isReceiveSyncing;
 
   const filteredItems = dataset.items
     .filter((item) => matchesInventorySearch(item, deferredSearch))
@@ -519,6 +504,10 @@ export function StorekeeperWorkspace({
     .sort(compareInventoryItems(sortKey));
 
   function handleIssueSubmit() {
+    if (isIssueBusy) {
+      return;
+    }
+
     setActionError(null);
     const submissionId = `issue-${Date.now()}-${issueForm.itemId}`;
     const issueInput = {
@@ -534,24 +523,32 @@ export function StorekeeperWorkspace({
       submissionId,
     };
 
-    startIssueTransition(() => {
-      try {
-        const result = issueStoreStock(dataset, issueInput);
+    try {
+      const result = issueStoreStock(dataset, issueInput);
 
-        setDataset(result.dataset);
-        setLastIssueNote(result.issueNote);
-        setIssueModalOpen(false);
-        setSyncMessage("Issue saved locally. Syncing with live inventory API...");
-        void syncStorekeeperStockIssue(issueInput)
-          .then((syncResult) => setSyncMessage(syncResult.message))
-          .catch((error: unknown) => setSyncMessage(getErrorMessage(error)));
-      } catch (error) {
-        setActionError(getErrorMessage(error));
-      }
-    });
+      setIssueSyncing(true);
+      setSyncMessage("Submitting stock issue to the live inventory API...");
+      void syncStorekeeperStockIssue(issueInput)
+        .then((syncResult) => {
+          startIssueTransition(() => {
+            setDataset(result.dataset);
+            setLastIssueNote(result.issueNote);
+            setIssueModalOpen(false);
+            setSyncMessage(syncResult.message);
+          });
+        })
+        .catch((error: unknown) => setActionError(getErrorMessage(error)))
+        .finally(() => setIssueSyncing(false));
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    }
   }
 
   function handleReceiveSubmit() {
+    if (isReceiveBusy) {
+      return;
+    }
+
     setActionError(null);
     const submissionId = `receipt-${Date.now()}-${receiveForm.itemId}`;
     const receiveInput = {
@@ -570,21 +567,25 @@ export function StorekeeperWorkspace({
       submissionId,
     };
 
-    startReceiveTransition(() => {
-      try {
-        const result = receiveStoreStock(dataset, receiveInput);
+    try {
+      const result = receiveStoreStock(dataset, receiveInput);
 
-        setDataset(result.dataset);
-        setLastReceiveNote(result.receiveNote);
-        setReceiveModalOpen(false);
-        setSyncMessage("Receipt saved locally. Syncing with live inventory API...");
-        void syncStorekeeperStockReceipt(receiveInput)
-          .then((syncResult) => setSyncMessage(syncResult.message))
-          .catch((error: unknown) => setSyncMessage(getErrorMessage(error)));
-      } catch (error) {
-        setActionError(getErrorMessage(error));
-      }
-    });
+      setReceiveSyncing(true);
+      setSyncMessage("Submitting stock receipt to the live inventory API...");
+      void syncStorekeeperStockReceipt(receiveInput)
+        .then((syncResult) => {
+          startReceiveTransition(() => {
+            setDataset(result.dataset);
+            setLastReceiveNote(result.receiveNote);
+            setReceiveModalOpen(false);
+            setSyncMessage(syncResult.message);
+          });
+        })
+        .catch((error: unknown) => setActionError(getErrorMessage(error)))
+        .finally(() => setReceiveSyncing(false));
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    }
   }
 
   function printIssueNote(note: StorekeeperIssueNote) {
@@ -717,34 +718,24 @@ export function StorekeeperWorkspace({
       <div className={compact ? "space-y-3" : "space-y-4"}>
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Department">
-            <select
+            <input
               value={issueForm.department}
               onChange={(event) =>
                 setIssueForm((current) => ({ ...current, department: event.target.value }))
               }
               className={inputClassName()}
-            >
-              {departments.map((department) => (
-                <option key={department} value={department}>
-                  {department}
-                </option>
-              ))}
-            </select>
+              placeholder="Department receiving stock"
+            />
           </Field>
           <Field label="Recipient">
-            <select
+            <input
               value={issueForm.recipient}
               onChange={(event) =>
                 setIssueForm((current) => ({ ...current, recipient: event.target.value }))
               }
               className={inputClassName()}
-            >
-              {recipients.map((recipient) => (
-                <option key={recipient} value={recipient}>
-                  {recipient}
-                </option>
-              ))}
-            </select>
+              placeholder="Receiving staff member"
+            />
           </Field>
           <Field label="Item">
             <select
@@ -754,6 +745,7 @@ export function StorekeeperWorkspace({
               }
               className={inputClassName()}
             >
+              <option value="">Select item</option>
               {dataset.items.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.code} - {item.name} ({formatStoreQuantity(item.quantityAvailable, item.unit)})
@@ -791,7 +783,7 @@ export function StorekeeperWorkspace({
             {actionError}
           </div>
         ) : null}
-        {isIssuePending ? <SkeletonCard className="h-9" /> : null}
+        {isIssueBusy ? <SkeletonCard className="h-9" /> : null}
       </div>
     );
   }
@@ -801,19 +793,20 @@ export function StorekeeperWorkspace({
       <div className={compact ? "space-y-3" : "space-y-4"}>
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Supplier">
-            <select
+            <input
               value={receiveForm.supplier}
               onChange={(event) =>
                 setReceiveForm((current) => ({ ...current, supplier: event.target.value }))
               }
               className={inputClassName()}
-            >
+              list="storekeeper-suppliers"
+              placeholder="Supplier name"
+            />
+            <datalist id="storekeeper-suppliers">
               {suppliers.map((supplier) => (
-                <option key={supplier} value={supplier}>
-                  {supplier}
-                </option>
+                <option key={supplier} value={supplier} />
               ))}
-            </select>
+            </datalist>
           </Field>
           <Field label="Purchase reference">
             <input
@@ -832,6 +825,7 @@ export function StorekeeperWorkspace({
               }
               className={inputClassName()}
             >
+              <option value="">Select item</option>
               {dataset.items.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.code} - {item.name}
@@ -886,7 +880,7 @@ export function StorekeeperWorkspace({
             {actionError}
           </div>
         ) : null}
-        {isReceivePending ? <SkeletonCard className="h-9" /> : null}
+        {isReceiveBusy ? <SkeletonCard className="h-9" /> : null}
       </div>
     );
   }
@@ -1173,7 +1167,7 @@ export function StorekeeperWorkspace({
           title="Stock issue workflow"
           subtitle="The storekeeper can complete a validated issue in one screen."
           action={
-            <Button onClick={() => setIssueModalOpen(true)}>
+            <Button disabled={isIssueBusy} onClick={() => setIssueModalOpen(true)}>
               <PackageMinus className="h-3.5 w-3.5" />
               Issue stock
             </Button>
@@ -1193,7 +1187,7 @@ export function StorekeeperWorkspace({
           />
           <div className="mt-4">{renderIssueForm()}</div>
           <div className="mt-4 flex justify-end">
-            <Button disabled={isIssuePending} onClick={handleIssueSubmit}>
+            <Button disabled={isIssueBusy} onClick={handleIssueSubmit}>
               Submit issue
             </Button>
           </div>
@@ -1224,7 +1218,7 @@ export function StorekeeperWorkspace({
           title="Stock receiving workflow"
           subtitle="Post supplier deliveries with purchase reference, batches, expiry dates, and cost."
           action={
-            <Button onClick={() => setReceiveModalOpen(true)}>
+            <Button disabled={isReceiveBusy} onClick={() => setReceiveModalOpen(true)}>
               <PackageCheck className="h-3.5 w-3.5" />
               Receive stock
             </Button>
@@ -1244,7 +1238,7 @@ export function StorekeeperWorkspace({
           />
           <div className="mt-4">{renderReceiveForm()}</div>
           <div className="mt-4 flex justify-end">
-            <Button disabled={isReceivePending} onClick={handleReceiveSubmit}>
+            <Button disabled={isReceiveBusy} onClick={handleReceiveSubmit}>
               Post receipt
             </Button>
           </div>
@@ -1400,20 +1394,14 @@ export function StorekeeperWorkspace({
               />
             </Field>
             <Field label="Department">
-              <select
+              <input
                 value={reportFilters.department}
                 onChange={(event) =>
                   setReportFilters((current) => ({ ...current, department: event.target.value }))
                 }
                 className={inputClassName()}
-              >
-                <option value="">All</option>
-                {departments.map((department) => (
-                  <option key={department} value={department}>
-                    {department}
-                  </option>
-                ))}
-              </select>
+                placeholder="Filter by department"
+              />
             </Field>
             <Field label="Item">
               <select
@@ -1670,11 +1658,11 @@ export function StorekeeperWorkspace({
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={() => setReceiveModalOpen(true)}>
+                    <Button variant="secondary" disabled={isReceiveBusy} onClick={() => setReceiveModalOpen(true)}>
                   <PackageCheck className="h-3.5 w-3.5" />
                   Receive stock
                 </Button>
-                <Button onClick={() => setIssueModalOpen(true)}>
+                    <Button disabled={isIssueBusy} onClick={() => setIssueModalOpen(true)}>
                   <PackageMinus className="h-3.5 w-3.5" />
                   Issue stock
                 </Button>
@@ -1716,7 +1704,7 @@ export function StorekeeperWorkspace({
             >
               Cancel
             </Button>
-            <Button disabled={isIssuePending} onClick={handleIssueSubmit}>
+            <Button disabled={isIssueBusy} onClick={handleIssueSubmit}>
               Submit issue
             </Button>
           </>
@@ -1745,7 +1733,7 @@ export function StorekeeperWorkspace({
             >
               Cancel
             </Button>
-            <Button disabled={isReceivePending} onClick={handleReceiveSubmit}>
+            <Button disabled={isReceiveBusy} onClick={handleReceiveSubmit}>
               Post receipt
             </Button>
           </>

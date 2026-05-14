@@ -5,6 +5,7 @@ import { NestFactory } from '@nestjs/core';
 import { AbstractHttpAdapter } from '@nestjs/core/adapters/http-adapter';
 
 import { AppModule } from './app.module';
+import { resolveCorsOriginPolicy } from './app-cors-policy';
 import { StructuredLoggerService } from './modules/observability/structured-logger.service';
 
 export const createApp = async (
@@ -38,17 +39,21 @@ export const createApp = async (
       'DELETE',
       'OPTIONS',
     ];
+    const corsCredentials =
+      configService.get<boolean>('app.corsCredentials') ?? true;
+    const corsOriginPolicy = resolveCorsOriginPolicy({
+      nodeEnv: configService.get<string>('app.nodeEnv') ?? 'development',
+      origins: corsOrigins,
+      credentials: corsCredentials,
+    });
 
     app.enableCors({
-      origin:
-        corsOrigins.length === 0 || corsOrigins.includes('*')
-          ? true
-          : corsOrigins,
+      origin: corsOriginPolicy,
       methods: corsMethods,
-      credentials: configService.get<boolean>('app.corsCredentials') ?? true,
+      credentials: corsCredentials,
     });
     logger.log(
-      `CORS enabled for ${corsOrigins.length === 0 ? 'all origins' : corsOrigins.join(', ')}`,
+      `CORS enabled for ${corsOriginPolicy === true ? 'all origins' : corsOriginPolicy.join(', ')}`,
     );
   }
 

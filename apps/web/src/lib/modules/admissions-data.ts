@@ -139,13 +139,6 @@ export interface StudentAcademicLine {
   note: string;
 }
 
-export interface StudentAttendanceLine {
-  id: string;
-  date: string;
-  status: string;
-  note: string;
-}
-
 export interface StudentDisciplineLine {
   id: string;
   date: string;
@@ -185,11 +178,12 @@ export interface AdmissionsStudentProfile {
   feesBalance: number;
   lastPayment: string;
   billingPlan: string;
+  portalAccessStatus: "active" | "invited" | "not_invited";
+  portalAccessDetail: string;
   allergies: string;
   conditions: string;
   emergencyContact: string;
   academics: StudentAcademicLine[];
-  attendance: StudentAttendanceLine[];
   discipline: StudentDisciplineLine[];
   fees: StudentFeesLine[];
   documents: StudentProfileDocument[];
@@ -200,8 +194,17 @@ export interface AdmissionsReportCard {
   title: string;
   description: string;
   filename: string;
+  serverExportId?: string;
   headers: string[];
   rows: string[][];
+}
+
+export interface AdmissionsSearchItem {
+  id: string;
+  label: string;
+  description: string;
+  href: string;
+  kind: "student";
 }
 
 export interface AdmissionsDataset {
@@ -214,686 +217,30 @@ export interface AdmissionsDataset {
   studentProfiles: AdmissionsStudentProfile[];
 }
 
-const baseApplications: AdmissionApplication[] = [
-  {
-    id: "app-001",
-    applicationNumber: "APP-20260504-118",
-    applicantName: "Brenda Atieno",
-    admissionNumber: "ADM-G7-118",
-    classApplying: "Grade 7",
-    parentName: "Janet Atieno",
-    parentPhone: "+254 712 300 401",
-    status: "registered",
-    dateApplied: "2026-05-04",
-    gender: "Female",
-    dateOfBirth: "2014-02-19",
-    birthCertificateNumber: "BC-448211",
-    nationality: "Kenyan",
-    previousSchool: "Lakeview Junior School",
-    kcpeResults: "368 marks",
-    cbcLevel: "Grade 6 complete",
-    parentEmail: "janet.atieno@gmail.com",
-    occupation: "Clinical officer",
-    relationship: "Mother",
-    allergies: "Peanuts",
-    conditions: "None",
-    emergencyContact: "+254 722 911 404",
-    reviewNote: "Interview complete and family orientation done.",
-  },
-  {
-    id: "app-002",
-    applicationNumber: "APP-20260503-112",
-    applicantName: "Ian Mwangi",
-    admissionNumber: "PENDING",
-    classApplying: "Grade 4",
-    parentName: "Paul Mwangi",
-    parentPhone: "+254 723 111 819",
-    status: "pending",
-    dateApplied: "2026-05-03",
-    gender: "Male",
-    dateOfBirth: "2017-09-13",
-    birthCertificateNumber: "BC-667140",
-    nationality: "Kenyan",
-    previousSchool: "Roysambu Christian Academy",
-    kcpeResults: "N/A",
-    cbcLevel: "Grade 3 complete",
-    parentEmail: "paul.mwangi@yahoo.com",
-    occupation: "Project manager",
-    relationship: "Father",
-    allergies: "None",
-    conditions: "Asthma",
-    emergencyContact: "+254 733 311 881",
-    reviewNote: "Passport photo missing from file.",
-  },
-  {
-    id: "app-003",
-    applicationNumber: "APP-20260503-115",
-    applicantName: "Mercy Chebet",
-    admissionNumber: "ADM-G8-046",
-    classApplying: "Grade 8",
-    parentName: "Rose Chebet",
-    parentPhone: "+254 711 441 099",
-    status: "approved",
-    dateApplied: "2026-05-03",
-    gender: "Female",
-    dateOfBirth: "2012-11-09",
-    birthCertificateNumber: "BC-774012",
-    nationality: "Kenyan",
-    previousSchool: "Kericho Hills School",
-    kcpeResults: "380 marks",
-    cbcLevel: "Grade 7 complete",
-    parentEmail: "rchebet@gmail.com",
-    occupation: "Lecturer",
-    relationship: "Mother",
-    allergies: "None",
-    conditions: "None",
-    emergencyContact: "+254 701 440 203",
-    reviewNote: "Ready for admission number confirmation and allocation.",
-  },
-  {
-    id: "app-004",
-    applicationNumber: "APP-20260502-108",
-    applicantName: "Hassan Noor",
-    admissionNumber: "PENDING",
-    classApplying: "Grade 5",
-    parentName: "Amina Noor",
-    parentPhone: "+254 721 889 440",
-    status: "interview",
-    dateApplied: "2026-05-02",
-    gender: "Male",
-    dateOfBirth: "2016-04-18",
-    birthCertificateNumber: "BC-902113",
-    nationality: "Kenyan",
-    previousSchool: "Eastleigh Education Centre",
-    kcpeResults: "N/A",
-    cbcLevel: "Grade 4 complete",
-    parentEmail: "amina.noor@mail.com",
-    occupation: "Trader",
-    relationship: "Mother",
-    allergies: "Seafood",
-    conditions: "None",
-    emergencyContact: "+254 721 800 310",
-    reviewNote: "Interview scheduled for Tuesday afternoon.",
-  },
-  {
-    id: "app-005",
-    applicationNumber: "APP-20260501-104",
-    applicantName: "Sheila Akinyi",
-    admissionNumber: "N/A",
-    classApplying: "Grade 9",
-    parentName: "Daniel Ouma",
-    parentPhone: "+254 724 555 120",
-    status: "rejected",
-    dateApplied: "2026-05-01",
-    gender: "Female",
-    dateOfBirth: "2011-06-24",
-    birthCertificateNumber: "BC-553010",
-    nationality: "Kenyan",
-    previousSchool: "Migosi Academy",
-    kcpeResults: "289 marks",
-    cbcLevel: "Grade 8 complete",
-    parentEmail: "d.ouma@mail.com",
-    occupation: "Driver",
-    relationship: "Father",
-    allergies: "None",
-    conditions: "None",
-    emergencyContact: "+254 710 100 887",
-    reviewNote: "Class level unavailable and application deferred.",
-  },
-  {
-    id: "app-006",
-    applicationNumber: "APP-20260430-098",
-    applicantName: "Daniel Kiptoo",
-    admissionNumber: "ADM-G6-082",
-    classApplying: "Grade 6",
-    parentName: "Leah Kiptoo",
-    parentPhone: "+254 733 991 240",
-    status: "registered",
-    dateApplied: "2026-04-30",
-    gender: "Male",
-    dateOfBirth: "2015-08-14",
-    birthCertificateNumber: "BC-330119",
-    nationality: "Kenyan",
-    previousSchool: "Hilltop Academy",
-    kcpeResults: "N/A",
-    cbcLevel: "Grade 5 complete",
-    parentEmail: "leah.kiptoo@gmail.com",
-    occupation: "Farmer",
-    relationship: "Mother",
-    allergies: "None",
-    conditions: "None",
-    emergencyContact: "+254 717 222 118",
-    reviewNote: "Transport route assigned and welcome pack issued.",
-  },
-];
-
-const baseStudents: StudentDirectoryEntry[] = [
-  {
-    id: "stu-001",
-    fullName: "Brenda Atieno",
-    admissionNumber: "ADM-G7-118",
-    className: "Grade 7",
-    streamName: "Hope",
-    parentName: "Janet Atieno",
-    parentPhone: "+254 712 300 401",
-    status: "registered",
-    registrationDate: "2026-05-04",
-  },
-  {
-    id: "stu-002",
-    fullName: "Mercy Chebet",
-    admissionNumber: "ADM-G8-046",
-    className: "Grade 8",
-    streamName: "Imani",
-    parentName: "Rose Chebet",
-    parentPhone: "+254 711 441 099",
-    status: "pending_allocation",
-    registrationDate: "2026-05-03",
-  },
-  {
-    id: "stu-003",
-    fullName: "Daniel Kiptoo",
-    admissionNumber: "ADM-G6-082",
-    className: "Grade 6",
-    streamName: "Baraka",
-    parentName: "Leah Kiptoo",
-    parentPhone: "+254 733 991 240",
-    status: "registered",
-    registrationDate: "2026-04-30",
-  },
-  {
-    id: "stu-004",
-    fullName: "Faith Muthoni",
-    admissionNumber: "ADM-PP2-031",
-    className: "PP2",
-    streamName: "Tulip",
-    parentName: "James Muthoni",
-    parentPhone: "+254 720 112 211",
-    status: "registered",
-    registrationDate: "2026-04-28",
-  },
-  {
-    id: "stu-005",
-    fullName: "Allan Odhiambo",
-    admissionNumber: "ADM-G5-067",
-    className: "Grade 5",
-    streamName: "Jasiri",
-    parentName: "Dorothy Odhiambo",
-    parentPhone: "+254 722 891 114",
-    status: "registered",
-    registrationDate: "2026-04-26",
-  },
-];
-
-const baseParents: ParentDirectoryEntry[] = [
-  {
-    id: "par-001",
-    parentName: "Janet Atieno",
-    phone: "+254 712 300 401",
-    email: "janet.atieno@gmail.com",
-    occupation: "Clinical officer",
-    relationship: "Mother",
-    learners: "Brenda Atieno",
-  },
-  {
-    id: "par-002",
-    parentName: "Rose Chebet",
-    phone: "+254 711 441 099",
-    email: "rchebet@gmail.com",
-    occupation: "Lecturer",
-    relationship: "Mother",
-    learners: "Mercy Chebet",
-  },
-  {
-    id: "par-003",
-    parentName: "Leah Kiptoo",
-    phone: "+254 733 991 240",
-    email: "leah.kiptoo@gmail.com",
-    occupation: "Farmer",
-    relationship: "Mother",
-    learners: "Daniel Kiptoo",
-  },
-  {
-    id: "par-004",
-    parentName: "James Muthoni",
-    phone: "+254 720 112 211",
-    email: "j.muthoni@gmail.com",
-    occupation: "Procurement officer",
-    relationship: "Father",
-    learners: "Faith Muthoni",
-  },
-  {
-    id: "par-005",
-    parentName: "Dorothy Odhiambo",
-    phone: "+254 722 891 114",
-    email: "dorothy.o@gmail.com",
-    occupation: "Business owner",
-    relationship: "Mother",
-    learners: "Allan Odhiambo",
-  },
-];
-
-const baseDocuments: AdmissionsDocument[] = [
-  {
-    id: "doc-001",
-    learnerName: "Brenda Atieno",
-    documentType: "Birth certificate",
-    fileName: "brenda-birth-certificate.pdf",
-    uploadedOn: "2026-05-04",
-    verificationStatus: "verified",
-    ownerType: "student",
-  },
-  {
-    id: "doc-002",
-    learnerName: "Brenda Atieno",
-    documentType: "Passport photo",
-    fileName: "brenda-passport.jpg",
-    uploadedOn: "2026-05-04",
-    verificationStatus: "verified",
-    ownerType: "student",
-  },
-  {
-    id: "doc-003",
-    learnerName: "Mercy Chebet",
-    documentType: "Previous report forms",
-    fileName: "mercy-report-forms.pdf",
-    uploadedOn: "2026-05-03",
-    verificationStatus: "pending",
-    ownerType: "application",
-  },
-  {
-    id: "doc-004",
-    learnerName: "Ian Mwangi",
-    documentType: "Passport photo",
-    fileName: "Not uploaded",
-    uploadedOn: "-",
-    verificationStatus: "missing",
-    ownerType: "application",
-  },
-  {
-    id: "doc-005",
-    learnerName: "Hassan Noor",
-    documentType: "Birth certificate",
-    fileName: "hassan-bc.pdf",
-    uploadedOn: "2026-05-02",
-    verificationStatus: "pending",
-    ownerType: "application",
-  },
-  {
-    id: "doc-006",
-    learnerName: "Daniel Kiptoo",
-    documentType: "Previous report forms",
-    fileName: "daniel-report.pdf",
-    uploadedOn: "2026-04-30",
-    verificationStatus: "verified",
-    ownerType: "student",
-  },
-];
-
-const baseAllocations: ClassAllocation[] = [
-  {
-    id: "alloc-001",
-    studentId: "stu-001",
-    studentName: "Brenda Atieno",
-    admissionNumber: "ADM-G7-118",
-    className: "Grade 7",
-    streamName: "Hope",
-    dormitoryName: "Mara House",
-    transportRoute: "Eastern Bypass",
-    effectiveFrom: "2026-05-04",
-    status: "assigned",
-  },
-  {
-    id: "alloc-002",
-    studentId: "stu-002",
-    studentName: "Mercy Chebet",
-    admissionNumber: "ADM-G8-046",
-    className: "Grade 8",
-    streamName: "Pending",
-    dormitoryName: "Pending",
-    transportRoute: "Pending",
-    effectiveFrom: "2026-05-03",
-    status: "pending",
-  },
-  {
-    id: "alloc-003",
-    studentId: "stu-003",
-    studentName: "Daniel Kiptoo",
-    admissionNumber: "ADM-G6-082",
-    className: "Grade 6",
-    streamName: "Baraka",
-    dormitoryName: "None",
-    transportRoute: "Ngong Road",
-    effectiveFrom: "2026-04-30",
-    status: "assigned",
-  },
-];
-
-const baseTransfers: AdmissionsTransfer[] = [
-  {
-    id: "trn-001",
-    learnerName: "Mercy Chebet",
-    admissionNumber: "ADM-G8-046",
-    direction: "incoming",
-    schoolName: "Kericho Hills School",
-    reason: "Parent relocation to Nairobi",
-    requestedOn: "2026-05-03",
-    status: "pending",
-  },
-  {
-    id: "trn-002",
-    learnerName: "Allan Odhiambo",
-    admissionNumber: "ADM-G5-067",
-    direction: "outgoing",
-    schoolName: "Kisumu Junior Academy",
-    reason: "Family transfer to Kisumu",
-    requestedOn: "2026-04-26",
-    status: "completed",
-  },
-];
-
-const baseProfiles: AdmissionsStudentProfile[] = [
-  {
-    id: "stu-001",
-    fullName: "Brenda Atieno",
-    admissionNumber: "ADM-G7-118",
-    className: "Grade 7",
-    streamName: "Hope",
-    dormitoryName: "Mara House",
-    transportRoute: "Eastern Bypass",
-    gender: "Female",
-    dateOfBirth: "2014-02-19",
-    nationality: "Kenyan",
-    parentName: "Janet Atieno",
-    parentPhone: "+254 712 300 401",
-    parentEmail: "janet.atieno@gmail.com",
-    occupation: "Clinical officer",
-    relationship: "Mother",
-    previousSchool: "Lakeview Junior School",
-    kcpeResults: "368 marks",
-    cbcLevel: "Grade 6 complete",
-    registrationDate: "2026-05-04",
-    applicationStatus: "registered",
-    feesBalance: 24500,
-    lastPayment: "2026-05-02 M-PESA KES 15,000",
-    billingPlan: "Tuition + lunch + transport",
-    allergies: "Peanuts",
-    conditions: "None",
-    emergencyContact: "+254 722 911 404",
-    academics: [
-      {
-        id: "acad-001",
-        subject: "English",
-        value: "Meeting expectation",
-        note: "Strong oral communication and written summary skills.",
-      },
-      {
-        id: "acad-002",
-        subject: "Mathematics",
-        value: "Approaching expectation",
-        note: "Needs support on fractions baseline transition.",
-      },
-      {
-        id: "acad-003",
-        subject: "Science",
-        value: "Meeting expectation",
-        note: "Practical readiness confirmed during interview.",
-      },
-    ],
-    attendance: [
-      {
-        id: "att-001",
-        date: "2026-05-04",
-        status: "Present",
-        note: "Orientation day attendance confirmed.",
-      },
-      {
-        id: "att-002",
-        date: "2026-05-05",
-        status: "Present",
-        note: "Reported to class and transport pick-up logged.",
-      },
-    ],
-    discipline: [
-      {
-        id: "disc-001",
-        date: "2026-05-04",
-        entry: "No disciplinary concern on file.",
-        status: "Clear",
-      },
-    ],
-    fees: [
-      {
-        id: "fee-001",
-        item: "Admission fee",
-        amount: 10000,
-        status: "posted",
-      },
-      {
-        id: "fee-002",
-        item: "Tuition deposit",
-        amount: 15000,
-        status: "posted",
-      },
-      {
-        id: "fee-003",
-        item: "Transport setup",
-        amount: 9500,
-        status: "pending",
-      },
-    ],
-    documents: [
-      {
-        id: "doc-prof-001",
-        documentType: "Birth certificate",
-        fileName: "brenda-birth-certificate.pdf",
-        uploadedOn: "2026-05-04",
-        verificationStatus: "verified",
-      },
-      {
-        id: "doc-prof-002",
-        documentType: "Passport photo",
-        fileName: "brenda-passport.jpg",
-        uploadedOn: "2026-05-04",
-        verificationStatus: "verified",
-      },
-      {
-        id: "doc-prof-003",
-        documentType: "Previous report forms",
-        fileName: "brenda-report-forms.pdf",
-        uploadedOn: "2026-05-04",
-        verificationStatus: "pending",
-      },
-    ],
-  },
-  {
-    id: "stu-002",
-    fullName: "Mercy Chebet",
-    admissionNumber: "ADM-G8-046",
-    className: "Grade 8",
-    streamName: "Pending",
-    dormitoryName: "Pending",
-    transportRoute: "Pending",
-    gender: "Female",
-    dateOfBirth: "2012-11-09",
-    nationality: "Kenyan",
-    parentName: "Rose Chebet",
-    parentPhone: "+254 711 441 099",
-    parentEmail: "rchebet@gmail.com",
-    occupation: "Lecturer",
-    relationship: "Mother",
-    previousSchool: "Kericho Hills School",
-    kcpeResults: "380 marks",
-    cbcLevel: "Grade 7 complete",
-    registrationDate: "2026-05-03",
-    applicationStatus: "approved",
-    feesBalance: 40500,
-    lastPayment: "No payment posted yet",
-    billingPlan: "Admission fee pending confirmation",
-    allergies: "None",
-    conditions: "None",
-    emergencyContact: "+254 701 440 203",
-    academics: [
-      {
-        id: "acad-101",
-        subject: "English",
-        value: "Exceeding expectation",
-        note: "High reading fluency from transfer records.",
-      },
-      {
-        id: "acad-102",
-        subject: "Mathematics",
-        value: "Meeting expectation",
-        note: "Strong KCPE transition baseline.",
-      },
-    ],
-    attendance: [
-      {
-        id: "att-101",
-        date: "2026-05-03",
-        status: "Pending start",
-        note: "Registration done, class allocation not complete.",
-      },
-    ],
-    discipline: [
-      {
-        id: "disc-101",
-        date: "2026-05-03",
-        entry: "No record",
-        status: "Clear",
-      },
-    ],
-    fees: [
-      {
-        id: "fee-101",
-        item: "Admission fee",
-        amount: 12000,
-        status: "pending",
-      },
-      {
-        id: "fee-102",
-        item: "Tuition deposit",
-        amount: 28500,
-        status: "pending",
-      },
-    ],
-    documents: [
-      {
-        id: "doc-prof-101",
-        documentType: "Previous report forms",
-        fileName: "mercy-report-forms.pdf",
-        uploadedOn: "2026-05-03",
-        verificationStatus: "pending",
-      },
-      {
-        id: "doc-prof-102",
-        documentType: "Birth certificate",
-        fileName: "mercy-birth-certificate.pdf",
-        uploadedOn: "2026-05-03",
-        verificationStatus: "verified",
-      },
-    ],
-  },
-  {
-    id: "stu-003",
-    fullName: "Daniel Kiptoo",
-    admissionNumber: "ADM-G6-082",
-    className: "Grade 6",
-    streamName: "Baraka",
-    dormitoryName: "None",
-    transportRoute: "Ngong Road",
-    gender: "Male",
-    dateOfBirth: "2015-08-14",
-    nationality: "Kenyan",
-    parentName: "Leah Kiptoo",
-    parentPhone: "+254 733 991 240",
-    parentEmail: "leah.kiptoo@gmail.com",
-    occupation: "Farmer",
-    relationship: "Mother",
-    previousSchool: "Hilltop Academy",
-    kcpeResults: "N/A",
-    cbcLevel: "Grade 5 complete",
-    registrationDate: "2026-04-30",
-    applicationStatus: "registered",
-    feesBalance: 18000,
-    lastPayment: "2026-05-01 Cash Office KES 12,000",
-    billingPlan: "Tuition + lunch",
-    allergies: "None",
-    conditions: "None",
-    emergencyContact: "+254 717 222 118",
-    academics: [
-      {
-        id: "acad-201",
-        subject: "Science",
-        value: "Meeting expectation",
-        note: "Strong participation during entry assessment.",
-      },
-    ],
-    attendance: [
-      {
-        id: "att-201",
-        date: "2026-05-02",
-        status: "Present",
-        note: "Reported on time.",
-      },
-    ],
-    discipline: [
-      {
-        id: "disc-201",
-        date: "2026-04-30",
-        entry: "No record",
-        status: "Clear",
-      },
-    ],
-    fees: [
-      {
-        id: "fee-201",
-        item: "Admission fee",
-        amount: 8000,
-        status: "posted",
-      },
-      {
-        id: "fee-202",
-        item: "Tuition deposit",
-        amount: 22000,
-        status: "pending",
-      },
-    ],
-    documents: [
-      {
-        id: "doc-prof-201",
-        documentType: "Birth certificate",
-        fileName: "daniel-bc.pdf",
-        uploadedOn: "2026-04-30",
-        verificationStatus: "verified",
-      },
-    ],
-  },
-];
+export interface AdmissionsTransportOptions {
+  transportEnabled?: boolean;
+}
 
 export function createAdmissionsDataset(): AdmissionsDataset {
   return {
-    applications: baseApplications.map((item) => ({ ...item })),
-    students: baseStudents.map((item) => ({ ...item })),
-    parents: baseParents.map((item) => ({ ...item })),
-    documents: baseDocuments.map((item) => ({ ...item })),
-    allocations: baseAllocations.map((item) => ({ ...item })),
-    transfers: baseTransfers.map((item) => ({ ...item })),
-    studentProfiles: baseProfiles.map((profile) => ({
-      ...profile,
-      academics: profile.academics.map((item) => ({ ...item })),
-      attendance: profile.attendance.map((item) => ({ ...item })),
-      discipline: profile.discipline.map((item) => ({ ...item })),
-      fees: profile.fees.map((item) => ({ ...item })),
-      documents: profile.documents.map((item) => ({ ...item })),
-    })),
+    applications: [],
+    students: [],
+    parents: [],
+    documents: [],
+    allocations: [],
+    transfers: [],
+    studentProfiles: [],
   };
 }
 
-export function buildAdmissionsModuleSections(data: AdmissionsDataset): ModuleShellSectionData[] {
+export function buildAdmissionsModuleSections(
+  data: AdmissionsDataset,
+  options: AdmissionsTransportOptions = {},
+): ModuleShellSectionData[] {
   const pendingApplications = data.applications.filter((item) => item.status === "pending").length;
   const missingDocs = data.documents.filter((item) => item.verificationStatus === "missing").length;
   const pendingAllocations = data.allocations.filter((item) => item.status === "pending").length;
+  const transportEnabled = options.transportEnabled === true;
 
   return [
     {
@@ -934,7 +281,9 @@ export function buildAdmissionsModuleSections(data: AdmissionsDataset): ModuleSh
     {
       id: "class-allocation",
       label: "Class Allocation",
-      description: "Class, stream, dormitory, and route assignment.",
+      description: transportEnabled
+        ? "Class, stream, dormitory, and route assignment."
+        : "Class, stream, and dormitory assignment.",
       badge: `${pendingAllocations} pending`,
       tone: pendingAllocations > 0 ? "warning" : "ok",
     },
@@ -955,7 +304,7 @@ export function buildAdmissionsModuleSections(data: AdmissionsDataset): ModuleSh
 }
 
 export function buildAdmissionsStatStrip(data: AdmissionsDataset): StatStripDataItem[] {
-  const newApplications = data.applications.filter((item) => item.dateApplied >= "2026-05-01").length;
+  const newApplications = data.applications.length;
   const approvedStudents = data.applications.filter((item) => item.status === "approved").length;
   const pendingReview = data.applications.filter(
     (item) => item.status === "pending" || item.status === "interview",
@@ -1040,17 +389,20 @@ export function getTransferTone(status: "pending" | "completed"): StatusTone {
   return status === "pending" ? "warning" : "ok";
 }
 
-export function buildAdmissionsTrend() {
-  return [
-    { id: "trend-jan", label: "Jan", applications: 11, registered: 8 },
-    { id: "trend-feb", label: "Feb", applications: 15, registered: 10 },
-    { id: "trend-mar", label: "Mar", applications: 18, registered: 12 },
-    { id: "trend-apr", label: "Apr", applications: 22, registered: 15 },
-    { id: "trend-may", label: "May", applications: 14, registered: 6 },
-  ];
+export function buildAdmissionsTrend(): Array<{
+  id: string;
+  label: string;
+  applications: number;
+  registered: number;
+}> {
+  return [];
 }
 
-export function buildAdmissionsReports(data: AdmissionsDataset): AdmissionsReportCard[] {
+export function buildAdmissionsReports(
+  data: AdmissionsDataset,
+  options: AdmissionsTransportOptions = {},
+): AdmissionsReportCard[] {
+  const transportEnabled = options.transportEnabled === true;
   const applicationsRows = data.applications.map((application) => [
     application.applicantName,
     application.applicationNumber,
@@ -1067,14 +419,24 @@ export function buildAdmissionsReports(data: AdmissionsDataset): AdmissionsRepor
     formatDocumentStatus(document.verificationStatus),
   ]);
 
-  const allocationRows = data.allocations.map((allocation) => [
-    allocation.studentName,
-    allocation.className,
-    allocation.streamName,
-    allocation.dormitoryName,
-    allocation.transportRoute,
-    formatAllocationStatus(allocation.status),
-  ]);
+  const allocationRows = data.allocations.map((allocation) =>
+    transportEnabled
+      ? [
+          allocation.studentName,
+          allocation.className,
+          allocation.streamName,
+          allocation.dormitoryName,
+          allocation.transportRoute,
+          formatAllocationStatus(allocation.status),
+        ]
+      : [
+          allocation.studentName,
+          allocation.className,
+          allocation.streamName,
+          allocation.dormitoryName,
+          formatAllocationStatus(allocation.status),
+        ],
+  );
 
   const transferRows = data.transfers.map((transfer) => [
     transfer.learnerName,
@@ -1091,6 +453,7 @@ export function buildAdmissionsReports(data: AdmissionsDataset): AdmissionsRepor
       title: "Applications register",
       description: "Applicant status mix and parent contact register.",
       filename: "admissions-applications.csv",
+      serverExportId: "applications",
       headers: ["Applicant", "Application No", "Class", "Parent Phone", "Status"],
       rows: applicationsRows,
     },
@@ -1099,15 +462,21 @@ export function buildAdmissionsReports(data: AdmissionsDataset): AdmissionsRepor
       title: "Document compliance",
       description: "Uploaded and missing admissions document trail.",
       filename: "admissions-documents.csv",
+      serverExportId: "documents",
       headers: ["Learner", "Document", "File", "Uploaded On", "Verification"],
       rows: documentsRows,
     },
     {
       id: "report-allocations",
       title: "Allocation report",
-      description: "Class, stream, boarding, and route allocation posture.",
+      description: transportEnabled
+        ? "Class, stream, boarding, and route allocation posture."
+        : "Class, stream, and boarding allocation posture.",
       filename: "admissions-allocations.csv",
-      headers: ["Student", "Class", "Stream", "Dormitory", "Route", "Status"],
+      serverExportId: "allocations",
+      headers: transportEnabled
+        ? ["Student", "Class", "Stream", "Dormitory", "Route", "Status"]
+        : ["Student", "Class", "Stream", "Dormitory", "Status"],
       rows: allocationRows,
     },
     {
@@ -1115,27 +484,16 @@ export function buildAdmissionsReports(data: AdmissionsDataset): AdmissionsRepor
       title: "Transfer history",
       description: "Incoming and outgoing transfer operational history.",
       filename: "admissions-transfers.csv",
+      serverExportId: "transfers",
       headers: ["Learner", "Admission No", "Direction", "School", "Date", "Status"],
       rows: transferRows,
     },
   ];
 }
 
-export function buildAdmissionsSearchItems(role: DashboardRole) {
-  if (role === "storekeeper") {
-    return [];
-  }
-
-  return baseStudents.map((student) => ({
-    id: `student-search-${student.id}`,
-    label: `${student.fullName} (${student.admissionNumber})`,
-    description: `${student.className} ${student.streamName} · Parent ${student.parentPhone}`,
-    href:
-      role === "admissions"
-        ? `/dashboard/admissions/admissions?view=student-directory&student=${student.id}`
-        : `/dashboard/${role}/students/${student.id}`,
-    kind: "student" as const,
-  }));
+export function buildAdmissionsSearchItems(role: DashboardRole): AdmissionsSearchItem[] {
+  void role;
+  return [];
 }
 
 export function buildFeesSummary(balance: number) {

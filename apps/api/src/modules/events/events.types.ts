@@ -1,4 +1,8 @@
-export type SupportedDomainEventName = 'student.created' | 'payment.completed';
+export type SupportedDomainEventName =
+  | 'student.created'
+  | 'student.academic_enrollment.created'
+  | 'student.academic_lifecycle.changed'
+  | 'payment.completed';
 export type OutboxEventStatus =
   | 'pending'
   | 'processing'
@@ -34,8 +38,40 @@ export interface PaymentCompletedPayload {
   completed_at: string;
 }
 
+export interface StudentAcademicEnrollmentCreatedPayload {
+  tenant_id: string;
+  student_id: string;
+  academic_enrollment_id: string;
+  application_id?: string | null;
+  class_section_id?: string | null;
+  class_name: string;
+  stream_name: string;
+  academic_year: string;
+  status: string;
+  occurred_at: string;
+}
+
+export interface StudentAcademicLifecycleChangedPayload {
+  tenant_id: string;
+  student_id: string;
+  lifecycle_event_id: string;
+  event_type: 'promotion' | 'graduation' | 'archive';
+  source_enrollment_id: string;
+  target_enrollment_id?: string | null;
+  from_class_name: string;
+  from_stream_name: string;
+  from_academic_year: string;
+  to_class_name?: string | null;
+  to_stream_name?: string | null;
+  to_academic_year?: string | null;
+  reason: string;
+  occurred_at: string;
+}
+
 export interface DomainEventPayloadMap {
   'student.created': StudentCreatedPayload;
+  'student.academic_enrollment.created': StudentAcademicEnrollmentCreatedPayload;
+  'student.academic_lifecycle.changed': StudentAcademicLifecycleChangedPayload;
   'payment.completed': PaymentCompletedPayload;
 }
 

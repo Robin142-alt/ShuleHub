@@ -82,8 +82,8 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
-  IF request_path NOT IN ('/auth/login', '/auth/register') THEN
-    RAISE EXCEPTION 'Auth user lookup is only available on login and registration routes'
+  IF request_path <> '/auth/login' THEN
+    RAISE EXCEPTION 'Auth user lookup is only available on login routes'
       USING ERRCODE = '42501';
   END IF;
 
@@ -103,7 +103,10 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION app.ensure_global_user_for_registration(
+DROP FUNCTION IF EXISTS app.ensure_global_user_for_seed(text, text, text);
+DROP FUNCTION IF EXISTS app.ensure_global_user_for_registration(text, text, text);
+
+CREATE OR REPLACE FUNCTION app.create_global_user_from_invitation(
   input_email text,
   input_password_hash text,
   input_display_name text
@@ -124,28 +127,21 @@ SET search_path = public, app, pg_temp
 AS $$
 DECLARE
   request_user_id text;
-  request_tenant_id text;
   request_path text;
   normalized_email text;
   existing_user_id uuid;
 BEGIN
-  request_tenant_id := NULLIF(current_setting('app.tenant_id', true), '');
   request_user_id := COALESCE(NULLIF(current_setting('app.user_id', true), ''), 'anonymous');
   request_path := COALESCE(NULLIF(current_setting('app.path', true), ''), '');
   normalized_email := lower(input_email);
 
-  IF request_tenant_id IS NULL THEN
-    RAISE EXCEPTION 'Tenant context is required for auth registration'
-      USING ERRCODE = '42501';
-  END IF;
-
   IF request_user_id <> 'anonymous' THEN
-    RAISE EXCEPTION 'Auth registration helper is only available before authentication'
+    RAISE EXCEPTION 'Invitation account setup is only available before authentication'
       USING ERRCODE = '42501';
   END IF;
 
-  IF request_path <> '/auth/register' THEN
-    RAISE EXCEPTION 'Auth registration helper is only available on the registration route'
+  IF request_path <> '/auth/invitations/accept' THEN
+    RAISE EXCEPTION 'Invitation account setup is only available through invitation acceptance'
       USING ERRCODE = '42501';
   END IF;
 
@@ -178,7 +174,7 @@ BEGIN
     WHERE u.id = existing_user_id
       AND u.tenant_id <> 'global'
   ) THEN
-    RAISE EXCEPTION 'Auth registration helper only supports global users'
+    RAISE EXCEPTION 'Invitation account setup only supports global users'
       USING ERRCODE = '42501';
   END IF;
 
@@ -194,6 +190,99 @@ BEGIN
     users.updated_at
   FROM users
   WHERE users.id = existing_user_id
+  LIMIT 1;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION app.find_platform_owner_by_email_for_auth(input_email text)
+RETURNS TABLE (
+  id uuid,
+  tenant_id text,
+  email text,
+  password_hash text,
+  display_name text,
+  status text,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, app, pg_temp
+AS $$
+DECLARE
+  request_user_id text;
+  request_path text;
+BEGIN
+  request_user_id := COALESCE(NULLIF(current_setting('app.user_id', true), ''), 'anonymous');
+  request_path := COALESCE(NULLIF(current_setting('app.path', true), ''), '');
+
+  IF request_user_id <> 'anonymous' THEN
+    RAISE EXCEPTION 'Platform owner lookup is only available before authentication'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF request_path <> '/auth/login' THEN
+    RAISE EXCEPTION 'Platform owner lookup is only available on login routes'
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    u.id,
+    u.tenant_id::text,
+    u.email::text,
+    u.password_hash,
+    u.display_name,
+    u.status,
+    u.created_at,
+    u.updated_at
+  FROM users u
+  WHERE lower(u.email) = lower(input_email)
+    AND u.tenant_id = 'global'
+    AND u.user_type = 'platform_owner'
+  LIMIT 1;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION app.find_platform_owner_by_id_for_auth(input_user_id uuid)
+RETURNS TABLE (
+  id uuid,
+  tenant_id text,
+  email text,
+  password_hash text,
+  display_name text,
+  status text,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, app, pg_temp
+AS $$
+DECLARE
+  request_path text;
+BEGIN
+  request_path := COALESCE(NULLIF(current_setting('app.path', true), ''), '');
+
+  IF request_path NOT IN ('/auth/refresh', '/auth/me') THEN
+    RAISE EXCEPTION 'Platform owner lookup is only available on authenticated auth routes'
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    u.id,
+    u.tenant_id::text,
+    u.email::text,
+    u.password_hash,
+    u.display_name,
+    u.status,
+    u.created_at,
+    u.updated_at
+  FROM users u
+  WHERE u.id = input_user_id
+    AND u.tenant_id = 'global'
+    AND u.user_type = 'platform_owner'
   LIMIT 1;
 END;
 $$;
@@ -274,11 +363,18 @@ CREATE TABLE users (
   email citext NOT NULL,
   password_hash text NOT NULL,
   display_name text NOT NULL,
+  user_type text NOT NULL DEFAULT 'member',
   status text NOT NULL DEFAULT 'active',
+  email_verified_at timestamptz,
+  recovery_email text,
+  mfa_enabled boolean NOT NULL DEFAULT FALSE,
+  mfa_verified_at timestamptz,
+  password_changed_at timestamptz,
   last_login_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT NOW(),
   updated_at timestamptz NOT NULL DEFAULT NOW(),
   CONSTRAINT ck_users_tenant_id_global CHECK (tenant_id = 'global'),
+  CONSTRAINT ck_users_user_type CHECK (user_type IN ('member', 'platform_owner')),
   CONSTRAINT ck_users_status CHECK (status IN ('active', 'disabled', 'locked')),
   CONSTRAINT ck_users_display_name_not_blank CHECK (btrim(display_name) <> ''),
   CONSTRAINT ck_users_password_hash_not_blank CHECK (btrim(password_hash) <> ''),
@@ -358,6 +454,68 @@ CREATE TABLE tenant_memberships (
     ON DELETE RESTRICT,
   CONSTRAINT fk_tenant_memberships_invited_by_user
     FOREIGN KEY (invited_by_user_id)
+    REFERENCES users (id)
+    ON DELETE SET NULL
+);
+
+CREATE TABLE auth_action_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id tenant_key,
+  user_id uuid,
+  email citext NOT NULL,
+  purpose text NOT NULL,
+  token_hash text NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  expires_at timestamptz NOT NULL,
+  consumed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT NOW(),
+  updated_at timestamptz NOT NULL DEFAULT NOW(),
+  CONSTRAINT ck_auth_action_tokens_purpose CHECK (
+    purpose IN (
+      'invite_acceptance',
+      'password_recovery',
+      'email_verification',
+      'mfa_verification',
+      'device_verification',
+      'account_activation'
+    )
+  ),
+  CONSTRAINT fk_auth_action_tokens_user
+    FOREIGN KEY (user_id)
+    REFERENCES users (id)
+    ON DELETE CASCADE
+);
+
+CREATE TABLE auth_email_outbox (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id tenant_key,
+  user_id uuid,
+  recipient_email citext NOT NULL,
+  template text NOT NULL,
+  subject text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  status text NOT NULL DEFAULT 'pending',
+  attempts integer NOT NULL DEFAULT 0,
+  next_attempt_at timestamptz NOT NULL DEFAULT NOW(),
+  sent_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT NOW(),
+  updated_at timestamptz NOT NULL DEFAULT NOW(),
+  CONSTRAINT ck_auth_email_outbox_template CHECK (
+    template IN (
+      'invite_acceptance',
+      'password_recovery',
+      'email_verification',
+      'mfa_verification',
+      'login_alert',
+      'suspicious_login_alert',
+      'school_invitation',
+      'account_activation'
+    )
+  ),
+  CONSTRAINT ck_auth_email_outbox_status CHECK (status IN ('pending', 'processing', 'sent', 'failed')),
+  CONSTRAINT ck_auth_email_outbox_attempts CHECK (attempts >= 0),
+  CONSTRAINT fk_auth_email_outbox_user
+    FOREIGN KEY (user_id)
     REFERENCES users (id)
     ON DELETE SET NULL
 );
@@ -820,6 +978,41 @@ CREATE TABLE students (
     ON DELETE SET NULL
 );
 
+CREATE TABLE student_guardians (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id tenant_key NOT NULL,
+  student_id uuid NOT NULL,
+  user_id uuid,
+  invitation_id uuid,
+  display_name text NOT NULL,
+  email citext NOT NULL,
+  phone text,
+  relationship text NOT NULL,
+  is_primary boolean NOT NULL DEFAULT FALSE,
+  status text NOT NULL DEFAULT 'invited',
+  accepted_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT NOW(),
+  updated_at timestamptz NOT NULL DEFAULT NOW(),
+  CONSTRAINT ck_student_guardians_tenant_id_non_global CHECK (tenant_id <> 'global'),
+  CONSTRAINT ck_student_guardians_display_name_not_blank CHECK (btrim(display_name) <> ''),
+  CONSTRAINT ck_student_guardians_email_not_blank CHECK (btrim(email::text) <> ''),
+  CONSTRAINT ck_student_guardians_relationship_not_blank CHECK (btrim(relationship) <> ''),
+  CONSTRAINT ck_student_guardians_status CHECK (status IN ('invited', 'active', 'revoked')),
+  CONSTRAINT uq_student_guardians_tenant_id_id UNIQUE (tenant_id, id),
+  CONSTRAINT fk_student_guardians_student
+    FOREIGN KEY (tenant_id, student_id)
+    REFERENCES students (tenant_id, id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_student_guardians_user
+    FOREIGN KEY (user_id)
+    REFERENCES users (id)
+    ON DELETE SET NULL,
+  CONSTRAINT fk_student_guardians_invitation
+    FOREIGN KEY (invitation_id)
+    REFERENCES auth_action_tokens (id)
+    ON DELETE SET NULL
+);
+
 CREATE TABLE subscriptions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id tenant_key NOT NULL,
@@ -985,7 +1178,7 @@ CREATE TABLE sync_cursors (
   created_at timestamptz NOT NULL DEFAULT NOW(),
   updated_at timestamptz NOT NULL DEFAULT NOW(),
   CONSTRAINT ck_sync_cursors_tenant_id_non_global CHECK (tenant_id <> 'global'),
-  CONSTRAINT ck_sync_cursors_entity CHECK (entity IN ('attendance', 'finance')),
+  CONSTRAINT ck_sync_cursors_entity CHECK (entity IN ('finance')),
   CONSTRAINT ck_sync_cursors_last_version_non_negative CHECK (last_version >= 0),
   CONSTRAINT uq_sync_cursors_tenant_id_id UNIQUE (tenant_id, id),
   CONSTRAINT uq_sync_cursors_tenant_device_entity UNIQUE (tenant_id, device_id, entity),
@@ -1005,42 +1198,8 @@ CREATE TABLE sync_operation_logs (
   created_at timestamptz NOT NULL DEFAULT NOW(),
   updated_at timestamptz NOT NULL DEFAULT NOW(),
   CONSTRAINT ck_sync_operation_logs_tenant_id_non_global CHECK (tenant_id <> 'global'),
-  CONSTRAINT ck_sync_operation_logs_entity CHECK (entity IN ('attendance', 'finance')),
+  CONSTRAINT ck_sync_operation_logs_entity CHECK (entity IN ('finance')),
   CONSTRAINT uq_sync_operation_logs_tenant_version UNIQUE (tenant_id, version)
-);
-
-CREATE TABLE attendance_records (
-  id uuid PRIMARY KEY,
-  tenant_id tenant_key NOT NULL,
-  student_id uuid NOT NULL,
-  attendance_date date NOT NULL,
-  status text NOT NULL,
-  notes text,
-  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-  source_device_id text,
-  last_modified_at timestamptz NOT NULL,
-  last_operation_id uuid,
-  sync_version bigint,
-  created_at timestamptz NOT NULL DEFAULT NOW(),
-  updated_at timestamptz NOT NULL DEFAULT NOW(),
-  CONSTRAINT ck_attendance_records_tenant_id_non_global CHECK (tenant_id <> 'global'),
-  CONSTRAINT ck_attendance_records_status CHECK (
-    status IN ('present', 'absent', 'late', 'excused')
-  ),
-  CONSTRAINT uq_attendance_records_tenant_id_id UNIQUE (tenant_id, id),
-  CONSTRAINT uq_attendance_records_tenant_student_date UNIQUE (tenant_id, student_id, attendance_date),
-  CONSTRAINT fk_attendance_records_last_operation
-    FOREIGN KEY (last_operation_id)
-    REFERENCES sync_operation_logs (op_id)
-    ON DELETE SET NULL,
-  CONSTRAINT fk_attendance_records_sync_version
-    FOREIGN KEY (tenant_id, sync_version)
-    REFERENCES sync_operation_logs (tenant_id, version)
-    ON DELETE SET NULL,
-  CONSTRAINT fk_attendance_records_student
-    FOREIGN KEY (tenant_id, student_id)
-    REFERENCES students (tenant_id, id)
-    ON DELETE CASCADE
 );
 
 DO $$
@@ -1065,6 +1224,10 @@ CREATE INDEX ix_users_status_created_at
 CREATE INDEX ix_users_last_login_at
   ON users (last_login_at DESC NULLS LAST);
 
+CREATE UNIQUE INDEX ux_users_single_platform_owner
+  ON users ((user_type))
+  WHERE user_type = 'platform_owner' AND status = 'active';
+
 CREATE INDEX ix_roles_tenant_name
   ON roles (tenant_id, name);
 
@@ -1079,6 +1242,15 @@ CREATE INDEX ix_tenant_memberships_user_status
 
 CREATE INDEX ix_tenant_memberships_tenant_role_status
   ON tenant_memberships (tenant_id, role_id, status);
+
+CREATE UNIQUE INDEX ux_auth_action_tokens_hash
+  ON auth_action_tokens (token_hash);
+
+CREATE INDEX ix_auth_action_tokens_tenant_email
+  ON auth_action_tokens (tenant_id, lower(email::text), purpose);
+
+CREATE INDEX ix_auth_email_outbox_status
+  ON auth_email_outbox (status, next_attempt_at);
 
 CREATE INDEX ix_consent_records_tenant_user_captured_at
   ON consent_records (tenant_id, user_id, captured_at DESC);
@@ -1180,6 +1352,17 @@ CREATE INDEX ix_students_status_created_at
 CREATE INDEX ix_students_name_lookup
   ON students (tenant_id, last_name, first_name, admission_number);
 
+CREATE UNIQUE INDEX ux_student_guardians_student_email
+  ON student_guardians (tenant_id, student_id, lower(email::text));
+
+CREATE INDEX ix_student_guardians_user_status
+  ON student_guardians (tenant_id, user_id, status)
+  WHERE user_id IS NOT NULL;
+
+CREATE INDEX ix_student_guardians_invitation
+  ON student_guardians (tenant_id, invitation_id)
+  WHERE invitation_id IS NOT NULL;
+
 CREATE INDEX ix_subscriptions_tenant_status_period_end
   ON subscriptions (tenant_id, status, current_period_end DESC);
 
@@ -1220,15 +1403,6 @@ CREATE INDEX ix_sync_operation_logs_tenant_entity_version
 CREATE INDEX ix_sync_operation_logs_device_created_at
   ON sync_operation_logs (tenant_id, device_id, created_at DESC);
 
-CREATE INDEX ix_attendance_records_student_date
-  ON attendance_records (tenant_id, student_id, attendance_date DESC);
-
-CREATE INDEX ix_attendance_records_last_modified_at
-  ON attendance_records (tenant_id, last_modified_at DESC);
-
-CREATE INDEX ix_attendance_records_sync_version
-  ON attendance_records (tenant_id, sync_version);
-
 CREATE TRIGGER trg_users_set_updated_at
 BEFORE UPDATE ON users
 FOR EACH ROW
@@ -1251,6 +1425,16 @@ EXECUTE FUNCTION app.set_updated_at();
 
 CREATE TRIGGER trg_tenant_memberships_set_updated_at
 BEFORE UPDATE ON tenant_memberships
+FOR EACH ROW
+EXECUTE FUNCTION app.set_updated_at();
+
+CREATE TRIGGER trg_auth_action_tokens_set_updated_at
+BEFORE UPDATE ON auth_action_tokens
+FOR EACH ROW
+EXECUTE FUNCTION app.set_updated_at();
+
+CREATE TRIGGER trg_auth_email_outbox_set_updated_at
+BEFORE UPDATE ON auth_email_outbox
 FOR EACH ROW
 EXECUTE FUNCTION app.set_updated_at();
 
@@ -1304,6 +1488,11 @@ BEFORE UPDATE ON students
 FOR EACH ROW
 EXECUTE FUNCTION app.set_updated_at();
 
+CREATE TRIGGER trg_student_guardians_set_updated_at
+BEFORE UPDATE ON student_guardians
+FOR EACH ROW
+EXECUTE FUNCTION app.set_updated_at();
+
 CREATE TRIGGER trg_subscriptions_set_updated_at
 BEFORE UPDATE ON subscriptions
 FOR EACH ROW
@@ -1321,11 +1510,6 @@ EXECUTE FUNCTION app.set_updated_at();
 
 CREATE TRIGGER trg_sync_cursors_set_updated_at
 BEFORE UPDATE ON sync_cursors
-FOR EACH ROW
-EXECUTE FUNCTION app.set_updated_at();
-
-CREATE TRIGGER trg_attendance_records_set_updated_at
-BEFORE UPDATE ON attendance_records
 FOR EACH ROW
 EXECUTE FUNCTION app.set_updated_at();
 
@@ -1381,6 +1565,12 @@ ALTER TABLE role_permissions FORCE ROW LEVEL SECURITY;
 ALTER TABLE tenant_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tenant_memberships FORCE ROW LEVEL SECURITY;
 
+ALTER TABLE auth_action_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_action_tokens FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE auth_email_outbox ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_email_outbox FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE consent_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE consent_records FORCE ROW LEVEL SECURITY;
 
@@ -1417,6 +1607,9 @@ ALTER TABLE mpesa_transactions FORCE ROW LEVEL SECURITY;
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE students FORCE ROW LEVEL SECURITY;
 
+ALTER TABLE student_guardians ENABLE ROW LEVEL SECURITY;
+ALTER TABLE student_guardians FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions FORCE ROW LEVEL SECURITY;
 
@@ -1437,9 +1630,6 @@ ALTER TABLE sync_cursors FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE sync_operation_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sync_operation_logs FORCE ROW LEVEL SECURITY;
-
-ALTER TABLE attendance_records ENABLE ROW LEVEL SECURITY;
-ALTER TABLE attendance_records FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY users_select_policy
   ON users
@@ -1569,6 +1759,42 @@ CREATE POLICY tenant_memberships_delete_policy
   ON tenant_memberships
   FOR DELETE
   USING (tenant_id = app.current_tenant_id());
+
+CREATE POLICY auth_action_tokens_policy
+  ON auth_action_tokens
+  FOR ALL
+  USING (
+    tenant_id = app.current_tenant_id()
+    OR (
+      tenant_id IS NULL
+      AND app.current_role_code() = 'platform_owner'
+    )
+  )
+  WITH CHECK (
+    tenant_id = app.current_tenant_id()
+    OR (
+      tenant_id IS NULL
+      AND app.current_role_code() = 'platform_owner'
+    )
+  );
+
+CREATE POLICY auth_email_outbox_policy
+  ON auth_email_outbox
+  FOR ALL
+  USING (
+    tenant_id = app.current_tenant_id()
+    OR (
+      tenant_id IS NULL
+      AND app.current_role_code() = 'platform_owner'
+    )
+  )
+  WITH CHECK (
+    tenant_id = app.current_tenant_id()
+    OR (
+      tenant_id IS NULL
+      AND app.current_role_code() = 'platform_owner'
+    )
+  );
 
 CREATE POLICY consent_records_select_policy
   ON consent_records
@@ -1789,6 +2015,39 @@ CREATE POLICY students_delete_policy
   FOR DELETE
   USING (tenant_id = app.current_tenant_id());
 
+CREATE POLICY student_guardians_select_policy
+  ON student_guardians
+  FOR SELECT
+  USING (
+    tenant_id = app.current_tenant_id()
+    OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/invitations/accept%'
+  );
+
+CREATE POLICY student_guardians_insert_policy
+  ON student_guardians
+  FOR INSERT
+  WITH CHECK (
+    tenant_id = app.current_tenant_id()
+    OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/invitations/accept%'
+  );
+
+CREATE POLICY student_guardians_update_policy
+  ON student_guardians
+  FOR UPDATE
+  USING (
+    tenant_id = app.current_tenant_id()
+    OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/invitations/accept%'
+  )
+  WITH CHECK (
+    tenant_id = app.current_tenant_id()
+    OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/invitations/accept%'
+  );
+
+CREATE POLICY student_guardians_delete_policy
+  ON student_guardians
+  FOR DELETE
+  USING (tenant_id = app.current_tenant_id());
+
 CREATE POLICY subscriptions_select_policy
   ON subscriptions
   FOR SELECT
@@ -1913,26 +2172,5 @@ CREATE POLICY sync_operation_logs_insert_policy
   ON sync_operation_logs
   FOR INSERT
   WITH CHECK (tenant_id = app.current_tenant_id());
-
-CREATE POLICY attendance_records_select_policy
-  ON attendance_records
-  FOR SELECT
-  USING (tenant_id = app.current_tenant_id());
-
-CREATE POLICY attendance_records_insert_policy
-  ON attendance_records
-  FOR INSERT
-  WITH CHECK (tenant_id = app.current_tenant_id());
-
-CREATE POLICY attendance_records_update_policy
-  ON attendance_records
-  FOR UPDATE
-  USING (tenant_id = app.current_tenant_id())
-  WITH CHECK (tenant_id = app.current_tenant_id());
-
-CREATE POLICY attendance_records_delete_policy
-  ON attendance_records
-  FOR DELETE
-  USING (tenant_id = app.current_tenant_id());
 
 COMMIT;

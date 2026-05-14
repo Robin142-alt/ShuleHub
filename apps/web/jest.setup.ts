@@ -63,6 +63,7 @@ jest.mock("next/navigation", () => ({
     prefetch: routerPrefetchMock,
   }),
   usePathname: () => "/dashboard/admin",
+  useSearchParams: () => new URLSearchParams(window.location.search),
   notFound: jest.fn(),
   redirect: jest.fn(),
 }));
@@ -98,6 +99,7 @@ jest.mock("next/link", () => {
 
 beforeEach(() => {
   resetRouterMocks();
+  document.body.style.overflow = "";
   document.cookie.split(";").forEach((cookie) => {
     const [rawName] = cookie.split("=");
     const name = rawName?.trim();

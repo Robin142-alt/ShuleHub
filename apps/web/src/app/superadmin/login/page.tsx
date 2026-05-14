@@ -19,7 +19,7 @@ export default function SuperadminLoginPage() {
         {
           id: "secure-recovery",
           title: "Secure recovery",
-          description: "2FA, device verification, and managed sessions keep high-privilege access trustworthy.",
+          description: "Verified email, managed sessions, and audit trails keep high-privilege access accountable.",
         },
         {
           id: "ops-ready",
@@ -28,7 +28,7 @@ export default function SuperadminLoginPage() {
         },
       ]}
       trustNotes={[
-        { id: "two-fa", label: "2FA supported", icon: "shield" },
+        { id: "verified-email", label: "Email verified", icon: "shield" },
         { id: "audit", label: "Audit logged", icon: "check" },
         { id: "session", label: "Session managed", icon: "lock" },
       ]}

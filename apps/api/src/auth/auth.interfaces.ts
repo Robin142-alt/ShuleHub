@@ -24,6 +24,7 @@ export interface AuthenticatedPrincipal {
 }
 
 export interface AuthSessionRecord extends AuthenticatedPrincipal {
+  email_verified_at: string | null;
   refresh_token_id: string;
   created_at: string;
   updated_at: string;

@@ -214,278 +214,19 @@ export interface StorekeeperReport {
   rows: string[][];
 }
 
-const movementTimestamp = "2026-05-07 09:15";
+function formatStorekeeperTimestamp(date = new Date()) {
+  return date.toISOString().slice(0, 16).replace("T", " ");
+}
 
-const baseItems: StorekeeperItem[] = [
-  {
-    id: "item-paper",
-    code: "STAT-A4-001",
-    barcode: "616110001001",
-    name: "A4 Printing Paper",
-    category: "stationery",
-    quantityAvailable: 18,
-    reorderLevel: 25,
-    unit: "ream",
-    location: "Main Store - Shelf A2",
-    unitCost: 650,
-    supplier: "Crown Office Supplies",
-    batchNumber: "COS-A4-0426",
-    averageWeeklyIssue: 22,
-    lastIssuedAt: "2026-05-07 08:05",
-  },
-  {
-    id: "item-lab-gloves",
-    code: "LAB-GLV-100",
-    barcode: "616110003104",
-    name: "Lab Gloves",
-    category: "lab equipment",
-    quantityAvailable: 4,
-    reorderLevel: 10,
-    unit: "box",
-    location: "Science Prep Room - Locker 4",
-    unitCost: 780,
-    supplier: "LabTech East Africa",
-    batchNumber: "LTE-GLV-0526",
-    expiryDate: "2026-08-30",
-    averageWeeklyIssue: 7,
-    lastIssuedAt: "2026-05-06 14:20",
-  },
-  {
-    id: "item-whiteboard-markers",
-    code: "STAT-WBM-012",
-    barcode: "616110001012",
-    name: "Whiteboard Markers",
-    category: "stationery",
-    quantityAvailable: 0,
-    reorderLevel: 24,
-    unit: "box",
-    location: "Main Store - Shelf A3",
-    unitCost: 120,
-    supplier: "Crown Office Supplies",
-    averageWeeklyIssue: 16,
-    lastIssuedAt: "2026-05-07 07:50",
-  },
-  {
-    id: "item-maize-flour",
-    code: "FOOD-MF-2KG",
-    barcode: "616110002201",
-    name: "Maize Flour 2kg",
-    category: "food supplies",
-    quantityAvailable: 140,
-    reorderLevel: 90,
-    unit: "bag",
-    location: "Kitchen Dry Store - Row 1",
-    unitCost: 168,
-    supplier: "Ruiru Fresh Grains",
-    batchNumber: "RFG-MF-0507",
-    expiryDate: "2026-06-12",
-    averageWeeklyIssue: 95,
-    lastIssuedAt: "2026-05-07 06:45",
-  },
-  {
-    id: "item-cleaner",
-    code: "CLN-DIS-20L",
-    barcode: "616110006020",
-    name: "Disinfectant 20L",
-    category: "cleaning supplies",
-    quantityAvailable: 7,
-    reorderLevel: 8,
-    unit: "jerrycan",
-    location: "Maintenance Store - Rack C1",
-    unitCost: 1900,
-    supplier: "Apex Hygiene Solutions",
-    batchNumber: "APX-DIS-0426",
-    expiryDate: "2026-05-25",
-    averageWeeklyIssue: 4,
-    lastIssuedAt: "2026-05-06 09:10",
-  },
-  {
-    id: "item-textbooks",
-    code: "TXT-MATH-G7",
-    barcode: "616110004701",
-    name: "Grade 7 Mathematics Textbook",
-    category: "textbooks",
-    quantityAvailable: 62,
-    reorderLevel: 30,
-    unit: "copy",
-    location: "Book Store - Bay B4",
-    unitCost: 740,
-    supplier: "Longhorn Publishers",
-    averageWeeklyIssue: 12,
-    lastIssuedAt: "2026-05-05 11:30",
-  },
-  {
-    id: "item-uniform-shirts",
-    code: "UNI-SHIRT-32",
-    barcode: "616110005032",
-    name: "School Shirt Size 32",
-    category: "uniforms",
-    quantityAvailable: 28,
-    reorderLevel: 20,
-    unit: "piece",
-    location: "Uniform Store - Rack U2",
-    unitCost: 620,
-    supplier: "Rift Uniforms",
-    averageWeeklyIssue: 11,
-    lastIssuedAt: "2026-05-04 10:25",
-  },
-  {
-    id: "item-footballs",
-    code: "SPT-FTB-05",
-    barcode: "616110007005",
-    name: "Training Footballs",
-    category: "sports items",
-    quantityAvailable: 9,
-    reorderLevel: 10,
-    unit: "ball",
-    location: "Games Cage - Bin 2",
-    unitCost: 1850,
-    supplier: "Boarding Essentials Limited",
-    averageWeeklyIssue: 6,
-    lastIssuedAt: "2026-05-06 16:05",
-  },
-];
+function referenceDateStamp(date = new Date()) {
+  return date.toISOString().slice(0, 10).replaceAll("-", "");
+}
 
-const baseSuppliers: StorekeeperSupplier[] = [
-  {
-    id: "sup-crown",
-    name: "Crown Office Supplies",
-    contact: "Lucy Njeri",
-    phone: "+254 722 441 885",
-    email: "orders@crownoffice.co.ke",
-    lastDelivery: "2026-05-07",
-    activeOrders: 2,
-    status: "active",
-  },
-  {
-    id: "sup-ruiru",
-    name: "Ruiru Fresh Grains",
-    contact: "Peter Mwangi",
-    phone: "+254 733 112 904",
-    email: "stores@ruirufresh.co.ke",
-    lastDelivery: "2026-05-07",
-    activeOrders: 1,
-    status: "active",
-  },
-  {
-    id: "sup-labtech",
-    name: "LabTech East Africa",
-    contact: "Miriam Akinyi",
-    phone: "+254 711 683 204",
-    email: "service@labtech-ea.com",
-    lastDelivery: "2026-05-03",
-    activeOrders: 1,
-    status: "watch",
-  },
-  {
-    id: "sup-apex",
-    name: "Apex Hygiene Solutions",
-    contact: "Sophie Muthoni",
-    phone: "+254 720 001 446",
-    email: "sales@apexhygiene.co.ke",
-    lastDelivery: "2026-04-30",
-    activeOrders: 0,
-    status: "on_hold",
-  },
-];
-
-const baseRequests: StorekeeperRequest[] = [
-  {
-    id: "req-science",
-    department: "Science Lab",
-    requestedBy: "Moses Otieno",
-    itemName: "Lab Gloves",
-    quantity: 12,
-    unit: "box",
-    status: "pending",
-    neededBy: "Today 14:00",
-  },
-  {
-    id: "req-lower-school",
-    department: "Lower School",
-    requestedBy: "Lucy Wambui",
-    itemName: "Whiteboard Markers",
-    quantity: 24,
-    unit: "box",
-    status: "approved",
-    neededBy: "Today 11:00",
-  },
-  {
-    id: "req-kitchen",
-    department: "Kitchen",
-    requestedBy: "Chef Ruth Nduta",
-    itemName: "Maize Flour 2kg",
-    quantity: 45,
-    unit: "bag",
-    status: "fulfilled",
-    neededBy: "Issued 06:45",
-  },
-];
-
-const baseTransfers: StorekeeperTransfer[] = [
-  {
-    id: "trf-kitchen",
-    itemName: "Maize Flour 2kg",
-    fromLocation: "Kitchen Dry Store - Row 1",
-    toLocation: "Boarding Kitchen",
-    quantity: 45,
-    requestedBy: "Chef Ruth Nduta",
-    status: "completed",
-    date: "2026-05-07",
-  },
-  {
-    id: "trf-games",
-    itemName: "Training Footballs",
-    fromLocation: "Games Cage - Bin 2",
-    toLocation: "Sports Field Store",
-    quantity: 4,
-    requestedBy: "Games Master",
-    status: "in_transit",
-    date: "2026-05-07",
-  },
-];
-
-const baseMovements: StorekeeperMovement[] = [
-  {
-    id: "mov-issue-kitchen",
-    reference: "ISS-20260507-001",
-    actionType: "issue",
-    itemId: "item-maize-flour",
-    itemCode: "FOOD-MF-2KG",
-    itemName: "Maize Flour 2kg",
-    category: "food supplies",
-    beforeQuantity: 185,
-    quantity: 45,
-    afterQuantity: 140,
-    unit: "bag",
-    department: "Kitchen",
-    user: "Storekeeper Amani Prep",
-    counterparty: "Chef Ruth Nduta",
-    timestamp: "2026-05-07 06:45",
-    location: "Kitchen Dry Store - Row 1",
-    notes: "Weekly boarding meal plan issue.",
-  },
-  {
-    id: "mov-receipt-paper",
-    reference: "RCV-20260507-001",
-    actionType: "receipt",
-    itemId: "item-paper",
-    itemCode: "STAT-A4-001",
-    itemName: "A4 Printing Paper",
-    category: "stationery",
-    beforeQuantity: 6,
-    quantity: 12,
-    afterQuantity: 18,
-    unit: "ream",
-    supplier: "Crown Office Supplies",
-    user: "Storekeeper Amani Prep",
-    counterparty: "Lucy Njeri",
-    timestamp: "2026-05-07 08:30",
-    location: "Main Store - Shelf A2",
-    batchNumber: "COS-A4-0426",
-    notes: "Received against PO-2026-029.",
-  },
-];
+function isoDateDaysFromNow(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
 
 function cloneDataset(dataset: StorekeeperDataset): StorekeeperDataset {
   return {
@@ -499,7 +240,7 @@ function cloneDataset(dataset: StorekeeperDataset): StorekeeperDataset {
 }
 
 function nextReference(prefix: "ISS" | "RCV", existingCount: number) {
-  return `${prefix}-20260507-${String(existingCount + 1).padStart(3, "0")}`;
+  return `${prefix}-${referenceDateStamp()}-${String(existingCount + 1).padStart(3, "0")}`;
 }
 
 function requirePositiveQuantity(quantity: number) {
@@ -536,11 +277,11 @@ export function formatStoreQuantity(quantity: number, unit: string) {
 
 export function createStorekeeperInventoryDataset(): StorekeeperDataset {
   return cloneDataset({
-    items: baseItems,
-    suppliers: baseSuppliers,
-    requests: baseRequests,
-    transfers: baseTransfers,
-    movements: baseMovements,
+    items: [],
+    suppliers: [],
+    requests: [],
+    transfers: [],
+    movements: [],
     processedSubmissionIds: [],
   });
 }
@@ -618,6 +359,7 @@ export function issueStoreStock(dataset: StorekeeperDataset, input: StorekeeperI
 
   const nextDataset = cloneDataset(dataset);
   const reference = nextReference("ISS", nextDataset.movements.filter((item) => item.actionType === "issue").length);
+  const movementTimestamp = formatStorekeeperTimestamp();
   const noteLines: StorekeeperIssueNote["lines"] = [];
   const movements: StorekeeperMovement[] = [];
 
@@ -708,6 +450,7 @@ export function receiveStoreStock(dataset: StorekeeperDataset, input: Storekeepe
 
   const nextDataset = cloneDataset(dataset);
   const reference = nextReference("RCV", nextDataset.movements.filter((item) => item.actionType === "receipt").length);
+  const movementTimestamp = formatStorekeeperTimestamp();
   const noteLines: StorekeeperReceiveNote["lines"] = [];
   const movements: StorekeeperMovement[] = [];
 
@@ -785,14 +528,16 @@ export function receiveStoreStock(dataset: StorekeeperDataset, input: Storekeepe
 }
 
 export function buildStorekeeperDashboard(dataset: StorekeeperDataset) {
+  const todayPrefix = formatStorekeeperTimestamp().slice(0, 10);
+  const expiryWindow = isoDateDaysFromNow(30);
   const lowStockItems = dataset.items.filter((item) => getStoreItemStatus(item) !== "healthy");
   const pendingRequests = dataset.requests.filter((request) => request.status !== "fulfilled");
   const recentlyIssuedItems = dataset.movements.filter((movement) => movement.actionType === "issue").slice(0, 5);
-  const todayMovements = dataset.movements.filter((movement) => movement.timestamp.startsWith("2026-05-07"));
+  const todayMovements = dataset.movements.filter((movement) => movement.timestamp.startsWith(todayPrefix));
   const receivedToday = dataset.movements.filter(
-    (movement) => movement.actionType === "receipt" && movement.timestamp.startsWith("2026-05-07"),
+    (movement) => movement.actionType === "receipt" && movement.timestamp.startsWith(todayPrefix),
   );
-  const expiringItems = dataset.items.filter((item) => item.expiryDate && item.expiryDate <= "2026-06-15");
+  const expiringItems = dataset.items.filter((item) => item.expiryDate && item.expiryDate <= expiryWindow);
   const fastMovingItems = [...dataset.items]
     .sort((first, second) => second.averageWeeklyIssue - first.averageWeeklyIssue)
     .slice(0, 5);

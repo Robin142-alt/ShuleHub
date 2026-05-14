@@ -42,6 +42,34 @@ export class UpdateInventoryCategoryDto {
   description?: string;
 }
 
+export class CreateInventoryLocationDto {
+  @IsString()
+  code!: string;
+
+  @IsString()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['active', 'inactive'])
+  status?: 'active' | 'inactive';
+}
+
+export class UpdateInventoryLocationDto {
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['active', 'inactive'])
+  status?: 'active' | 'inactive';
+}
+
 export class CreateInventorySupplierDto {
   @IsString()
   supplier_name!: string;

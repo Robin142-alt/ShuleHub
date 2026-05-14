@@ -10,6 +10,7 @@ import {
 } from 'class-validator';
 
 import { SYNC_SUPPORTED_ENTITIES } from '../sync.constants';
+import type { SyncEntity } from '../sync.types';
 
 export class SyncPushOperationDto {
   @Transform(({ value }: { value: unknown }): unknown =>
@@ -21,7 +22,7 @@ export class SyncPushOperationDto {
 
   @IsString()
   @IsIn([...SYNC_SUPPORTED_ENTITIES])
-  entity!: (typeof SYNC_SUPPORTED_ENTITIES)[number];
+  entity!: SyncEntity;
 
   @Type(() => Number)
   @IsInt()

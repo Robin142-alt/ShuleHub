@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Post } from '@nestjs/common';
 
+import { Permissions } from '../../auth/decorators/permissions.decorator';
 import { ComplianceService } from './compliance.service';
 import { ConsentRecordResponseDto } from './dto/consent-record-response.dto';
 import { DataExportResponseDto } from './dto/data-export-response.dto';
@@ -7,6 +8,7 @@ import { DeleteAccountResponseDto } from './dto/delete-account-response.dto';
 import { RecordConsentDto } from './dto/record-consent.dto';
 
 @Controller('compliance/me')
+@Permissions('auth:read')
 export class ComplianceController {
   constructor(private readonly complianceService: ComplianceService) {}
 

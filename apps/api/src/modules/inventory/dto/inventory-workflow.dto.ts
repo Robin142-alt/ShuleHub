@@ -51,7 +51,7 @@ export class CreatePurchaseOrderDto {
 
 export class UpdateWorkflowStatusDto {
   @IsString()
-  @IsIn(['draft', 'pending', 'approved', 'received', 'cancelled', 'fulfilled', 'in_transit', 'completed'])
+  @IsIn(['draft', 'pending', 'approved', 'backordered', 'received', 'cancelled', 'fulfilled', 'partially_fulfilled', 'in_transit', 'completed'])
   status!: string;
 
   @IsOptional()
@@ -164,6 +164,36 @@ export class CreateStockReceiptDto {
   @ValidateNested({ each: true })
   @Type(() => StockReceiptLineDto)
   lines!: StockReceiptLineDto[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+class StockCountLineDto {
+  @IsUUID()
+  item_id!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  counted_quantity!: number;
+}
+
+export class PostStockCountDto {
+  @IsOptional()
+  @IsString()
+  location_code?: string;
+
+  @IsOptional()
+  @IsString()
+  counted_at?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => StockCountLineDto)
+  lines!: StockCountLineDto[];
 
   @IsOptional()
   @IsString()

@@ -403,7 +403,7 @@ export const renderSystemDashboard = (): string => `<!doctype html>
               <div>
                 <h2 class="panel-title">Open Alerts</h2>
                 <p class="panel-copy">
-                  The current SLO and queue warnings coming from the live backend.
+                  The current SLO and queue warnings coming from the production service.
                 </p>
               </div>
             </div>

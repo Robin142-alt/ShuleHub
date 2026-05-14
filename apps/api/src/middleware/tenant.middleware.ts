@@ -21,7 +21,10 @@ export class TenantMiddleware implements NestMiddleware {
 
     try {
       const requestContext = this.requestContext.requireStore();
-      const tenantId = this.tenantService.resolveTenantId(request.headers.host);
+      const tenantId = this.tenantService.resolveTenantId(
+        request.headers.host,
+        request.headers['x-tenant-id'],
+      );
 
       this.requestContext.setTenantId(tenantId);
 

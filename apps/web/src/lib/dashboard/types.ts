@@ -4,6 +4,7 @@ export const DASHBOARD_ROLES = [
   "teacher",
   "parent",
   "storekeeper",
+  "librarian",
   "admissions",
 ] as const;
 
@@ -16,6 +17,7 @@ export interface TenantOption {
   id: string;
   name: string;
   county: string;
+  transportEnabled?: boolean;
 }
 
 export interface SidebarItem {
@@ -27,10 +29,10 @@ export interface SidebarItem {
 
 export type DashboardWidgetKey =
   | "finance"
-  | "attendance"
   | "academics"
   | "students"
   | "inventory"
+  | "library"
   | "admissions";
 
 export interface NotificationItem {
@@ -72,13 +74,6 @@ export interface FinanceWidgetData {
   collectionMix: Array<{ label: string; value: number }>;
 }
 
-export interface AttendanceWidgetData {
-  attendanceRate: string;
-  unmarkedClasses: string;
-  absentees: string;
-  classStatus: Array<{ className: string; status: SyncState; value: string }>;
-}
-
 export interface AcademicsWidgetData {
   nextExam: string;
   gradingQueue: string;
@@ -106,7 +101,7 @@ export interface ActivityItem {
   actor: string;
   href: string;
   timeLabel: string;
-  category: "payment" | "attendance" | "student" | "communication";
+  category: "payment" | "student" | "communication";
 }
 
 export interface QuickActionItem {
@@ -129,9 +124,9 @@ export interface CapabilityItem {
   category:
     | "students"
     | "academics"
-    | "attendance"
     | "finance"
     | "inventory"
+    | "library"
     | "admissions"
     | "communication"
     | "staff"
@@ -155,7 +150,6 @@ export interface DashboardSnapshot {
   alerts: AlertItem[];
   kpis: KpiCard[];
   finance: FinanceWidgetData;
-  attendance: AttendanceWidgetData;
   academics: AcademicsWidgetData;
   contextSections: ContextSection[];
   activityFeed: ActivityItem[];

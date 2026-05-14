@@ -1,7 +1,16 @@
 .git
+<<<<<<< HEAD
 .vercel
 .worktrees
 node_modules
+=======
+node_modules
+apps/web/node_modules
+apps/web/.next
+apps/web/.swc
+apps/web/.npm-cache
+apps/web/test-results
+>>>>>>> 9b602a66
 .npm-cache
 artifacts
 dist

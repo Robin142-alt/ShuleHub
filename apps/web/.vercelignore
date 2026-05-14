@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .next
 node_modules
 .npm-cache
@@ -5,3 +6,15 @@ coverage
 playwright-report
 test-results
 *.log
+=======
+.git
+.vercel
+node_modules
+.next
+.swc
+.npm-cache
+test-results
+coverage
+*.tsbuildinfo
+.env*
+>>>>>>> 9b602a66

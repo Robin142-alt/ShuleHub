@@ -2,10 +2,9 @@ import {
   requestDashboardApi,
   type LiveAuthSession,
 } from "@/lib/dashboard/api-client";
-import type { DashboardRole } from "@/lib/dashboard/types";
+import type { DashboardRole, StatusTone } from "@/lib/dashboard/types";
 import {
   buildAdmissionsSearchItems,
-  createAdmissionsDataset,
   type AdmissionApplication,
   type AdmissionsDataset,
   type AdmissionsDocument,
@@ -13,7 +12,9 @@ import {
   type AdmissionsTransfer,
   type ClassAllocation,
   type ParentDirectoryEntry,
+  type StudentAcademicLine,
   type StudentDirectoryEntry,
+  type StudentFeesLine,
 } from "@/lib/modules/admissions-data";
 
 export interface AdmissionDocumentUploadInput {
@@ -184,6 +185,72 @@ export interface LiveAdmissionsStudentProfileResponse {
     transport_route?: string | null;
     effective_from?: string | null;
   } | null;
+  academic_enrollment?: {
+    id: string;
+    class_name: string;
+    stream_name: string;
+    academic_year: string;
+    status: string;
+    enrolled_at?: string | null;
+  } | null;
+  subject_enrollments?: Array<{
+    id: string;
+    subject_code?: string | null;
+    subject_name: string;
+    status: string;
+  }>;
+  timetable_enrollments?: Array<{
+    id: string;
+    day_of_week: string;
+    starts_at: string;
+    ends_at: string;
+    subject_name?: string | null;
+    room_name?: string | null;
+    status: string;
+  }>;
+  lifecycle_events?: Array<{
+    id: string;
+    event_type: "promotion" | "graduation" | "archive" | string;
+    from_class_name?: string | null;
+    from_stream_name?: string | null;
+    from_academic_year?: string | null;
+    to_class_name?: string | null;
+    to_stream_name?: string | null;
+    to_academic_year?: string | null;
+    reason?: string | null;
+    created_at?: string | null;
+  }>;
+  guardian_links?: Array<{
+    id: string;
+    display_name: string;
+    email: string;
+    phone?: string | null;
+    relationship?: string | null;
+    status: "invited" | "active" | "revoked" | string;
+    user_id?: string | null;
+    invitation_id?: string | null;
+    accepted_at?: string | null;
+  }>;
+  fee_assignment?: {
+    id: string;
+    status: string;
+    amount_minor: string | number;
+    currency_code: string;
+    description?: string | null;
+    term_name?: string | null;
+    academic_year?: string | null;
+  } | null;
+  fee_invoice?: {
+    id: string;
+    assignment_id?: string | null;
+    invoice_number: string;
+    status: string;
+    description?: string | null;
+    currency_code: string;
+    amount_due_minor: string | number;
+    amount_paid_minor: string | number;
+    due_date?: string | null;
+  } | null;
   documents: Array<{
     id: string;
     document_type: string;
@@ -191,14 +258,98 @@ export interface LiveAdmissionsStudentProfileResponse {
     verification_status: "pending" | "verified" | "rejected";
     created_at?: string | null;
   }>;
-  attendance: Array<{
-    attendance_date: string;
-    status: string;
-    notes?: string | null;
-  }>;
 }
 
-const fallbackAdmissions = createAdmissionsDataset();
+export interface LiveAdmissionRegistrationResponse {
+  student?: {
+    id?: string;
+    admission_number?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    full_name?: string | null;
+  } | null;
+  allocation?: {
+    class_name?: string | null;
+    stream_name?: string | null;
+  } | null;
+  academic_enrollment?: LiveAdmissionsStudentProfileResponse["academic_enrollment"];
+  subject_enrollments?: LiveAdmissionsStudentProfileResponse["subject_enrollments"];
+  timetable_enrollments?: LiveAdmissionsStudentProfileResponse["timetable_enrollments"];
+  parent_invitation?: {
+    email?: string | null;
+    invitee_email?: string | null;
+    status?: string | null;
+  } | null;
+  guardian_link?: {
+    id?: string;
+    display_name?: string | null;
+    email?: string | null;
+    status?: string | null;
+  } | null;
+  fee_assignment?: LiveAdmissionsStudentProfileResponse["fee_assignment"];
+  fee_invoice?: LiveAdmissionsStudentProfileResponse["fee_invoice"];
+  application_status?: string | null;
+}
+
+export interface AdmissionRegistrationSummary {
+  studentId?: string;
+  studentName: string;
+  admissionNumber: string;
+  applicationStatus: string;
+  academicSummary: string;
+  portalSummary: string;
+  feeSummary: string;
+  onboardingChecklist: AdmissionRegistrationChecklistItem[];
+}
+
+export interface AdmissionRegistrationChecklistItem {
+  id: "profile" | "academic" | "portal" | "fees";
+  title: string;
+  detail: string;
+  value: string;
+  tone: StatusTone;
+}
+
+export interface AdmissionRegistrationSummaryInput {
+  fallback: {
+    applicantName: string;
+    admissionNumber: string;
+    className: string;
+    streamName?: string;
+    parentEmail?: string;
+  };
+  response?: LiveAdmissionRegistrationResponse | null;
+}
+
+export interface LiveAdmissionAcademicLifecycleResponse {
+  lifecycle_event?: {
+    id?: string;
+    event_type?: "promotion" | "graduation" | "archive" | string;
+  } | null;
+  academic_enrollment?: {
+    id?: string;
+    class_name?: string | null;
+    stream_name?: string | null;
+    academic_year?: string | null;
+    status?: string | null;
+  } | null;
+  allocation?: {
+    class_name?: string | null;
+    stream_name?: string | null;
+  } | null;
+  student_status?: string | null;
+}
+
+export interface LiveAdmissionsReportExportResponse {
+  report_id: string;
+  title: string;
+  filename: string;
+  content_type: string;
+  generated_at: string;
+  row_count: number;
+  checksum_sha256: string;
+  csv: string;
+}
 
 function formatDate(value?: string | null, withTime = false) {
   if (!value) {
@@ -219,6 +370,123 @@ function buildFullName(input: {
   }
 
   return `${input.first_name ?? ""} ${input.last_name ?? ""}`.trim();
+}
+
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function formatRegistrationMoney(currencyCode: string | null | undefined, amountMinor: string | number) {
+  const amount = parseMinorAmount(amountMinor);
+  const currency = currencyCode?.trim().toUpperCase() || "KES";
+
+  return `${currency} ${amount.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+export function buildAdmissionRegistrationSummary({
+  fallback,
+  response,
+}: AdmissionRegistrationSummaryInput): AdmissionRegistrationSummary {
+  const student = response?.student ?? {};
+  const enrollment = response?.academic_enrollment;
+  const subjectCount = response?.subject_enrollments?.length ?? 0;
+  const timetableCount = response?.timetable_enrollments?.length ?? 0;
+  const guardianEmail = response?.guardian_link?.email?.trim();
+  const invitationEmail =
+    response?.parent_invitation?.email?.trim()
+    || response?.parent_invitation?.invitee_email?.trim();
+  const fallbackParentEmail = fallback.parentEmail?.trim();
+  const studentName = buildFullName(student) || fallback.applicantName;
+  const admissionNumber = student.admission_number?.trim() || fallback.admissionNumber;
+  const className =
+    enrollment?.class_name?.trim()
+    || response?.allocation?.class_name?.trim()
+    || fallback.className;
+  const streamName =
+    enrollment?.stream_name?.trim()
+    || response?.allocation?.stream_name?.trim()
+    || fallback.streamName?.trim()
+    || "Pending";
+  const academicSummary = enrollment
+    ? `${className} ${streamName} for ${enrollment.academic_year} with ${pluralize(subjectCount, "subject")} and ${pluralize(timetableCount, "timetable slot")}`
+    : `${className} ${streamName} academic handoff pending`;
+
+  let portalSummary = "No parent portal invitation recorded.";
+  if (response?.guardian_link?.status === "active" && guardianEmail) {
+    portalSummary = `Parent portal active for ${guardianEmail}`;
+  } else if (guardianEmail) {
+    portalSummary = `Parent portal invitation sent to ${guardianEmail}`;
+  } else if (invitationEmail) {
+    portalSummary = `Parent portal invitation sent to ${invitationEmail}`;
+  } else if (fallbackParentEmail) {
+    portalSummary = `Parent portal invitation prepared for ${fallbackParentEmail}`;
+  }
+
+  let feeSummary = "Fee handoff not configured.";
+  let feesReady = false;
+  if (response?.fee_invoice) {
+    feesReady = true;
+    feeSummary = `Invoice ${response.fee_invoice.invoice_number} ${response.fee_invoice.status} for ${formatRegistrationMoney(
+      response.fee_invoice.currency_code,
+      response.fee_invoice.amount_due_minor,
+    )}`;
+  } else if (response?.fee_assignment) {
+    feesReady = true;
+    feeSummary = `Fee assignment ${response.fee_assignment.status} for ${formatRegistrationMoney(
+      response.fee_assignment.currency_code,
+      response.fee_assignment.amount_minor,
+    )}`;
+  }
+  const academicReady = Boolean(enrollment);
+  const portalActive = response?.guardian_link?.status === "active" && Boolean(guardianEmail);
+  const portalInvited = portalActive || Boolean(guardianEmail || invitationEmail || fallbackParentEmail);
+
+  return {
+    studentId: student.id,
+    studentName,
+    admissionNumber,
+    applicationStatus: response?.application_status?.trim() || "registered",
+    academicSummary,
+    portalSummary,
+    feeSummary,
+    onboardingChecklist: [
+      {
+        id: "profile",
+        title: "Learner profile created",
+        detail: `${studentName} is registered as ${admissionNumber}.`,
+        value: "Complete",
+        tone: "ok",
+      },
+      {
+        id: "academic",
+        title: academicReady ? "Academic handoff ready" : "Academic handoff pending",
+        detail: academicSummary,
+        value: academicReady ? "Complete" : "Pending setup",
+        tone: academicReady ? "ok" : "warning",
+      },
+      {
+        id: "portal",
+        title: portalActive
+          ? "Parent portal active"
+          : portalInvited
+            ? "Parent portal invited"
+            : "Parent portal pending",
+        detail: portalSummary,
+        value: portalActive ? "Complete" : portalInvited ? "Pending activation" : "Not invited",
+        tone: portalActive ? "ok" : portalInvited ? "warning" : "critical",
+      },
+      {
+        id: "fees",
+        title: feesReady ? "Opening fees handed off" : "Fee handoff pending",
+        detail: feeSummary,
+        value: feesReady ? "Complete" : "Pending setup",
+        tone: feesReady ? "ok" : "warning",
+      },
+    ],
+  };
 }
 
 function getDocumentOwnerType(document: LiveAdmissionsDocument): "application" | "student" {
@@ -252,17 +520,6 @@ function getMedicalMetadata(metadata?: Record<string, unknown> | null) {
       : {};
 
   return medical;
-}
-
-function getFallbackProfileSeed(input: { admissionNumber: string; fullName: string }) {
-  return (
-    fallbackAdmissions.studentProfiles.find(
-      (profile) =>
-        profile.admissionNumber === input.admissionNumber
-        || profile.fullName.toLowerCase() === input.fullName.toLowerCase(),
-    )
-    ?? null
-  );
 }
 
 function buildLearnerMap(
@@ -326,15 +583,11 @@ function buildStudentEntry(student: LiveAdmissionsStudent): StudentDirectoryEntr
   };
 }
 
-function buildFallbackStudentProfile(
+function buildStudentProfileFromLive(
   student: LiveAdmissionsStudent,
   documents: AdmissionsDocument[],
 ): AdmissionsStudentProfile {
   const fullName = buildFullName(student);
-  const fallbackSeed = getFallbackProfileSeed({
-    admissionNumber: student.admission_number,
-    fullName,
-  });
   const admissionsMetadata = getAdmissionsMetadata(student.metadata);
   const guardianMetadata = getGuardianMetadata(student.metadata);
   const medicalMetadata = getMedicalMetadata(student.metadata);
@@ -343,105 +596,67 @@ function buildFallbackStudentProfile(
     id: student.id,
     fullName,
     admissionNumber: student.admission_number,
-    className: student.class_name ?? fallbackSeed?.className ?? "Pending",
-    streamName: student.stream_name ?? fallbackSeed?.streamName ?? "Pending",
-    dormitoryName: student.dormitory_name ?? fallbackSeed?.dormitoryName ?? "Pending",
-    transportRoute: student.transport_route ?? fallbackSeed?.transportRoute ?? "Pending",
-    gender: fallbackSeed?.gender ?? "Not recorded",
-    dateOfBirth: fallbackSeed?.dateOfBirth ?? "Not recorded",
+    className: student.class_name ?? "Pending",
+    streamName: student.stream_name ?? "Pending",
+    dormitoryName: student.dormitory_name ?? "Pending",
+    transportRoute: student.transport_route ?? "Pending",
+    gender: "Not recorded",
+    dateOfBirth: "Not recorded",
     nationality:
       typeof admissionsMetadata.nationality === "string"
         ? admissionsMetadata.nationality
-        : (fallbackSeed?.nationality ?? "Kenyan"),
+        : "Not recorded",
     parentName:
       student.primary_guardian_name
       ?? (typeof guardianMetadata.parent_name === "string" ? guardianMetadata.parent_name : null)
-      ?? (fallbackSeed?.parentName ?? "Guardian pending"),
-    parentPhone: student.primary_guardian_phone ?? fallbackSeed?.parentPhone ?? "Not on file",
+      ?? "Guardian pending",
+    parentPhone: student.primary_guardian_phone ?? "Not on file",
     parentEmail:
       typeof guardianMetadata.parent_email === "string"
         ? guardianMetadata.parent_email
-        : (fallbackSeed?.parentEmail ?? ""),
+        : "",
     occupation:
       typeof guardianMetadata.parent_occupation === "string"
         ? guardianMetadata.parent_occupation
-        : (fallbackSeed?.occupation ?? "Not provided"),
+        : "Not provided",
     relationship:
       typeof guardianMetadata.relationship === "string"
         ? guardianMetadata.relationship
-        : (fallbackSeed?.relationship ?? "Guardian"),
+        : "Not recorded",
     previousSchool:
       typeof admissionsMetadata.previous_school === "string"
         ? admissionsMetadata.previous_school
-        : (fallbackSeed?.previousSchool ?? "Not provided"),
+        : "Not provided",
     kcpeResults:
       typeof admissionsMetadata.kcpe_results === "string"
         ? admissionsMetadata.kcpe_results
-        : (fallbackSeed?.kcpeResults ?? "N/A"),
+        : "Not recorded",
     cbcLevel:
       typeof admissionsMetadata.cbc_level === "string"
         ? admissionsMetadata.cbc_level
-        : (fallbackSeed?.cbcLevel ?? "Not recorded"),
-    registrationDate: fallbackSeed?.registrationDate ?? "On file",
+        : "Not recorded",
+    registrationDate: "On file",
     applicationStatus: "registered",
-    feesBalance: fallbackSeed?.feesBalance ?? 32000,
-    lastPayment:
-      fallbackSeed?.lastPayment ?? "Finance office will post opening balances after registration.",
-    billingPlan: fallbackSeed?.billingPlan ?? "Admission fee and opening term package",
+    feesBalance: 0,
+    lastPayment: "No payment history recorded.",
+    billingPlan: "Not configured",
+    portalAccessStatus: "not_invited",
+    portalAccessDetail: "No parent portal invitation recorded.",
     allergies:
       typeof medicalMetadata.allergies === "string"
         ? medicalMetadata.allergies
-        : (fallbackSeed?.allergies ?? "None"),
+        : "Not recorded",
     conditions:
       typeof medicalMetadata.conditions === "string"
         ? medicalMetadata.conditions
-        : (fallbackSeed?.conditions ?? "None"),
+        : "Not recorded",
     emergencyContact:
       typeof medicalMetadata.emergency_contact === "string"
         ? medicalMetadata.emergency_contact
-        : (fallbackSeed?.emergencyContact ?? "Not recorded"),
-    academics:
-      fallbackSeed?.academics ?? [
-        {
-          id: `acad-${student.id}`,
-          subject: "Entry baseline",
-          value: "Pending",
-          note: "Academic office will post readiness notes after onboarding.",
-        },
-      ],
-    attendance:
-      fallbackSeed?.attendance ?? [
-        {
-          id: `att-${student.id}`,
-          date: "Pending",
-          status: "Awaiting start",
-          note: "Attendance history will appear once class entry begins.",
-        },
-      ],
-    discipline:
-      fallbackSeed?.discipline ?? [
-        {
-          id: `disc-${student.id}`,
-          date: "On file",
-          entry: "No record",
-          status: "Clear",
-        },
-      ],
-    fees:
-      fallbackSeed?.fees ?? [
-        {
-          id: `fee-${student.id}-1`,
-          item: "Admission fee",
-          amount: 12000,
-          status: "pending",
-        },
-        {
-          id: `fee-${student.id}-2`,
-          item: "Opening tuition balance",
-          amount: 20000,
-          status: "pending",
-        },
-      ],
+        : "Not recorded",
+    academics: [],
+    discipline: [],
+    fees: [],
     documents: documents
       .filter((document) => document.ownerType === "student" && document.learnerName === fullName)
       .map((document) => ({
@@ -451,6 +666,167 @@ function buildFallbackStudentProfile(
         uploadedOn: document.uploadedOn,
         verificationStatus: document.verificationStatus,
       })),
+  };
+}
+
+function formatLifecycleEventType(value?: string | null) {
+  const normalized = value?.trim().toLowerCase();
+
+  if (!normalized) {
+    return "Lifecycle";
+  }
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function buildAcademicStatusLines(
+  input: LiveAdmissionsStudentProfileResponse,
+): StudentAcademicLine[] {
+  const academicLines: StudentAcademicLine[] = [];
+  const enrollment = input.academic_enrollment;
+  const subjectEnrollments = input.subject_enrollments ?? [];
+  const timetableEnrollments = input.timetable_enrollments ?? [];
+  const latestLifecycleEvent = input.lifecycle_events?.[0];
+
+  if (enrollment) {
+    academicLines.push({
+      id: `academic-enrollment-${enrollment.id}`,
+      subject: "Current enrollment",
+      value: `${enrollment.class_name} ${enrollment.stream_name}`.trim(),
+      note: `${enrollment.academic_year} - ${enrollment.status}`,
+    });
+  }
+
+  if (subjectEnrollments.length > 0) {
+    academicLines.push({
+      id: "academic-subject-enrollments",
+      subject: "Subjects",
+      value: `${subjectEnrollments.length} active`,
+      note: subjectEnrollments.map((subject) => subject.subject_name).join(", "),
+    });
+  }
+
+  if (timetableEnrollments.length > 0) {
+    academicLines.push({
+      id: "academic-timetable-enrollments",
+      subject: "Timetable",
+      value: `${timetableEnrollments.length} active`,
+      note: timetableEnrollments
+        .slice(0, 3)
+        .map((slot) => `${slot.day_of_week} ${slot.starts_at}`)
+        .join(", "),
+    });
+  }
+
+  if (latestLifecycleEvent) {
+    academicLines.push({
+      id: `academic-lifecycle-${latestLifecycleEvent.id}`,
+      subject: "Latest lifecycle",
+      value: formatLifecycleEventType(latestLifecycleEvent.event_type),
+      note:
+        [
+          latestLifecycleEvent.to_class_name,
+          latestLifecycleEvent.to_stream_name,
+          latestLifecycleEvent.to_academic_year,
+        ]
+          .filter(Boolean)
+          .join(" ")
+        || latestLifecycleEvent.reason
+        || formatDate(latestLifecycleEvent.created_at),
+    });
+  }
+
+  return academicLines;
+}
+
+function parseMinorAmount(value?: string | number | null) {
+  const amount = Number(value ?? 0);
+  return Number.isFinite(amount) ? amount / 100 : 0;
+}
+
+function buildPortalAccessStatus(input: LiveAdmissionsStudentProfileResponse) {
+  const guardianLinks = input.guardian_links ?? [];
+  const activeGuardian = guardianLinks.find((guardian) => guardian.status === "active");
+  const invitedGuardian = guardianLinks.find((guardian) => guardian.status === "invited");
+  const fallbackEmail = getGuardianMetadata(input.student.metadata).parent_email;
+
+  if (activeGuardian) {
+    return {
+      status: "active" as const,
+      detail: `Parent portal active for ${activeGuardian.email}`,
+    };
+  }
+
+  if (invitedGuardian) {
+    return {
+      status: "invited" as const,
+      detail: `Parent invitation sent to ${invitedGuardian.email}`,
+    };
+  }
+
+  return {
+    status: "not_invited" as const,
+    detail:
+      typeof fallbackEmail === "string" && fallbackEmail.trim()
+        ? `No accepted parent portal invite for ${fallbackEmail}`
+        : "No parent portal invitation recorded.",
+  };
+}
+
+function buildFeeHandoffStatus(input: LiveAdmissionsStudentProfileResponse): {
+  feesBalance: number;
+  billingPlan: string;
+  lastPayment: string;
+  fees: StudentFeesLine[];
+} {
+  const invoice = input.fee_invoice;
+  const assignment = input.fee_assignment;
+
+  if (invoice) {
+    const amountDue = parseMinorAmount(invoice.amount_due_minor);
+    const amountPaid = parseMinorAmount(invoice.amount_paid_minor);
+    const balance = Math.max(0, amountDue - amountPaid);
+    const status = invoice.status === "paid" ? "posted" : "pending";
+
+    return {
+      feesBalance: balance,
+      billingPlan: invoice.description?.trim() || assignment?.description?.trim() || "Opening invoice",
+      lastPayment:
+        invoice.status === "paid"
+          ? "Invoice paid"
+          : `Invoice ${invoice.status} - due ${formatDate(invoice.due_date)}`,
+      fees: [
+        {
+          id: invoice.id,
+          item: invoice.invoice_number,
+          amount: amountDue,
+          status,
+        },
+      ],
+    };
+  }
+
+  if (assignment) {
+    return {
+      feesBalance: parseMinorAmount(assignment.amount_minor),
+      billingPlan: assignment.description?.trim() || "Opening fee assignment",
+      lastPayment: `Fee assignment ${assignment.status}`,
+      fees: [
+        {
+          id: assignment.id,
+          item: assignment.description?.trim() || "Opening fee assignment",
+          amount: parseMinorAmount(assignment.amount_minor),
+          status: assignment.status === "assigned" ? "pending" : "posted",
+        },
+      ],
+    };
+  }
+
+  return {
+    feesBalance: 0,
+    billingPlan: "Not configured",
+    lastPayment: "No payment history recorded.",
+    fees: [],
   };
 }
 
@@ -487,13 +863,13 @@ export function mapAdmissionsDatasetFromLive(input: {
       birthCertificateNumber: application.birth_certificate_number,
       nationality: application.nationality,
       previousSchool: application.previous_school ?? "Not provided",
-      kcpeResults: application.kcpe_results ?? "N/A",
+      kcpeResults: application.kcpe_results ?? "Not recorded",
       cbcLevel: application.cbc_level ?? "Not recorded",
       parentEmail: application.parent_email ?? "",
       occupation: application.parent_occupation ?? "Not provided",
       relationship: application.relationship,
-      allergies: application.allergies ?? "None",
-      conditions: application.conditions ?? "None",
+      allergies: application.allergies ?? "Not recorded",
+      conditions: application.conditions ?? "Not recorded",
       emergencyContact: application.emergency_contact ?? "Not recorded",
       reviewNote: application.review_notes ?? "",
     };
@@ -588,7 +964,7 @@ export function mapAdmissionsDatasetFromLive(input: {
   });
 
   const studentProfiles = input.students.map((student) =>
-    buildFallbackStudentProfile(student, documents),
+    buildStudentProfileFromLive(student, documents),
   );
 
   return {
@@ -606,124 +982,79 @@ export function mapAdmissionsStudentProfileFromLive(
   input: LiveAdmissionsStudentProfileResponse,
 ): AdmissionsStudentProfile {
   const fullName = buildFullName(input.student);
-  const seed = getFallbackProfileSeed({
-    admissionNumber: input.student.admission_number,
-    fullName,
-  });
   const admissionsMetadata = getAdmissionsMetadata(input.student.metadata);
   const guardianMetadata = getGuardianMetadata(input.student.metadata);
   const medicalMetadata = getMedicalMetadata(input.student.metadata);
+  const portalAccess = buildPortalAccessStatus(input);
+  const feeHandoff = buildFeeHandoffStatus(input);
 
   return {
     id: input.student.id,
     fullName,
     admissionNumber: input.student.admission_number,
-    className: input.allocation?.class_name ?? seed?.className ?? "Pending",
-    streamName: input.allocation?.stream_name ?? seed?.streamName ?? "Pending",
-    dormitoryName: input.allocation?.dormitory_name ?? seed?.dormitoryName ?? "Pending",
-    transportRoute: input.allocation?.transport_route ?? seed?.transportRoute ?? "Pending",
-    gender: input.student.gender ?? seed?.gender ?? "Not recorded",
-    dateOfBirth: input.student.date_of_birth ?? seed?.dateOfBirth ?? "Not recorded",
+    className: input.allocation?.class_name ?? "Pending",
+    streamName: input.allocation?.stream_name ?? "Pending",
+    dormitoryName: input.allocation?.dormitory_name ?? "Pending",
+    transportRoute: input.allocation?.transport_route ?? "Pending",
+    gender: input.student.gender ?? "Not recorded",
+    dateOfBirth: input.student.date_of_birth ?? "Not recorded",
     nationality:
       typeof admissionsMetadata.nationality === "string"
         ? admissionsMetadata.nationality
-        : (seed?.nationality ?? "Kenyan"),
+        : "Not recorded",
     parentName:
       input.student.primary_guardian_name
       ?? (typeof guardianMetadata.parent_name === "string" ? guardianMetadata.parent_name : null)
-      ?? (seed?.parentName ?? "Guardian pending"),
-    parentPhone: input.student.primary_guardian_phone ?? seed?.parentPhone ?? "Not on file",
+      ?? "Guardian pending",
+    parentPhone: input.student.primary_guardian_phone ?? "Not on file",
     parentEmail:
       typeof guardianMetadata.parent_email === "string"
         ? guardianMetadata.parent_email
-        : (seed?.parentEmail ?? ""),
+        : "",
     occupation:
       typeof guardianMetadata.parent_occupation === "string"
         ? guardianMetadata.parent_occupation
-        : (seed?.occupation ?? "Not provided"),
+        : "Not provided",
     relationship:
       typeof guardianMetadata.relationship === "string"
         ? guardianMetadata.relationship
-        : (seed?.relationship ?? "Guardian"),
+        : "Not recorded",
     previousSchool:
       typeof admissionsMetadata.previous_school === "string"
         ? admissionsMetadata.previous_school
-        : (seed?.previousSchool ?? "Not provided"),
+        : "Not provided",
     kcpeResults:
       typeof admissionsMetadata.kcpe_results === "string"
         ? admissionsMetadata.kcpe_results
-        : (seed?.kcpeResults ?? "N/A"),
+        : "Not recorded",
     cbcLevel:
       typeof admissionsMetadata.cbc_level === "string"
         ? admissionsMetadata.cbc_level
-        : (seed?.cbcLevel ?? "Not recorded"),
-    registrationDate: formatDate(input.allocation?.effective_from) || seed?.registrationDate || "On file",
+        : "Not recorded",
+    registrationDate: input.allocation?.effective_from
+      ? formatDate(input.allocation.effective_from)
+      : "On file",
     applicationStatus: "registered",
-    feesBalance: seed?.feesBalance ?? 32000,
-    lastPayment:
-      seed?.lastPayment ?? "Finance office will post opening balances after registration.",
-    billingPlan: seed?.billingPlan ?? "Admission fee and opening term package",
+    feesBalance: feeHandoff.feesBalance,
+    lastPayment: feeHandoff.lastPayment,
+    billingPlan: feeHandoff.billingPlan,
+    portalAccessStatus: portalAccess.status,
+    portalAccessDetail: portalAccess.detail,
     allergies:
       typeof medicalMetadata.allergies === "string"
         ? medicalMetadata.allergies
-        : (seed?.allergies ?? "None"),
+        : "Not recorded",
     conditions:
       typeof medicalMetadata.conditions === "string"
         ? medicalMetadata.conditions
-        : (seed?.conditions ?? "None"),
+        : "Not recorded",
     emergencyContact:
       typeof medicalMetadata.emergency_contact === "string"
         ? medicalMetadata.emergency_contact
-        : (seed?.emergencyContact ?? "Not recorded"),
-    academics:
-      seed?.academics ?? [
-        {
-          id: `acad-${input.student.id}`,
-          subject: "Entry baseline",
-          value: "Pending",
-          note: "Academic office will post readiness notes after onboarding.",
-        },
-      ],
-    attendance:
-      input.attendance.length > 0
-        ? input.attendance.map((entry, index) => ({
-            id: `att-${input.student.id}-${index + 1}`,
-            date: formatDate(entry.attendance_date),
-            status: entry.status,
-            note: entry.notes ?? "Attendance entry recorded.",
-          }))
-        : (seed?.attendance ?? [
-            {
-              id: `att-${input.student.id}`,
-              date: "Pending",
-              status: "Awaiting start",
-              note: "Attendance history will appear once class entry begins.",
-            },
-          ]),
-    discipline:
-      seed?.discipline ?? [
-        {
-          id: `disc-${input.student.id}`,
-          date: "On file",
-          entry: "No record",
-          status: "Clear",
-        },
-      ],
-    fees:
-      seed?.fees ?? [
-        {
-          id: `fee-${input.student.id}-1`,
-          item: "Admission fee",
-          amount: 12000,
-          status: "pending",
-        },
-        {
-          id: `fee-${input.student.id}-2`,
-          item: "Opening tuition balance",
-          amount: 20000,
-          status: "pending",
-        },
-      ],
+        : "Not recorded",
+    academics: buildAcademicStatusLines(input),
+    discipline: [],
+    fees: feeHandoff.fees,
     documents: input.documents.map((document) => ({
       id: document.id,
       documentType: document.document_type,
@@ -791,6 +1122,16 @@ export async function fetchAdmissionsDatasetLive(session: LiveAuthSession) {
     allocations,
     transfers,
   });
+}
+
+export function fetchAdmissionsReportExportLive(
+  session: LiveAuthSession,
+  reportId: string,
+) {
+  return withSession<LiveAdmissionsReportExportResponse>(
+    session,
+    `/admissions/reports/${encodeURIComponent(reportId)}/export`,
+  );
 }
 
 export function fetchAdmissionsStudentProfileLive(
@@ -892,9 +1233,30 @@ export function registerAdmissionApplicationLive(
     transport_route?: string;
   },
 ) {
-  return withSession(
+  return withSession<LiveAdmissionRegistrationResponse>(
     session,
     `/admissions/applications/${applicationId}/register`,
+    {
+      method: "POST",
+      body: input,
+    },
+  );
+}
+
+export function advanceAdmissionsStudentAcademicLifecycleLive(
+  session: LiveAuthSession,
+  studentId: string,
+  input: {
+    action: "promotion" | "graduation" | "archive";
+    class_name?: string;
+    stream_name?: string;
+    reason?: string;
+    notes?: string;
+  },
+) {
+  return withSession<LiveAdmissionAcademicLifecycleResponse>(
+    session,
+    `/admissions/students/${studentId}/academic-lifecycle`,
     {
       method: "POST",
       body: input,

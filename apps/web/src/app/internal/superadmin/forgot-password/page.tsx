@@ -38,10 +38,11 @@ export default function InternalSuperadminForgotPasswordPage() {
         title="Recover platform access"
         subtitle="Enter the email address tied to your platform account. We will send recovery instructions to your verified channel."
         identifierLabel="Work email"
-        identifierPlaceholder="owner@shulehub.com"
+        identifierPlaceholder="Enter your work email"
         submitLabel="Send recovery link"
         backHref="/login"
         successMessage="If the email belongs to an authorized platform account, recovery instructions have been sent."
+        audience="superadmin"
       />
     </AuthShell>
   );

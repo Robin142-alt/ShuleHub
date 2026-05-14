@@ -6,7 +6,7 @@ export default function PortalLoginPage() {
     <AuthShell
       eyebrow="Parent and student portal"
       heroTitle="School access for families and learners."
-      heroDescription="A calm, mobile-first portal for fees, attendance, academics, notices, and downloads that feels friendly from the first screen."
+      heroDescription="A calm, mobile-first portal for fees, academics, notices, and downloads that feels friendly from the first screen."
       badge="Portal access"
       logoMark="PT"
       helper="Parents only see linked learners, and students only see their own records, comments, balances, and messages."
@@ -17,9 +17,9 @@ export default function PortalLoginPage() {
           description: "Current balance, recent payments, and M-PESA instructions stay simple and visible.",
         },
         {
-          id: "attendance",
+          id: "updates",
           title: "Daily visibility",
-          description: "Families can check attendance and notices without calling the school office first.",
+          description: "Families can check notices, results, and school updates without calling the school office first.",
         },
         {
           id: "friendly",

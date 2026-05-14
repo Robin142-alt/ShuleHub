@@ -5,7 +5,6 @@ import {
   MessageSquareText,
   ReceiptText,
   UserPlus,
-  UsersRound,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -15,7 +14,6 @@ import type { DashboardRole, QuickActionItem } from "@/lib/dashboard/types";
 const actionIconMap = {
   "add-student": UserPlus,
   "record-payment": CreditCard,
-  "mark-attendance": UsersRound,
   "send-sms": MessageSquareText,
   "create-invoice": ReceiptText,
   "print-report": FileSpreadsheet,

@@ -20,7 +20,7 @@ export default async function SchoolForgotPasswordPage() {
       logoMark={resolution.branding.logoMark}
       helper="Recovery remains tenant-scoped so staff only regain access to the school that issued their credentials."
       highlights={[
-        { id: "email-or-phone", title: "Email or phone", description: "Staff can start recovery with the identifier their school normally uses." },
+        { id: "verified-email", title: "Verified email", description: "Staff start recovery with the email address on their school account." },
         { id: "tenant-aware", title: "Tenant-aware", description: "Recovery messages always align to the school workspace, not the wider platform." },
         { id: "simple", title: "Simple enough for schools", description: "The flow stays clear and calm for day-to-day non-technical users." },
       ]}
@@ -31,12 +31,14 @@ export default async function SchoolForgotPasswordPage() {
     >
       <ForgotPasswordView
         title="Reset your school password"
-        subtitle="Enter the email or phone number your school uses for your account. We will send reset instructions to your verified channel."
-        identifierLabel="Email or phone number"
-        identifierPlaceholder="principal@school.ac.ke or 0712 345 678"
+        subtitle="Enter the verified email address your school uses for your account. We will send reset instructions to that address."
+        identifierLabel="Email address"
+        identifierPlaceholder="Email address on your school account"
         submitLabel="Send reset instructions"
         backHref="/school/login"
         successMessage="If the details match a school account, reset instructions are on the way."
+        audience="school"
+        tenantSlug={resolution.requestedSlug ?? resolution.branding.slug}
       />
     </AuthShell>
   );

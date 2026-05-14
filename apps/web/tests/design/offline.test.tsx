@@ -24,22 +24,24 @@ describe("STEP 6: Offline UI tests", () => {
     expect(within(syncPanel).getByText("Failed")).toBeVisible();
   });
 
-  it("disables unsafe finance actions while preserving offline-safe attendance actions", () => {
+  it("disables unsafe finance and inventory actions while offline", () => {
     renderDashboardScreen({ role: "admin", online: false });
 
     expect(
       screen.getByRole("button", { name: /record payment/i }),
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: /send sms/i }),
+      screen.getByRole("button", { name: /adjust stock/i }),
     ).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /send sms/i })).not.toBeInTheDocument();
   });
 
-  it("keeps teacher attendance action available while offline", () => {
+  it("does not expose retired teacher attendance actions while offline", () => {
     renderDashboardScreen({ role: "teacher", online: false });
 
     expect(
-      screen.getByRole("button", { name: /mark attendance/i }),
-    ).toBeEnabled();
+      screen.queryByRole("button", { name: /mark attendance/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /send sms/i })).not.toBeInTheDocument();
   });
 });

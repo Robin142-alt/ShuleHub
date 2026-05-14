@@ -7,12 +7,14 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 
+import { Public } from '../../auth/decorators/public.decorator';
 import { Permissions } from '../../auth/decorators/permissions.decorator';
+import { StreamingUploadInterceptor } from '../../common/uploads/streaming-upload.interceptor';
 import {
   AssignTicketDto,
   CreateInternalNoteDto,
@@ -25,13 +27,15 @@ import {
   UploadTicketAttachmentDto,
 } from './dto/support.dto';
 import { SupportService } from './support.service';
+import { SupportStatusSubscriptionService } from './support-status-subscription.service';
 import type { UploadedSupportFile } from './storage/support-attachment-storage.service';
-
-const { memoryStorage } = require('multer');
 
 @Controller('support')
 export class SupportController {
-  constructor(private readonly supportService: SupportService) {}
+  constructor(
+    private readonly supportService: SupportService,
+    private readonly supportStatusSubscriptions: SupportStatusSubscriptionService,
+  ) {}
 
   @Get('categories')
   @Permissions('support:view')
@@ -68,7 +72,7 @@ export class SupportController {
 
   @Post('tickets/:ticketId/attachments')
   @Permissions('support:reply')
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  @UseInterceptors(StreamingUploadInterceptor('file'))
   uploadAttachment(
     @Param('ticketId', new ParseUUIDPipe()) ticketId: string,
     @Body() dto: UploadTicketAttachmentDto,
@@ -134,10 +138,44 @@ export class SupportController {
     return this.supportService.getSystemStatus();
   }
 
+  @Get('public/system-status')
+  @Public()
+  async getPublicSystemStatus() {
+    const status = await this.supportService.getSystemStatus();
+
+    return this.supportStatusSubscriptions.toPublicStatus(status);
+  }
+
+  @Post('public/status-subscriptions')
+  @Public()
+  subscribeToStatus(
+    @Body() dto: { email?: string; locale?: string },
+    @Req() request: { ip?: string; headers?: Record<string, string | string[] | undefined> },
+  ) {
+    return this.supportStatusSubscriptions.subscribe({
+      email: dto.email ?? '',
+      locale: dto.locale,
+      consentSource: 'public_status_page',
+      clientIp: resolveClientIp(request),
+    });
+  }
+
+  @Post('public/status-subscriptions/unsubscribe')
+  @Public()
+  unsubscribeFromStatus(@Body() dto: { token?: string }) {
+    return this.supportStatusSubscriptions.unsubscribe({ token: dto.token ?? '' });
+  }
+
   @Get('notifications')
   @Permissions('support:view')
   listNotifications() {
     return this.supportService.listNotifications();
+  }
+
+  @Get('admin/notifications/dead-letter')
+  @Permissions('support:manage')
+  listNotificationDeadLetters() {
+    return this.supportService.listNotificationDeadLetters();
   }
 
   @Get('admin/analytics')
@@ -145,4 +183,12 @@ export class SupportController {
   getAnalytics() {
     return this.supportService.getAnalytics();
   }
+}
+
+function resolveClientIp(request: { ip?: string; headers?: Record<string, string | string[] | undefined> }): string | null {
+  const forwardedFor = request.headers?.['x-forwarded-for'];
+  const firstForwarded = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+  const clientIp = firstForwarded?.split(',')[0]?.trim() || request.ip?.trim();
+
+  return clientIp || null;
 }

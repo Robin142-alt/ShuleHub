@@ -6,18 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint src tests jest.config.ts jest.setup.ts next.config.ts playwright.config.ts postcss.config.mjs",
     "test:design": "jest --config jest.config.ts --runInBand",
     "test:design:watch": "jest --config jest.config.ts --watch",
     "test:design:e2e": "playwright test -c playwright.config.ts",
     "test:design:e2e:list": "playwright test -c playwright.config.ts --list"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
     "@tanstack/react-query": "^5.100.5",
+    "framer-motion": "^12.38.0",
     "lucide-react": "^1.11.0",
     "next": "16.2.4",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-hook-form": "^7.75.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",

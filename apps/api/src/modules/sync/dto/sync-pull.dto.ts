@@ -13,6 +13,7 @@ import {
 import { SYNC_DEFAULT_PULL_LIMIT, SYNC_MAX_PULL_LIMIT, SYNC_SUPPORTED_ENTITIES } from '../sync.constants';
 import { RegisterDeviceDto } from './register-device.dto';
 import { SyncCursorDto } from './sync-cursor.dto';
+import type { SyncEntity } from '../sync.types';
 
 export class SyncPullDto extends RegisterDeviceDto {
   @IsOptional()
@@ -26,7 +27,7 @@ export class SyncPullDto extends RegisterDeviceDto {
   @IsArray()
   @ArrayMaxSize(10)
   @IsIn([...SYNC_SUPPORTED_ENTITIES], { each: true })
-  entities?: Array<(typeof SYNC_SUPPORTED_ENTITIES)[number]>;
+  entities?: SyncEntity[];
 
   @IsOptional()
   @Type(() => Number)

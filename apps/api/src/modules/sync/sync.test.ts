@@ -1,98 +1,34 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { BadRequestException } from '@nestjs/common';
 
-import { AttendanceSyncConflictResolverService } from './conflict-resolvers/attendance-sync-conflict-resolver.service';
 import { FinanceSyncConflictResolverService } from './conflict-resolvers/finance-sync-conflict-resolver.service';
+import { SYNC_SUPPORTED_ENTITIES } from './sync.constants';
+import { SyncOperationLogService } from './sync-operation-log.service';
 import { SyncService } from './sync.service';
 import { RequestContextService } from '../../common/request-context/request-context.service';
 
-test('AttendanceSyncConflictResolverService applies a newer attendance operation', async () => {
-  const resolver = new AttendanceSyncConflictResolverService(
-    {
-      lockById: async (): Promise<null> => null,
-      lockByStudentAndDate: async (): Promise<null> => null,
-      upsertRecord: async () => ({
-        id: '00000000-0000-0000-0000-000000000101',
-        student_id: '00000000-0000-0000-0000-000000000201',
-        attendance_date: '2026-04-26',
-        status: 'present',
-        last_modified_at: new Date('2026-04-26T08:00:00.000Z'),
-        notes: null,
-        metadata: {},
-        source_device_id: 'device-1',
-        last_operation_id: '00000000-0000-0000-0000-000000000301',
-        sync_version: '15',
-      }),
-    } as never,
-    {
-      createOperation: async () => ({
-        version: '15',
-      }),
-    } as never,
+test('attendance is retired from client sync entities', () => {
+  assert.deepEqual([...SYNC_SUPPORTED_ENTITIES], ['finance']);
+
+  const operationLogService = new SyncOperationLogService({} as never, {} as never);
+
+  assert.throws(
+    () => operationLogService.ensureSupportedEntity('attendance'),
+    BadRequestException,
   );
-
-  const result = await resolver.applyOperation('tenant-a', 'device-1', {
-    op_id: '00000000-0000-0000-0000-000000000301',
-    entity: 'attendance',
-    version: 7,
-    payload: {
-      action: 'upsert',
-      record_id: '00000000-0000-0000-0000-000000000101',
-      student_id: '00000000-0000-0000-0000-000000000201',
-      attendance_date: '2026-04-26',
-      status: 'present',
-      last_modified_at: '2026-04-26T08:00:00.000Z',
-    },
-  });
-
-  assert.equal(result.status, 'applied');
-  assert.equal(result.server_version, '15');
 });
 
-test('AttendanceSyncConflictResolverService rejects stale attendance updates', async () => {
-  const resolver = new AttendanceSyncConflictResolverService(
-    {
-      lockById: async (): Promise<null> => null,
-      lockByStudentAndDate: async () => ({
-        id: '00000000-0000-0000-0000-000000000101',
-        student_id: '00000000-0000-0000-0000-000000000201',
-        attendance_date: '2026-04-26',
-        status: 'absent',
-        last_modified_at: new Date('2026-04-26T09:00:00.000Z'),
-        notes: null,
-        metadata: {},
-        source_device_id: 'device-server',
-        last_operation_id: '00000000-0000-0000-0000-000000000302',
-        sync_version: '18',
-      }),
-      upsertRecord: async (): Promise<never> => {
-        throw new Error('Stale operations must not upsert attendance records');
-      },
-    } as never,
-    {
-      createOperation: async (): Promise<never> => {
-        throw new Error('Stale operations must not create sync logs');
-      },
-    } as never,
-  );
-
-  const result = await resolver.applyOperation('tenant-a', 'device-1', {
-    op_id: '00000000-0000-0000-0000-000000000301',
-    entity: 'attendance',
-    version: 6,
-    payload: {
-      action: 'upsert',
-      record_id: '00000000-0000-0000-0000-000000000101',
-      student_id: '00000000-0000-0000-0000-000000000201',
-      attendance_date: '2026-04-26',
-      status: 'present',
-      last_modified_at: '2026-04-26T08:00:00.000Z',
-    },
-  });
-
-  assert.equal(result.status, 'rejected');
-  assert.equal(result.conflict_policy, 'last-write-wins');
-  assert.equal(result.server_version, '18');
+test('retired attendance sync source files are removed from the active API tree', () => {
+  for (const relativePath of [
+    'apps/api/src/modules/sync/conflict-resolvers/attendance-sync-conflict-resolver.service.ts',
+    'apps/api/src/modules/sync/entities/attendance-record.entity.ts',
+    'apps/api/src/modules/sync/repositories/attendance-records.repository.ts',
+  ]) {
+    assert.equal(existsSync(join(process.cwd(), relativePath)), false, `${relativePath} should be removed`);
+  }
 });
 
 test('FinanceSyncConflictResolverService rejects client finance mutations', async () => {
@@ -117,7 +53,7 @@ test('FinanceSyncConflictResolverService rejects client finance mutations', asyn
   assert.equal(result.conflict_policy, 'server-authoritative');
 });
 
-test('SyncService pull merges cursor windows and returns ordered operations', async () => {
+test('SyncService pull returns ordered finance operations after attendance retirement', async () => {
   const requestContext = new RequestContextService();
   const service = new SyncService(
     requestContext,
@@ -143,47 +79,28 @@ test('SyncService pull merges cursor windows and returns ordered operations', as
     } as never,
     {
       upsertCursor: async (): Promise<void> => undefined,
-      getCursorMap: async () => new Map([['attendance', '2']]),
+      getCursorMap: async () => new Map([['finance', '2']]),
     } as never,
     {
       findByOpId: async (): Promise<null> => null,
-      fetchByEntitySinceVersion: async (_tenantId: string, entity: string) =>
-        entity === 'attendance'
-          ? [
-              {
-                op_id: '00000000-0000-0000-0000-000000000601',
-                tenant_id: 'tenant-a',
-                device_id: 'device-2',
-                entity: 'attendance',
-                payload: { action: 'upsert' },
-                version: '3',
-                created_at: new Date('2026-04-26T08:00:00.000Z').toISOString(),
-                updated_at: new Date('2026-04-26T08:00:00.000Z').toISOString(),
-              },
-            ]
-          : [
-              {
-                op_id: '00000000-0000-0000-0000-000000000602',
-                tenant_id: 'tenant-a',
-                device_id: 'server',
-                entity: 'finance',
-                payload: { action: 'posted' },
-                version: '5',
-                created_at: new Date('2026-04-26T09:00:00.000Z').toISOString(),
-                updated_at: new Date('2026-04-26T09:00:00.000Z').toISOString(),
-              },
-            ],
+      fetchByEntitySinceVersion: async () => [
+        {
+          op_id: '00000000-0000-0000-0000-000000000602',
+          tenant_id: 'tenant-a',
+          device_id: 'server',
+          entity: 'finance',
+          payload: { action: 'posted' },
+          version: '5',
+          created_at: new Date('2026-04-26T09:00:00.000Z').toISOString(),
+          updated_at: new Date('2026-04-26T09:00:00.000Z').toISOString(),
+        },
+      ],
       getLatestVersionByEntities: async () => new Map(),
-    } as never,
-    {
-      lockById: async (): Promise<null> => null,
-      lockByStudentAndDate: async (): Promise<null> => null,
     } as never,
     {
       getLatestCursors: async () => [],
       ensureSupportedEntity: (): void => undefined,
     } as never,
-    {} as never,
     {} as never,
   );
 
@@ -208,14 +125,14 @@ test('SyncService pull merges cursor windows and returns ordered operations', as
         platform: 'android',
         app_version: '1.0.0',
         metadata: {},
-        entities: ['attendance', 'finance'],
+        entities: ['finance'],
         limit: 10,
       }),
   );
 
-  assert.equal(response.operations.length, 2);
+  assert.equal(response.operations.length, 1);
   assert.deepEqual(
     response.operations.map((operation) => operation.version),
-    ['3', '5'],
+    ['5'],
   );
 });

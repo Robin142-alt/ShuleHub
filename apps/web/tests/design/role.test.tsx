@@ -15,11 +15,14 @@ describe("STEP 4: Role tests", () => {
     expect(screen.getByRole("button", { name: /record payment/i })).toBeVisible();
   });
 
-  it("shows attendance actions for teacher without finance controls", () => {
+  it("keeps teacher dashboard free of inactive academics, communication, attendance, and finance controls", () => {
     renderDashboardScreen({ role: "teacher" });
 
-    expect(screen.getByRole("link", { name: /attendance today/i })).toBeVisible();
-    expect(screen.getByRole("button", { name: /mark attendance/i })).toBeVisible();
+    expect(screen.queryByRole("link", { name: /class planner/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /send sms/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /open academics/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /attendance today/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /mark attendance/i })).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /record payment/i }),
     ).not.toBeInTheDocument();
@@ -55,7 +58,7 @@ describe("STEP 4: Role tests", () => {
 
     expect(screen.getByRole("link", { name: /admissions/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /new registration/i })).toBeVisible();
-    expect(screen.getByPlaceholderText(/search students, payments, or reports/i)).toBeVisible();
+    expect(screen.getByPlaceholderText(/search students, payments, or modules/i)).toBeVisible();
   });
 
   it("shows finance visibility for bursar without exposing superadmin modules", () => {
@@ -68,7 +71,7 @@ describe("STEP 4: Role tests", () => {
   it("opens a public storekeeper school workspace with inventory navigation", () => {
     renderWithProviders(createElement(SchoolPages, { role: "storekeeper" }));
 
-    expect(screen.getByText(/Storekeeper/i)).toBeVisible();
+    expect(screen.getAllByText(/Storekeeper/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Inventory/i })).toHaveAttribute(
       "href",
       "/inventory",

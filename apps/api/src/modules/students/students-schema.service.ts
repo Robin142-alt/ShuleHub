@@ -55,30 +55,70 @@ export class StudentsSchemaService implements OnModuleInit {
           ON DELETE SET NULL
       );
 
-      DO $$
-      BEGIN
-        IF to_regclass('public.attendance_records') IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1
-            FROM pg_constraint
-            WHERE conname = 'fk_attendance_records_student'
-          ) THEN
-          ALTER TABLE attendance_records
-          ADD CONSTRAINT fk_attendance_records_student
-            FOREIGN KEY (tenant_id, student_id)
-            REFERENCES students (tenant_id, id)
-            ON DELETE CASCADE;
-        END IF;
-      END;
-      $$;
+      CREATE TABLE IF NOT EXISTS student_guardians (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        student_id uuid NOT NULL,
+        user_id uuid,
+        invitation_id uuid,
+        display_name text NOT NULL,
+        email text NOT NULL,
+        phone text,
+        relationship text NOT NULL,
+        is_primary boolean NOT NULL DEFAULT FALSE,
+        status text NOT NULL DEFAULT 'invited',
+        accepted_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT ck_student_guardians_display_name_not_blank CHECK (btrim(display_name) <> ''),
+        CONSTRAINT ck_student_guardians_email_not_blank CHECK (btrim(email) <> ''),
+        CONSTRAINT ck_student_guardians_relationship_not_blank CHECK (btrim(relationship) <> ''),
+        CONSTRAINT ck_student_guardians_status CHECK (status IN ('invited', 'active', 'revoked')),
+        CONSTRAINT uq_student_guardians_tenant_id_id UNIQUE (tenant_id, id),
+        CONSTRAINT fk_student_guardians_student
+          FOREIGN KEY (tenant_id, student_id)
+          REFERENCES students (tenant_id, id)
+          ON DELETE CASCADE,
+        CONSTRAINT fk_student_guardians_user
+          FOREIGN KEY (user_id)
+          REFERENCES users (id)
+          ON DELETE SET NULL,
+        CONSTRAINT fk_student_guardians_invitation
+          FOREIGN KEY (invitation_id)
+          REFERENCES auth_action_tokens (id)
+          ON DELETE SET NULL
+      );
 
       CREATE INDEX IF NOT EXISTS ix_students_status_created_at
         ON students (tenant_id, status, created_at DESC);
       CREATE INDEX IF NOT EXISTS ix_students_name_lookup
         ON students (tenant_id, last_name, first_name, admission_number);
+      CREATE INDEX IF NOT EXISTS ix_students_search_vector
+        ON students
+        USING GIN (
+          to_tsvector(
+            'simple',
+            admission_number || ' ' ||
+            first_name || ' ' ||
+            COALESCE(middle_name, '') || ' ' ||
+            last_name || ' ' ||
+            COALESCE(primary_guardian_name, '') || ' ' ||
+            COALESCE(primary_guardian_phone, '')
+          )
+        );
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_student_guardians_student_email
+        ON student_guardians (tenant_id, student_id, lower(email));
+      CREATE INDEX IF NOT EXISTS ix_student_guardians_user_status
+        ON student_guardians (tenant_id, user_id, status)
+        WHERE user_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS ix_student_guardians_invitation
+        ON student_guardians (tenant_id, invitation_id)
+        WHERE invitation_id IS NOT NULL;
 
       ALTER TABLE students ENABLE ROW LEVEL SECURITY;
       ALTER TABLE students FORCE ROW LEVEL SECURITY;
+      ALTER TABLE student_guardians ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE student_guardians FORCE ROW LEVEL SECURITY;
 
       DROP POLICY IF EXISTS students_rls_policy ON students;
       CREATE POLICY students_rls_policy ON students
@@ -86,13 +126,31 @@ export class StudentsSchemaService implements OnModuleInit {
       USING (tenant_id = current_setting('app.tenant_id', true))
       WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
+      DROP POLICY IF EXISTS student_guardians_rls_policy ON student_guardians;
+      CREATE POLICY student_guardians_rls_policy ON student_guardians
+      FOR ALL
+      USING (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/invitations/accept%'
+      )
+      WITH CHECK (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/invitations/accept%'
+      );
+
       DROP TRIGGER IF EXISTS trg_students_set_updated_at ON students;
       CREATE TRIGGER trg_students_set_updated_at
       BEFORE UPDATE ON students
       FOR EACH ROW
       EXECUTE FUNCTION set_updated_at();
+
+      DROP TRIGGER IF EXISTS trg_student_guardians_set_updated_at ON student_guardians;
+      CREATE TRIGGER trg_student_guardians_set_updated_at
+      BEFORE UPDATE ON student_guardians
+      FOR EACH ROW
+      EXECUTE FUNCTION set_updated_at();
     `);
 
-    this.logger.log('Student schema and attendance relationships verified');
+    this.logger.log('Student schema verified');
   }
 }

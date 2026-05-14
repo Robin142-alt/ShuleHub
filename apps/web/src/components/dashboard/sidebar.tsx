@@ -2,7 +2,6 @@
 
 import {
   BarChart3,
-  ClipboardCheck,
   ClipboardList,
   GraduationCap,
   HelpCircle,
@@ -29,7 +28,6 @@ const iconMap = {
   admissions: ClipboardList,
   finance: Wallet,
   mpesa: Smartphone,
-  attendance: ClipboardCheck,
   academics: GraduationCap,
   communication: MessageSquare,
   reports: BarChart3,

@@ -2,14 +2,6 @@ import type { LiveAuthUser } from "@/lib/dashboard/api-client";
 import { getDashboardApiBaseUrl } from "@/lib/dashboard/api-client";
 import type { ExperienceAudience } from "@/lib/auth/experience-audience";
 import {
-  portalDemoCredentials,
-  resolvePortalDemoCredential,
-  resolveSeededSchoolDemoCredential,
-  resolveSchoolDemoCredential,
-  schoolDemoCredentials,
-  superadminDemoCredentials,
-} from "@/lib/auth/demo-credentials";
-import {
   readAccessCookie,
   readAudienceCookie,
   readExperienceSessionCookie,
@@ -17,9 +9,6 @@ import {
   readTenantCookie,
   type ExperienceGatewaySession,
 } from "@/lib/auth/server-session";
-import { getRoleHomePath } from "@/lib/auth/role-routing";
-import { libraryPermissions } from "@/lib/library/library-data";
-import { storekeeperPermissions } from "@/lib/storekeeper/storekeeper-data";
 
 type LoginInput = {
   audience: ExperienceAudience;
@@ -57,36 +46,12 @@ function inferTenantSlug(request: Request) {
   return parts.length > 1 ? (parts[0] ?? null) : null;
 }
 
-function isEmailLike(value: string) {
-  return /\S+@\S+\.\S+/.test(value.trim());
-}
-
 function unauthorized(message: string) {
   return new Error(message);
 }
 
-function buildDemoUser(input: {
-  audience: ExperienceAudience;
-  identifier: string;
-  displayName: string;
-  role: string;
-  tenantSlug?: string | null;
-}) {
-  return {
-    user_id: `demo-${input.audience}-${input.role}`,
-    tenant_id: input.tenantSlug ?? "",
-    role: input.role,
-    email: isEmailLike(input.identifier) ? input.identifier : `${input.role}@demo.local`,
-    display_name: input.displayName,
-    permissions:
-      input.role === "storekeeper"
-        ? storekeeperPermissions
-        : input.role === "librarian"
-          ? libraryPermissions
-          : [],
-    session_id: `demo-session-${input.audience}-${input.role}`,
-  } satisfies LiveAuthUser;
-}
+const AUTH_SERVICE_UNAVAILABLE =
+  "Authentication service is temporarily unavailable. Please try again shortly.";
 
 function buildExperienceHomePath(input: {
   audience: ExperienceAudience;
@@ -94,14 +59,18 @@ function buildExperienceHomePath(input: {
   viewer?: string;
 }) {
   if (input.audience === "superadmin") {
-    return getRoleHomePath(input.role ?? "platform_owner");
+    return "/superadmin";
   }
 
   if (input.audience === "school") {
-    return getRoleHomePath(input.role ?? "principal");
+    if (input.role === "storekeeper") {
+      return "/inventory/dashboard";
+    }
+
+    return `/school/${input.role ?? "admin"}`;
   }
 
-  return getRoleHomePath(input.viewer ?? "parent");
+  return `/portal/${input.viewer ?? "parent"}`;
 }
 
 function buildGatewaySession(input: {
@@ -137,22 +106,26 @@ function buildGatewaySession(input: {
 async function requestBackendAuth<T>(
   path: string,
   input: {
-    tenantSlug: string;
+    audience: ExperienceAudience;
+    tenantSlug?: string | null;
     method: "GET" | "POST";
     accessToken?: string;
     body?: Record<string, unknown>;
   },
 ) {
-  const baseUrl = getDashboardApiBaseUrl(input.tenantSlug);
+  const tenantSlug = input.tenantSlug?.trim() || undefined;
+  const baseUrl = getDashboardApiBaseUrl(tenantSlug);
 
   if (!baseUrl) {
-    throw unauthorized("Live backend authentication is not configured.");
+    throw unauthorized(AUTH_SERVICE_UNAVAILABLE);
   }
 
   const response = await fetch(`${baseUrl}${path}`, {
     method: input.method,
     headers: {
       Accept: "application/json",
+      "x-auth-audience": input.audience,
+      ...(tenantSlug ? { "x-tenant-id": tenantSlug } : {}),
       ...(input.body ? { "Content-Type": "application/json" } : {}),
       ...(input.accessToken ? { Authorization: `Bearer ${input.accessToken}` } : {}),
     },
@@ -170,126 +143,79 @@ async function requestBackendAuth<T>(
 
 async function loginSchoolAudience(input: LoginInput) {
   const tenantSlug = input.tenantSlug?.trim() || null;
-  const matchedDemo = resolveSchoolDemoCredential(input.identifier, input.password);
-  const seededDemoForIdentifier = resolveSeededSchoolDemoCredential(input.identifier, input.password);
-  const matchedSeededDemo =
-    seededDemoForIdentifier &&
-    (!tenantSlug || seededDemoForIdentifier.tenantSlug === tenantSlug)
-      ? seededDemoForIdentifier
-      : undefined;
-  const matchedSchoolCredential = matchedDemo ?? matchedSeededDemo;
 
-  if (seededDemoForIdentifier && !matchedSeededDemo) {
-    throw unauthorized("Use one of the listed staff review accounts for this school workspace.");
+  if (!tenantSlug) {
+    throw unauthorized("School workspace is required.");
   }
 
-  if (tenantSlug && isEmailLike(input.identifier)) {
-    try {
-      const response = await requestBackendAuth<BackendAuthResponse>("/auth/login", {
-        tenantSlug,
-        method: "POST",
-        body: {
-          email: input.identifier.trim(),
-          password: input.password,
-          audience: "school",
-        },
-      });
-
-      return buildGatewaySession({
-        audience: "school",
-        userLabel: response.user.display_name || response.user.email,
-        tenantSlug,
-        role: response.user.role,
-        accessToken: response.tokens.access_token,
-        refreshToken: response.tokens.refresh_token,
-        user: response.user,
-      });
-    } catch (error) {
-      if (!matchedSchoolCredential) {
-        throw error;
-      }
-    }
-  }
-
-  if (!matchedSchoolCredential) {
-    throw unauthorized("Use one of the listed staff review accounts for this school workspace.");
-  }
-
-  const resolvedTenantSlug = matchedSchoolCredential.tenantSlug ?? tenantSlug ?? "amani-prep";
-  const displayName =
-    matchedSchoolCredential.displayName ??
-    (matchedSchoolCredential.role === "principal"
-      ? "Principal"
-      : matchedSchoolCredential.role === "bursar"
-        ? "Bursar"
-        : matchedSchoolCredential.role === "teacher"
-          ? "Teacher"
-          : matchedSchoolCredential.role === "storekeeper"
-            ? "Storekeeper"
-            : matchedSchoolCredential.role === "librarian"
-              ? "Librarian"
-              : matchedSchoolCredential.role === "admissions"
-                ? "Admissions officer"
-                : "Admin staff");
+  const response = await requestBackendAuth<BackendAuthResponse>("/auth/login", {
+    audience: "school",
+    tenantSlug,
+    method: "POST",
+    body: {
+      email: input.identifier.trim(),
+      password: input.password,
+      audience: "school",
+    },
+  });
 
   return buildGatewaySession({
     audience: "school",
-    userLabel: displayName,
-    tenantSlug: resolvedTenantSlug,
-    role: matchedSchoolCredential.role,
-    user: buildDemoUser({
-      audience: "school",
-      identifier: matchedSchoolCredential.identifier,
-      displayName,
-      role: matchedSchoolCredential.role,
-      tenantSlug: resolvedTenantSlug,
-    }),
+    userLabel: response.user.display_name || response.user.email,
+    tenantSlug,
+    role: response.user.role,
+    accessToken: response.tokens.access_token,
+    refreshToken: response.tokens.refresh_token,
+    user: response.user,
   });
 }
 
 async function loginSuperadminAudience(input: LoginInput) {
-  if (
-    input.identifier.trim().toLowerCase() !== superadminDemoCredentials.email ||
-    input.password !== superadminDemoCredentials.password
-  ) {
-    throw unauthorized("Use the listed platform owner review credentials to enter this secured workspace.");
-  }
-
-  if ((input.verificationCode ?? "").trim() !== superadminDemoCredentials.verificationCode) {
-    throw unauthorized("Use the listed verification code to complete the protected sign-in.");
-  }
+  const response = await requestBackendAuth<BackendAuthResponse>("/auth/login", {
+    audience: "superadmin",
+    tenantSlug: null,
+    method: "POST",
+    body: {
+      email: input.identifier.trim(),
+      password: input.password,
+      audience: "superadmin",
+      verification_code: input.verificationCode?.trim() || undefined,
+    },
+  });
 
   return buildGatewaySession({
     audience: "superadmin",
-    userLabel: "Platform owner",
+    userLabel: response.user.display_name || response.user.email,
     tenantSlug: null,
-    user: buildDemoUser({
-      audience: "superadmin",
-      identifier: superadminDemoCredentials.email,
-      displayName: "Platform owner",
-      role: "platform_owner",
-    }),
+    role: response.user.role,
+    accessToken: response.tokens.access_token,
+    refreshToken: response.tokens.refresh_token,
+    user: response.user,
   });
 }
 
 async function loginPortalAudience(input: LoginInput) {
-  const matchedDemo = resolvePortalDemoCredential(input.identifier, input.password);
-
-  if (!matchedDemo) {
-    throw unauthorized("Use one of the listed portal review credentials to open the family workspace.");
-  }
+  const tenantSlug = input.tenantSlug?.trim() || null;
+  const response = await requestBackendAuth<BackendAuthResponse>("/auth/login", {
+    audience: "portal",
+    tenantSlug,
+    method: "POST",
+    body: {
+      email: input.identifier.trim(),
+      password: input.password,
+      audience: "portal",
+    },
+  });
 
   return buildGatewaySession({
     audience: "portal",
-    userLabel: matchedDemo.identifier,
-    tenantSlug: null,
-    viewer: matchedDemo.viewer,
-    user: buildDemoUser({
-      audience: "portal",
-      identifier: matchedDemo.identifier,
-      displayName: matchedDemo.viewer === "parent" ? "Parent" : "Student",
-      role: matchedDemo.viewer,
-    }),
+    userLabel: response.user.display_name || response.user.email,
+    tenantSlug,
+    viewer: response.user.role === "student" ? "student" : "parent",
+    role: response.user.role,
+    accessToken: response.tokens.access_token,
+    refreshToken: response.tokens.refresh_token,
+    user: response.user,
   });
 }
 
@@ -314,24 +240,19 @@ export function createServerAuthClient(request: Request) {
     },
 
     async refresh(input: RefreshInput, cookies: CookieReader) {
-      if (input.audience !== "school") {
-        const session = readExperienceSessionCookie(cookies, input.audience);
-
-        if (!session) {
-          throw unauthorized("No active session found.");
-        }
-
-        return this.me(input.audience, cookies);
-      }
-
       const tenantSlug = input.tenantSlug?.trim() || readTenantCookie(cookies);
       const refreshToken = readRefreshCookie(cookies);
 
-      if (!tenantSlug || !refreshToken) {
+      if (!refreshToken) {
+        throw unauthorized("No refresh session found.");
+      }
+
+      if (input.audience === "school" && !tenantSlug) {
         throw unauthorized("No refresh session found.");
       }
 
       const response = await requestBackendAuth<BackendAuthResponse>("/auth/refresh", {
+        audience: input.audience,
         tenantSlug,
         method: "POST",
         body: {
@@ -340,10 +261,11 @@ export function createServerAuthClient(request: Request) {
       });
 
       return buildGatewaySession({
-        audience: "school",
+        audience: input.audience,
         userLabel: response.user.display_name || response.user.email,
-        tenantSlug,
+        tenantSlug: response.user.tenant_id ?? tenantSlug ?? null,
         role: response.user.role,
+        viewer: input.audience === "portal" ? (response.user.role === "student" ? "student" : "parent") : undefined,
         accessToken: response.tokens.access_token,
         refreshToken: response.tokens.refresh_token,
         user: response.user,
@@ -358,105 +280,38 @@ export function createServerAuthClient(request: Request) {
         throw unauthorized("No active session found.");
       }
 
-      if (requestedAudience === "school") {
-        if (session.experience !== "school") {
-          throw unauthorized("No active session found.");
-        }
-
-        const tenantSlug = readTenantCookie(cookies) ?? session.tenantSlug;
-        const accessToken = readAccessCookie(cookies);
-
-        if (tenantSlug && accessToken) {
-          try {
-            const response = await requestBackendAuth<{ user: LiveAuthUser }>("/auth/me", {
-              tenantSlug,
-              method: "GET",
-              accessToken,
-            });
-
-            return buildGatewaySession({
-              audience: "school",
-              userLabel: response.user.display_name || response.user.email,
-              tenantSlug,
-              role: response.user.role,
-              accessToken,
-              refreshToken: readRefreshCookie(cookies),
-              user: response.user,
-            });
-          } catch {
-            // fall through to demo/session-based user if backend hydration fails
-          }
-        }
-
-        const demoRole = session.role ?? "admin";
-        const demoIdentifier =
-          demoRole === "principal"
-            ? schoolDemoCredentials.principal.identifier
-            : demoRole === "bursar"
-              ? schoolDemoCredentials.bursar.identifier
-              : demoRole === "teacher"
-                ? schoolDemoCredentials.teacher.identifier
-                : demoRole === "storekeeper" || demoRole === "admissions" || demoRole === "librarian"
-                  ? `${demoRole}@${session.tenantSlug ?? "amani-prep"}.demo.shulehub.ke`
-                : schoolDemoCredentials.admin.identifier;
-
-        return buildGatewaySession({
-          audience: "school",
-          userLabel: session.userLabel,
-          tenantSlug: session.tenantSlug,
-          role: demoRole,
-          accessToken: readAccessCookie(cookies),
-          refreshToken: readRefreshCookie(cookies),
-          user: buildDemoUser({
-            audience: "school",
-            identifier: demoIdentifier,
-            displayName: session.userLabel,
-            role: demoRole,
-            tenantSlug: session.tenantSlug,
-          }),
-        });
-      }
-
-      if (requestedAudience === "superadmin") {
-        if (session.experience !== "superadmin") {
-          throw unauthorized("No active session found.");
-        }
-
-        return buildGatewaySession({
-          audience: "superadmin",
-          userLabel: session.userLabel,
-          tenantSlug: null,
-          accessToken: readAccessCookie(cookies),
-          refreshToken: readRefreshCookie(cookies),
-          user: buildDemoUser({
-            audience: "superadmin",
-            identifier: superadminDemoCredentials.email,
-            displayName: session.userLabel,
-            role: "platform_owner",
-          }),
-        });
-      }
-
-      if (session.experience !== "portal") {
+      if (session.experience !== requestedAudience) {
         throw unauthorized("No active session found.");
       }
 
+      const sessionTenantSlug = session.experience === "school" ? session.tenantSlug : null;
+      const tenantSlug = readTenantCookie(cookies) ?? sessionTenantSlug;
+      const accessToken = readAccessCookie(cookies);
+
+      if (!accessToken) {
+        throw unauthorized("No active session found.");
+      }
+
+      if (requestedAudience === "school" && !tenantSlug) {
+        throw unauthorized("No active session found.");
+      }
+
+      const response = await requestBackendAuth<{ user: LiveAuthUser }>("/auth/me", {
+        audience: requestedAudience,
+        tenantSlug,
+        method: "GET",
+        accessToken,
+      });
+
       return buildGatewaySession({
-        audience: "portal",
-        userLabel: session.userLabel,
-        tenantSlug: null,
-        viewer: session.viewer,
-        accessToken: readAccessCookie(cookies),
+        audience: requestedAudience,
+        userLabel: response.user.display_name || response.user.email,
+        tenantSlug: response.user.tenant_id ?? tenantSlug ?? null,
+        role: response.user.role,
+        viewer: requestedAudience === "portal" ? (response.user.role === "student" ? "student" : "parent") : undefined,
+        accessToken,
         refreshToken: readRefreshCookie(cookies),
-        user: buildDemoUser({
-          audience: "portal",
-          identifier:
-            session.viewer === "student"
-              ? portalDemoCredentials.student.identifier
-              : portalDemoCredentials.parent.identifier,
-          displayName: session.userLabel,
-          role: session.viewer ?? "parent",
-        }),
+        user: response.user,
       });
     },
   };

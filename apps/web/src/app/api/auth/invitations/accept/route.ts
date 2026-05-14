@@ -1,32 +1,32 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
+import { validateCsrfRequest } from "@/lib/auth/csrf";
 import { getDashboardApiBaseUrl } from "@/lib/dashboard/api-client";
 
-function inferTenantSlug(request: Request) {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
-  const normalizedHost = host.split(":")[0]?.trim().toLowerCase() ?? "";
+const unavailableMessage =
+  "Invitation acceptance is temporarily unavailable. Please contact support if you need immediate access.";
 
-  if (!normalizedHost || normalizedHost === "localhost" || normalizedHost === "127.0.0.1") {
-    return null;
-  }
-
-  return normalizedHost.split(".")[0] ?? null;
-}
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    if (!validateCsrfRequest(request)) {
+      return NextResponse.json(
+        { message: "Security check expired. Refresh the page and try again." },
+        { status: 403 },
+      );
+    }
+
     const body = (await request.json()) as {
       token?: string;
       password?: string;
-      display_name?: string;
+      displayName?: string;
       tenantSlug?: string | null;
     };
-    const tenantSlug = body.tenantSlug?.trim() || inferTenantSlug(request);
-    const baseUrl = tenantSlug ? getDashboardApiBaseUrl(tenantSlug) : null;
+    const baseUrl = getDashboardApiBaseUrl(body.tenantSlug ?? undefined);
 
     if (!baseUrl) {
       return NextResponse.json(
-        { message: "Live invitation activation is not configured for this tenant." },
+        { message: unavailableMessage },
         { status: 503 },
       );
     }
@@ -36,26 +36,46 @@ export async function POST(request: Request) {
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
+        "x-auth-audience": "school",
+        ...(body.tenantSlug ? { "x-tenant-id": body.tenantSlug } : {}),
       },
       body: JSON.stringify({
         token: body.token,
         password: body.password,
-        display_name: body.display_name,
+        display_name: body.displayName,
       }),
       cache: "no-store",
     });
-    const payload = await response.json().catch(() => null);
+    const payload = (await response.json().catch(() => null)) as
+      | {
+          success?: boolean;
+          message?: string;
+          tenant_id?: string;
+          email?: string;
+          display_name?: string;
+          role?: string;
+        }
+      | null;
 
-    return NextResponse.json(payload ?? {}, { status: response.status });
-  } catch (error) {
     return NextResponse.json(
-      {
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to accept the invitation.",
-      },
-      { status: 400 },
+      response.ok
+        ? {
+            success: true,
+            message: payload?.message ?? "Invitation accepted. You can now sign in.",
+            tenantId: payload?.tenant_id,
+            email: payload?.email,
+            displayName: payload?.display_name,
+            role: payload?.role,
+          }
+        : {
+            message: payload?.message ?? unavailableMessage,
+          },
+      { status: response.ok ? 200 : response.status },
+    );
+  } catch {
+    return NextResponse.json(
+      { message: unavailableMessage },
+      { status: 500 },
     );
   }
 }

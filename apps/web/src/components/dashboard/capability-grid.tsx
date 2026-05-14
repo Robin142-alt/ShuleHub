@@ -1,6 +1,6 @@
 import {
-  ActivitySquare,
   BriefcaseBusiness,
+  BookOpenCheck,
   ClipboardList,
   CreditCard,
   FileSpreadsheet,
@@ -19,9 +19,9 @@ import type { CapabilityItem, DashboardRole } from "@/lib/dashboard/types";
 const iconMap = {
   students: Users,
   academics: GraduationCap,
-  attendance: ActivitySquare,
   finance: CreditCard,
   inventory: Package,
+  library: BookOpenCheck,
   admissions: ClipboardList,
   communication: MessageSquareMore,
   staff: BriefcaseBusiness,

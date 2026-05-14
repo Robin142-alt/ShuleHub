@@ -5,16 +5,16 @@ import { CommonModule } from '../common/common.module';
 import { DatabaseModule } from '../database/database.module';
 import { RedisModule } from '../infrastructure/redis/redis.module';
 import { AuthController } from './auth.controller';
+import { AuthEmailVerificationService } from './auth-email-verification.service';
+import { AuthEmailService } from './auth-email.service';
+import { AuthInvitationService } from './auth-invitation.service';
+import { AuthRecoveryService } from './auth-recovery.service';
 import { AuthSchemaService } from './auth-schema.service';
 import { AuthService } from './auth.service';
-import { AuditService } from './audit.service';
-import { InvitationsController } from './invitations.controller';
-import { InvitationService } from './invitation.service';
-import { PasswordRecoveryController } from './password-recovery.controller';
-import { PasswordRecoveryService } from './password-recovery.service';
-import { SessionsController } from './sessions.controller';
-import { InvitationsRepository } from './repositories/invitations.repository';
-import { PasswordResetsRepository } from './repositories/password-resets.repository';
+import { MagicLinkService } from './magic-link.service';
+import { MfaService } from './mfa.service';
+import { TenantInvitationsService } from './tenant-invitations.service';
+import { TrustedDeviceService } from './trusted-device.service';
 import { AuthorizationRepository } from './repositories/authorization.repository';
 import { TenantMembershipsRepository } from './repositories/tenant-memberships.repository';
 import { UsersRepository } from './repositories/users.repository';
@@ -26,20 +26,18 @@ import { AbacPolicyEngine } from './policies/abac-policy.engine';
 @Global()
 @Module({
   imports: [CommonModule, DatabaseModule, RedisModule, JwtModule.register({})],
-  controllers: [
-    AuthController,
-    InvitationsController,
-    PasswordRecoveryController,
-    SessionsController,
-  ],
+  controllers: [AuthController],
   providers: [
     AuthSchemaService,
+    AuthEmailVerificationService,
+    AuthEmailService,
+    AuthInvitationService,
+    AuthRecoveryService,
     AuthService,
-    AuditService,
-    InvitationService,
-    PasswordRecoveryService,
-    InvitationsRepository,
-    PasswordResetsRepository,
+    MagicLinkService,
+    MfaService,
+    TenantInvitationsService,
+    TrustedDeviceService,
     UsersRepository,
     TenantMembershipsRepository,
     AuthorizationRepository,
@@ -50,16 +48,19 @@ import { AbacPolicyEngine } from './policies/abac-policy.engine';
   ],
   exports: [
     AuthSchemaService,
+    AuthEmailVerificationService,
+    AuthEmailService,
+    AuthInvitationService,
+    AuthRecoveryService,
     AuthService,
-    AuditService,
-    InvitationService,
-    PasswordRecoveryService,
+    MagicLinkService,
+    MfaService,
+    TenantInvitationsService,
+    TrustedDeviceService,
     SessionService,
     TokenService,
     AbacPolicyEngine,
     UsersRepository,
-    InvitationsRepository,
-    PasswordResetsRepository,
     TenantMembershipsRepository,
     AuthorizationRepository,
     PasswordService,

@@ -9,7 +9,7 @@ export default function InternalPortalForgotPasswordPage() {
       heroDescription="Keep the portal recovery flow simple enough for families and learners while still protecting private school information."
       badge="Friendly recovery"
       logoMark="PT"
-      helper="Use the phone number or admission number already linked to the portal account."
+      helper="Use the verified email address already linked to the portal account."
       highlights={[
         { id: "simple", title: "Simple for families", description: "Clear language and familiar identifiers reduce support calls." },
         { id: "private", title: "Private access", description: "Only the linked family or learner receives recovery instructions." },
@@ -21,13 +21,14 @@ export default function InternalPortalForgotPasswordPage() {
       ]}
     >
       <ForgotPasswordView
-        title="Recover your portal password or PIN"
-        subtitle="Enter the phone number or admission number linked to the portal. We will send a recovery message to your verified contact."
-        identifierLabel="Phone number or admission number"
-        identifierPlaceholder="0712 345 678 or SH-24011"
-        submitLabel="Send recovery message"
+        title="Recover your portal password"
+        subtitle="Enter the verified email address linked to the portal. We will send recovery instructions to that address."
+        identifierLabel="Email address"
+        identifierPlaceholder="Email address on your portal account"
+        submitLabel="Send recovery instructions"
         backHref="/login"
         successMessage="If the details match a family or student account, recovery instructions have been sent."
+        audience="portal"
       />
     </AuthShell>
   );

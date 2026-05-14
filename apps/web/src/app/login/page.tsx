@@ -8,7 +8,7 @@ export default async function PublicLoginPage() {
   return (
     <AuthShell
       eyebrow="School ERP sign-in"
-      heroTitle="Run collections, attendance, academics, and school operations from one trusted workspace."
+      heroTitle="Run collections, academics, and school operations from one trusted workspace."
       heroDescription="ShuleHub is built for institutions that need fee clarity, operational control, and tenant-safe access from the first sign-in screen."
       badge="Institutional school access"
       logoMark="SH"
@@ -27,7 +27,7 @@ export default async function PublicLoginPage() {
         {
           id: "trust",
           title: "Operationally trusted",
-          description: "Built for the routines schools actually depend on every day, from roll call to statements and reconciliations.",
+          description: "Built for the routines schools actually depend on every day, from learner records to statements and reconciliations.",
         },
       ]}
       trustNotes={[

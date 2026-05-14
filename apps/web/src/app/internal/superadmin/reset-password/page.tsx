@@ -1,7 +1,14 @@
 import { AuthShell } from "@/components/auth/auth-shell";
 import { ResetPasswordView } from "@/components/auth/auth-recovery-view";
+import { readResetToken, type ResetSearchParams } from "@/lib/auth/reset-token";
 
-export default function InternalSuperadminResetPasswordPage() {
+export default async function InternalSuperadminResetPasswordPage({
+  searchParams,
+}: {
+  searchParams?: ResetSearchParams;
+}) {
+  const initialToken = await readResetToken(searchParams);
+
   return (
     <AuthShell
       eyebrow="Super admin reset"
@@ -19,9 +26,9 @@ export default function InternalSuperadminResetPasswordPage() {
         },
         {
           id: "confirm-device",
-          title: "Device-aware",
+          title: "Audit-aware",
           description:
-            "Recent device context helps teams spot unusual reset activity quickly.",
+            "Recent request context helps teams spot unusual reset activity quickly.",
         },
         {
           id: "fast-return",
@@ -41,6 +48,8 @@ export default function InternalSuperadminResetPasswordPage() {
         secretLabel="New password"
         secretPlaceholder="Create a strong platform password"
         backHref="/login"
+        audience="superadmin"
+        initialToken={initialToken}
       />
     </AuthShell>
   );

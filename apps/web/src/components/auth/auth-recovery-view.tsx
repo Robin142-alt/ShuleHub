@@ -7,7 +7,15 @@ import { AuthCard } from "@/components/auth/auth-card";
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthMessage } from "@/components/auth/auth-message";
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
+import { SecurityBadge, SessionWarning } from "@/components/auth/auth-security";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
+import {
+  requestPasswordRecovery,
+  resetPassword,
+} from "@/lib/auth/recovery-client";
+
+type RecoveryAudience = "superadmin" | "school" | "portal";
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function ForgotPasswordView({
   title,
@@ -17,6 +25,8 @@ export function ForgotPasswordView({
   submitLabel,
   backHref,
   successMessage,
+  audience = "school",
+  tenantSlug = null,
 }: {
   title: string;
   subtitle: string;
@@ -25,6 +35,8 @@ export function ForgotPasswordView({
   submitLabel: string;
   backHref: string;
   successMessage: string;
+  audience?: RecoveryAudience;
+  tenantSlug?: string | null;
 }) {
   const [identifier, setIdentifier] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,8 +44,10 @@ export function ForgotPasswordView({
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    if (!/\S+@\S+\.\S+/.test(identifier.trim())) {
-      setError("Enter the email address tied to this account.");
+    const normalizedIdentifier = identifier.trim();
+
+    if (!emailPattern.test(normalizedIdentifier)) {
+      setError("Enter a valid email address for this account.");
       return;
     }
 
@@ -41,25 +55,17 @@ export function ForgotPasswordView({
     setBusy(true);
 
     try {
-      const response = await fetch("/api/auth/password/forgot", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email: identifier.trim() }),
+      await requestPasswordRecovery({
+        audience,
+        identifier: normalizedIdentifier,
+        tenantSlug,
       });
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-
-      if (!response.ok) {
-        throw new Error(payload?.message ?? "Unable to start password recovery.");
-      }
-
       setSuccess(true);
     } catch (submitError) {
       setError(
         submitError instanceof Error
           ? submitError.message
-          : "Unable to start password recovery.",
+          : "Unable to send recovery instructions right now.",
       );
     } finally {
       setBusy(false);
@@ -70,8 +76,12 @@ export function ForgotPasswordView({
     <AuthCard>
       <div className="space-y-6">
         <div className="space-y-3">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">{title}</h2>
-          <p className="text-sm leading-6 text-muted">{subtitle}</p>
+          <div className="flex flex-wrap gap-2">
+            <SecurityBadge label="Secure recovery" tone="success" />
+            <SecurityBadge label="Short-lived link" />
+          </div>
+          <h2 className="text-3xl font-bold leading-tight text-slate-950">{title}</h2>
+          <p className="text-sm leading-6 text-slate-600">{subtitle}</p>
         </div>
 
         {success ? (
@@ -85,6 +95,7 @@ export function ForgotPasswordView({
             <AuthField
               label={identifierLabel}
               placeholder={identifierPlaceholder}
+              autoComplete="username"
               value={identifier}
               onChange={(event) => setIdentifier(event.target.value)}
               error={error ?? undefined}
@@ -95,7 +106,9 @@ export function ForgotPasswordView({
           </div>
         )}
 
-        <Link href={backHref} className="inline-flex text-sm font-medium text-foreground underline-offset-4 hover:underline">
+        <SessionWarning mode="normal" />
+
+        <Link href={backHref} className="inline-flex text-sm font-bold text-slate-700 underline-offset-4 hover:text-emerald-700 hover:underline">
           Back to login
         </Link>
       </div>
@@ -109,42 +122,48 @@ export function ResetPasswordView({
   secretLabel,
   secretPlaceholder,
   backHref,
+  audience = "school",
+  tenantSlug = null,
+  initialToken = "",
 }: {
   title: string;
   subtitle: string;
   secretLabel: string;
   secretPlaceholder: string;
   backHref: string;
+  audience?: RecoveryAudience;
+  tenantSlug?: string | null;
+  initialToken?: string;
 }) {
-  const [code, setCode] = useState(() =>
-    typeof window === "undefined"
-      ? ""
-      : new URLSearchParams(window.location.search).get("token") ?? "",
-  );
+  const [code, setCode] = useState(initialToken);
   const [secret, setSecret] = useState("");
   const [confirmSecret, setConfirmSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState(false);
-  const [generalError, setGeneralError] = useState<string | null>(null);
 
   const submit = async () => {
     const nextErrors: Record<string, string> = {};
 
     if (code.trim().length < 4) {
-      nextErrors.code = "Enter the reset token from your recovery message.";
+      nextErrors.code = "Enter the reset code or token from your recovery message.";
     }
 
-    if (secret.trim().length < 12) {
-      nextErrors.secret = "Use at least 12 characters.";
+    if (
+      secret.trim().length < 10 ||
+      !/[A-Z]/.test(secret) ||
+      !/[a-z]/.test(secret) ||
+      !/\d/.test(secret)
+    ) {
+      nextErrors.secret =
+        "Use at least 10 characters with uppercase, lowercase, and a number.";
     }
 
     if (confirmSecret !== secret) {
-      nextErrors.confirmSecret = "The confirmation does not match the new secret.";
+      nextErrors.confirmSecret = "The confirmation does not match the new password.";
     }
 
     setFieldErrors(nextErrors);
-    setGeneralError(null);
 
     if (Object.keys(nextErrors).length > 0) {
       return;
@@ -153,29 +172,20 @@ export function ResetPasswordView({
     setBusy(true);
 
     try {
-      const response = await fetch("/api/auth/password/reset", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          token: code.trim(),
-          password: secret,
-        }),
+      await resetPassword({
+        audience,
+        token: code.trim(),
+        password: secret,
+        tenantSlug,
       });
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-
-      if (!response.ok) {
-        throw new Error(payload?.message ?? "Unable to reset this password.");
-      }
-
       setSuccess(true);
     } catch (submitError) {
-      setGeneralError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Unable to reset this password.",
-      );
+      setFieldErrors({
+        code:
+          submitError instanceof Error
+            ? submitError.message
+            : "Unable to reset this password right now.",
+      });
     } finally {
       setBusy(false);
     }
@@ -185,8 +195,12 @@ export function ResetPasswordView({
     <AuthCard>
       <div className="space-y-6">
         <div className="space-y-3">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">{title}</h2>
-          <p className="text-sm leading-6 text-muted">{subtitle}</p>
+          <div className="flex flex-wrap gap-2">
+            <SecurityBadge label="Password policy" tone="success" />
+            <SecurityBadge label="Verified code" />
+          </div>
+          <h2 className="text-3xl font-bold leading-tight text-slate-950">{title}</h2>
+          <p className="text-sm leading-6 text-slate-600">{subtitle}</p>
         </div>
 
         {success ? (
@@ -198,8 +212,9 @@ export function ResetPasswordView({
         ) : (
           <div className="space-y-4">
             <AuthField
-              label="Recovery token"
-              placeholder="Paste the token from your reset link"
+              label="Recovery code"
+              placeholder="Enter the code you received"
+              autoComplete="one-time-code"
               value={code}
               onChange={(event) => setCode(event.target.value)}
               error={fieldErrors.code}
@@ -207,6 +222,7 @@ export function ResetPasswordView({
             <AuthPasswordField
               label={secretLabel}
               placeholder={secretPlaceholder}
+              autoComplete="new-password"
               value={secret}
               onChange={(event) => setSecret(event.target.value)}
               error={fieldErrors.secret}
@@ -214,24 +230,20 @@ export function ResetPasswordView({
             <AuthPasswordField
               label="Confirm new password"
               placeholder="Re-enter your new password"
+              autoComplete="new-password"
               value={confirmSecret}
               onChange={(event) => setConfirmSecret(event.target.value)}
               error={fieldErrors.confirmSecret}
             />
-            {generalError ? (
-              <AuthMessage
-                tone="error"
-                title="Reset failed"
-                description={generalError}
-              />
-            ) : null}
             <AuthSubmitButton busy={busy} onClick={submit}>
               Save new password
             </AuthSubmitButton>
           </div>
         )}
 
-        <Link href={backHref} className="inline-flex text-sm font-medium text-foreground underline-offset-4 hover:underline">
+        <SessionWarning mode="normal" />
+
+        <Link href={backHref} className="inline-flex text-sm font-bold text-slate-700 underline-offset-4 hover:text-emerald-700 hover:underline">
           Back to login
         </Link>
       </div>

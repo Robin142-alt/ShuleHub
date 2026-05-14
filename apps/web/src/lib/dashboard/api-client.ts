@@ -5,10 +5,12 @@ type ApiEnvelope<T> = {
 
 export interface LiveAuthUser {
   user_id: string;
-  tenant_id: string;
+  tenant_id: string | null;
   role: string;
   email: string;
   display_name: string;
+  email_verified?: boolean;
+  email_verified_at?: string | null;
   permissions: string[];
   session_id: string;
 }
@@ -147,9 +149,13 @@ export async function requestDashboardApi<T>(
       method: options?.method ?? "GET",
       headers: {
         Accept: "application/json",
+        ...(options?.tenantId ? { "x-tenant-id": options.tenantId } : {}),
         ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
         ...(options?.accessToken
-          ? { Authorization: `Bearer ${options.accessToken}` }
+          ? {
+              Authorization: `Bearer ${options.accessToken}`,
+              "x-auth-audience": "school",
+            }
           : {}),
       },
       cache: "no-store",

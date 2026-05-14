@@ -2,7 +2,6 @@ import {
   BookOpenCheck,
   Boxes,
   CalendarDays,
-  ClipboardCheck,
   ClipboardList,
   CircleDollarSign,
   FileSpreadsheet,
@@ -16,7 +15,7 @@ import {
 } from "lucide-react";
 
 import { buildSchoolErpModel } from "@/lib/dashboard/erp-model";
-import { buildDashboardSnapshot } from "@/lib/dashboard/mock-data";
+import { buildDashboardSnapshot } from "@/lib/dashboard/empty-data";
 import type { DashboardRole } from "@/lib/dashboard/types";
 import { getDefaultSchoolBranding, getSchoolBrandingBySlug } from "@/lib/auth/school-branding";
 import type {
@@ -25,6 +24,7 @@ import type {
   ExperienceProfile,
   SchoolExperienceRole,
 } from "@/lib/experiences/types";
+import { filterProductionReadyNavItems } from "@/lib/features/module-readiness";
 export type { SchoolExperienceRole } from "@/lib/experiences/types";
 import { toSchoolPath } from "@/lib/routing/experience-routes";
 import { supportSidebarItems } from "@/lib/support/support-data";
@@ -63,7 +63,6 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
   principal: [
     { id: "dashboard", label: "Dashboard", href: toSchoolPath("dashboard"), icon: LayoutGrid, group: "Overview" },
     { id: "students", label: "Students", href: toSchoolPath("students"), icon: Users, group: "Students" },
-    { id: "attendance", label: "Attendance", href: toSchoolPath("attendance"), icon: ClipboardCheck, group: "Students" },
     { id: "academics", label: "Academics", href: toSchoolPath("academics"), icon: GraduationCap, group: "Academics" },
     { id: "exams", label: "Exams", href: toSchoolPath("exams"), icon: BookOpenCheck, group: "Academics" },
     { id: "timetable", label: "Timetable", href: toSchoolPath("timetable"), icon: CalendarDays, group: "Academics" },
@@ -89,7 +88,6 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
   teacher: [
     { id: "dashboard", label: "Dashboard", href: toSchoolPath("dashboard"), icon: LayoutGrid, group: "Overview" },
     { id: "students", label: "Students", href: toSchoolPath("students"), icon: Users, group: "Students" },
-    { id: "attendance", label: "Attendance", href: toSchoolPath("attendance"), icon: ClipboardCheck, group: "Students" },
     { id: "academics", label: "Academics", href: toSchoolPath("academics"), icon: GraduationCap, group: "Academics" },
     { id: "exams", label: "Exams", href: toSchoolPath("exams"), icon: BookOpenCheck, group: "Academics" },
     { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Academics" },
@@ -100,7 +98,6 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
   admin: [
     { id: "dashboard", label: "Dashboard", href: toSchoolPath("dashboard"), icon: LayoutGrid, group: "Overview" },
     { id: "students", label: "Students", href: toSchoolPath("students"), icon: Users, group: "Students" },
-    { id: "attendance", label: "Attendance", href: toSchoolPath("attendance"), icon: ClipboardCheck, group: "Students" },
     { id: "finance", label: "Fees / Payments", href: toSchoolPath("finance"), icon: CircleDollarSign, group: "Finance" },
     { id: "mpesa", label: "MPESA Transactions", href: toSchoolPath("mpesa"), icon: SmartphoneCharging, group: "Finance" },
     { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Operations" },
@@ -117,12 +114,6 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
     { id: "communication", label: "Communication", href: toSchoolPath("communication"), icon: MessageSquareText, group: "Operations" },
     ...supportSidebarItems,
   ],
-  librarian: [
-    { id: "dashboard", label: "Dashboard", href: toSchoolPath("dashboard"), icon: LayoutGrid, group: "Overview" },
-    { id: "library", label: "Library", href: "/library", icon: BookOpenCheck, group: "Library" },
-    { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Library" },
-    ...supportSidebarItems,
-  ],
   admissions: [
     { id: "dashboard", label: "Dashboard", href: toSchoolPath("dashboard"), icon: LayoutGrid, group: "Overview" },
     { id: "admissions", label: "Admissions", href: toSchoolPath("admissions"), icon: ClipboardList, group: "Admissions" },
@@ -130,6 +121,9 @@ const schoolNavMap: Record<SchoolExperienceRole, ExperienceNavItem[]> = {
     { id: "reports", label: "Reports", href: toSchoolPath("reports"), icon: FileSpreadsheet, group: "Admissions" },
     { id: "communication", label: "Communication", href: toSchoolPath("communication"), icon: MessageSquareText, group: "Operations" },
     ...supportSidebarItems,
+  ],
+  librarian: [
+    { id: "library", label: "Library", href: "/library", icon: BookOpenCheck, group: "Library" },
   ],
 };
 
@@ -139,7 +133,7 @@ const roleToDashboardRole: Record<SchoolExperienceRole, DashboardRole> = {
   teacher: "teacher",
   admin: "admin",
   storekeeper: "storekeeper",
-  librarian: "storekeeper",
+  librarian: "librarian",
   admissions: "admissions",
 };
 
@@ -148,7 +142,6 @@ export const schoolSectionLabels: Record<string, string> = {
   students: "Students",
   finance: "Fees / Payments",
   mpesa: "MPESA Transactions",
-  attendance: "Attendance",
   academics: "Academics",
   exams: "Exams",
   reports: "Reports",
@@ -167,37 +160,37 @@ export const schoolSectionLabels: Record<string, string> = {
 function buildSchoolProfile(role: SchoolExperienceRole, schoolName: string): ExperienceProfile {
   const profileMap: Record<SchoolExperienceRole, ExperienceProfile> = {
     principal: {
-      name: "Grace Njeri",
+      name: "Principal workspace",
       roleLabel: "Principal",
       contextLabel: schoolName,
     },
     bursar: {
-      name: "Joseph Kamau",
+      name: "Bursar workspace",
       roleLabel: "Bursar",
       contextLabel: schoolName,
     },
     teacher: {
-      name: "Beatrice Wanjiku",
+      name: "Teacher workspace",
       roleLabel: "Class teacher",
       contextLabel: schoolName,
     },
     admin: {
-      name: "Daniel Ouma",
+      name: "School admin workspace",
       roleLabel: "School admin",
       contextLabel: schoolName,
     },
     storekeeper: {
-      name: "Mercy Wambui",
+      name: "Storekeeper workspace",
       roleLabel: "Storekeeper",
       contextLabel: schoolName,
     },
     librarian: {
-      name: "Janet Auma",
+      name: "Library workspace",
       roleLabel: "Librarian",
       contextLabel: schoolName,
     },
     admissions: {
-      name: "Naomi Achieng",
+      name: "Admissions workspace",
       roleLabel: "Admissions officer",
       contextLabel: schoolName,
     },
@@ -223,7 +216,7 @@ export function getSchoolWorkspace(role: SchoolExperienceRole, tenantSlug?: stri
     snapshot,
     model,
     subscription: buildSchoolSubscription(role),
-    navItems: schoolNavMap[role],
+    navItems: filterProductionReadyNavItems(schoolNavMap[role]),
     profile: buildSchoolProfile(role, branding.name),
   };
 }
@@ -274,57 +267,18 @@ function buildSchoolSubscription(role: SchoolExperienceRole): SchoolSubscription
     },
   ];
 
-  const renewalAction =
-    role === "teacher" || role === "storekeeper" || role === "librarian" || role === "admissions"
-      ? {
-          label: "Contact school admin",
-          href: toSchoolPath("reports"),
-        }
-      : {
-          label: "Renew with MPESA",
-          href: toSchoolPath("finance"),
-        };
-
   return {
-    state: "EXPIRING",
-    tone: "warning",
+    state: "ACTIVE",
+    tone: "ok",
     accessMode: "full",
-    statusLabel: "Renewal due in 5 days",
-    headline: "Your school subscription is approaching renewal",
-    detail:
-      role === "teacher" || role === "storekeeper" || role === "librarian" || role === "admissions"
-        ? "Your operational workspace stays available, but a school administrator should renew the workspace soon to avoid restricted mode."
-        : "Billing reminders are active. Renew now to avoid entering grace period and later read-only restriction.",
-    renewalDueLabel: "Renews on 09 May 2026",
+    statusLabel: "Subscription setup pending",
+    headline: "Subscription details appear after onboarding",
+    detail: "Billing status, renewal dates, and payment instructions are loaded from the live tenant subscription record.",
+    renewalDueLabel: "Not configured",
     exportAllowedLabel: "Data export always remains available",
-    primaryActionLabel: renewalAction.label,
-    primaryActionHref: renewalAction.href,
-    reminders: [
-      {
-        id: "sub-admin",
-        channel: "admin",
-        title: "Admin banner raised",
-        detail: "Subscription warning is visible to school admins and bursars.",
-        status: "Sent",
-        tone: "ok",
-      },
-      {
-        id: "sub-sms",
-        channel: "sms",
-        title: "SMS reminder queued",
-        detail: "Billing phone will receive an MPESA renewal reminder this afternoon.",
-        status: "Queued",
-        tone: "warning",
-      },
-      {
-        id: "sub-email",
-        channel: "email",
-        title: "Email reminder queued",
-        detail: "Finance contacts will receive the renewal link and invoice summary.",
-        status: "Queued",
-        tone: "warning",
-      },
-    ],
+    primaryActionLabel: role === "teacher" ? "Open support" : role === "librarian" ? "Open catalog" : "Open finance",
+    primaryActionHref: role === "teacher" ? toSchoolPath("support-my-tickets") : role === "librarian" ? "/library" : toSchoolPath("finance"),
+    reminders: [],
     stages,
   };
 }

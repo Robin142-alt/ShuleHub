@@ -16,6 +16,7 @@ export class PaymentsController {
   ) {}
 
   @Post('payment-intents')
+  @Permissions('payments:create')
   async createPaymentIntent(
     @Body() dto: CreatePaymentIntentDto,
   ): Promise<PaymentIntentResponseDto> {

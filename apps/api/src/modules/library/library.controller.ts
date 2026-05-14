@@ -1,34 +1,38 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 
 import { Permissions } from '../../auth/decorators/permissions.decorator';
-import { CreateLibraryMemberDto, ListLibraryQueryDto } from './dto/library-workflow.dto';
+import {
+  IssueLibraryCopyDto,
+  ReserveLibraryCopyDto,
+  ReturnLibraryCopyDto,
+} from './dto/library.dto';
 import { LibraryService } from './library.service';
 
 @Controller('library')
 export class LibraryController {
   constructor(private readonly libraryService: LibraryService) {}
 
-  @Get('dashboard')
-  @Permissions('library:view')
-  getDashboard() {
-    return this.libraryService.getDashboard();
+  @Post('issues')
+  @Permissions('library:write')
+  issueCopy(@Body() dto: IssueLibraryCopyDto) {
+    return this.libraryService.issueCopy(dto);
   }
 
-  @Get('members')
-  @Permissions('library:view')
-  listMembers(@Query() query: ListLibraryQueryDto) {
-    return this.libraryService.listMembers(query);
+  @Post('reservations')
+  @Permissions('library:write')
+  reserveCopy(@Body() dto: ReserveLibraryCopyDto) {
+    return this.libraryService.reserveCopy(dto);
   }
 
-  @Post('members')
-  @Permissions('library:catalog.manage')
-  createMember(@Body() dto: CreateLibraryMemberDto) {
-    return this.libraryService.createMember(dto);
+  @Post('returns')
+  @Permissions('library:write')
+  returnCopy(@Body() dto: ReturnLibraryCopyDto) {
+    return this.libraryService.returnCopy(dto);
   }
 
-  @Get('activity')
-  @Permissions('library:view')
-  listActivity(@Query() query: ListLibraryQueryDto) {
-    return this.libraryService.listActivity(query);
+  @Get('circulation')
+  @Permissions('library:read')
+  listCirculation(@Query() query: Record<string, string | undefined>) {
+    return this.libraryService.listCirculation(query);
   }
 }

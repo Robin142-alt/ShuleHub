@@ -50,4 +50,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \
 
 # Use dumb-init to properly handle signals for graceful shutdown
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/apps/api/src/main.js"]

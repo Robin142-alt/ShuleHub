@@ -1,19 +1,6 @@
-export type SyncEntity = 'attendance' | 'finance';
-export type SyncConflictPolicy = 'last-write-wins' | 'server-authoritative';
+export type SyncEntity = 'finance';
+export type SyncConflictPolicy = 'server-authoritative';
 export type SyncPushOperationStatus = 'applied' | 'duplicate' | 'rejected';
-
-export interface AttendanceSyncPayload extends Record<string, unknown> {
-  action: 'upsert';
-  record_id: string;
-  student_id: string;
-  attendance_date: string;
-  status: 'present' | 'absent' | 'late' | 'excused';
-  last_modified_at: string;
-  notes?: string | null;
-  metadata?: Record<string, unknown>;
-  client_version?: number;
-  source?: 'device' | 'server';
-}
 
 export interface FinanceSyncPayload extends Record<string, unknown> {
   action: 'posted';
@@ -29,7 +16,6 @@ export interface FinanceSyncPayload extends Record<string, unknown> {
 }
 
 export interface SyncPayloadMap {
-  attendance: AttendanceSyncPayload;
   finance: FinanceSyncPayload;
 }
 
@@ -64,19 +50,6 @@ export interface DeviceRegistration {
   last_pull_at: string | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface AttendanceRecordState extends Record<string, unknown> {
-  record_id: string;
-  student_id: string;
-  attendance_date: string;
-  status: AttendanceSyncPayload['status'];
-  last_modified_at: string;
-  notes: string | null;
-  metadata: Record<string, unknown>;
-  source_device_id: string | null;
-  last_operation_id: string | null;
-  sync_version: string | null;
 }
 
 export interface SyncPushOperationInput<TEntity extends SyncEntity = SyncEntity> {

@@ -27,7 +27,7 @@ export default async function InternalSchoolLoginPage() {
         },
         {
           id: "academics",
-          title: "Academics and attendance",
+          title: "Academics and classroom operations",
           description:
             "Classroom operations stay one or two clicks away for non-technical school teams.",
         },

@@ -21,6 +21,7 @@ import { startTransition, useDeferredValue, useState } from "react";
 import { StatusPill } from "@/components/ui/status-pill";
 import type { LiveAuthUser } from "@/lib/dashboard/api-client";
 import { getRoleSidebar } from "@/lib/dashboard/role-config";
+import { isProductionReadyHref } from "@/lib/features/module-readiness";
 import type {
   AlertItem,
   CapabilityItem,
@@ -156,7 +157,7 @@ export function Topbar({
       kind: "capability" as const,
     })),
     ...supplementalSearchItems,
-  ];
+  ].filter((item) => isProductionReadyHref(item.href));
 
   const filteredSearchItems = searchItems
     .filter((item) => {
@@ -257,7 +258,7 @@ export function Topbar({
                 runSearchNavigation(filteredSearchItems[0].href);
               }
             }}
-            placeholder="Search students, payments, or reports"
+            placeholder="Search students, payments, or modules"
             className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted"
           />
           <kbd className="hidden rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted lg:inline">
@@ -476,9 +477,9 @@ export function Topbar({
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="section-title">Live backend</p>
+                <p className="section-title">Production service</p>
                 <p className="mt-0.5 text-[11px] text-muted">
-                  Tenant-scoped backend data
+                  Tenant-scoped live data
                 </p>
               </div>
               <StatusPill
@@ -519,7 +520,7 @@ export function Topbar({
                   <p className="mt-0.5 text-[11px] text-muted">{liveUser.email}</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <StatusPill label={liveUser.role} tone="ok" />
-                    <StatusPill label={liveUser.tenant_id} tone="warning" />
+                    <StatusPill label={liveUser.tenant_id ?? "Platform"} tone="warning" />
                   </div>
                 </div>
                 <button
@@ -544,7 +545,7 @@ export function Topbar({
                     type="email"
                     value={liveEmail}
                     onChange={(event) => setLiveEmail(event.target.value)}
-                    placeholder="finance@school.ac.ke"
+                    placeholder="School account email"
                     className="input-base"
                   />
                 </label>
@@ -588,7 +589,7 @@ export function Topbar({
             ) : (
               <div className="mt-3 rounded-[var(--radius-sm)] bg-surface-muted px-3 py-2.5">
                 <p className="text-[13px] text-muted">
-                  Add <code className="rounded bg-surface-strong px-1 py-0.5 text-[11px] font-mono">NEXT_PUBLIC_API_BASE_URL</code> to enable live data.
+                  Live account access is currently unavailable for this workspace.
                 </p>
               </div>
             )}
