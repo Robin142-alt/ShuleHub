@@ -5,7 +5,6 @@ import type { ComponentType } from "react";
 import { DashboardHome } from "@/components/dashboard/erp-pages";
 import type {
   AcademicsWidgetData,
-  AttendanceWidgetData,
   DashboardWidgetKey,
   DashboardRole,
   DashboardSnapshot,
@@ -17,10 +16,6 @@ type FinanceWidgetComponent = ComponentType<{
   href: string;
   online: boolean;
   actionLabel: string;
-}>;
-
-type AttendanceWidgetComponent = ComponentType<{
-  data: AttendanceWidgetData;
 }>;
 
 type AcademicsWidgetComponent = ComponentType<{
@@ -40,7 +35,6 @@ export function DashboardView({
   widgetOrder: DashboardWidgetKey[];
   onAction: (action: DashboardSnapshot["quickActions"][number]) => void;
   FinanceWidgetComponent: FinanceWidgetComponent;
-  AttendanceWidgetComponent: AttendanceWidgetComponent;
   AcademicsWidgetComponent: AcademicsWidgetComponent;
 }) {
   return (

@@ -3,10 +3,14 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import { RequestContextService } from '../../common/request-context/request-context.service';
+import { UploadMalwareScanService } from '../../common/uploads/upload-malware-scan.service';
+import { validateUploadedFile } from '../../common/uploads/upload-policy';
 import { DatabaseService } from '../../database/database.service';
 import {
   AssignTicketDto,
@@ -30,6 +34,7 @@ import {
   SupportAttachmentStorageService,
   UploadedSupportFile,
 } from './storage/support-attachment-storage.service';
+import { SupportNotificationDeliveryService } from './support-notification-delivery.service';
 
 const SUPPORT_OPERATOR_ROLES = new Set([
   'platform_owner',
@@ -47,6 +52,9 @@ export class SupportService {
     private readonly databaseService: DatabaseService,
     private readonly supportRepository: SupportRepository,
     private readonly attachmentStorage: SupportAttachmentStorageService,
+    @Optional() private readonly notificationDelivery?: SupportNotificationDeliveryService,
+    @Optional() private readonly configService?: ConfigService,
+    @Optional() private readonly uploadMalwareScan?: UploadMalwareScanService,
   ) {}
 
   async getCategories() {
@@ -107,7 +115,7 @@ export class SupportService {
           module_affected: ticket.module_affected,
         },
       });
-      await this.supportRepository.createNotifications(
+      await this.createAndDispatchNotifications(
         this.buildTicketCreatedNotifications(ticket, category),
       );
 
@@ -162,6 +170,7 @@ export class SupportService {
       const actorUserId = this.getActorUserId();
       const supportOperator = this.isSupportOperator();
       const authorType = supportOperator ? 'support' : 'school';
+      const nextStatus = this.resolveReplyStatus(ticket, dto.next_status, supportOperator);
       const message = await this.supportRepository.createMessage({
         tenant_id: ticket.tenant_id,
         ticket_id: ticket.id,
@@ -169,7 +178,6 @@ export class SupportService {
         author_type: authorType,
         body: this.requireText(dto.body, 'Support message'),
       });
-      const nextStatus = this.resolveReplyStatus(ticket, dto.next_status, supportOperator);
       let updatedTicket = ticket;
 
       if (supportOperator) {
@@ -193,15 +201,18 @@ export class SupportService {
           actor_user_id: actorUserId,
           from_status: ticket.status,
           to_status: nextStatus,
-          action: 'ticket.status_changed',
+          action: this.isReopenTransition(ticket.status, nextStatus)
+            ? 'ticket.reopened'
+            : 'ticket.status_changed',
           metadata: {
             source: 'reply',
             author_type: authorType,
+            requested_status: dto.next_status ?? null,
           },
         });
       }
 
-      await this.supportRepository.createNotifications(
+      await this.createAndDispatchNotifications(
         supportOperator
           ? this.buildSchoolReplyNotifications(ticket)
           : this.buildCustomerReplyNotifications(ticket),
@@ -268,7 +279,7 @@ export class SupportService {
           reason: dto.reason?.trim() || null,
         },
       });
-      await this.supportRepository.createNotifications(this.buildStatusNotifications(updated));
+      await this.createAndDispatchNotifications(this.buildStatusNotifications(updated));
 
       return updated;
     });
@@ -297,7 +308,9 @@ export class SupportService {
         to_status: ticket.status,
         action: 'ticket.assigned',
         metadata: {
+          previous_assigned_agent_id: ticket.assigned_agent_id,
           assigned_agent_id: dto.assigned_agent_id,
+          reassigned: ticket.assigned_agent_id !== dto.assigned_agent_id,
         },
       });
 
@@ -361,40 +374,58 @@ export class SupportService {
       throw new BadRequestException('A support attachment file is required');
     }
 
-    const ticket = await this.requireTicket(ticketId);
-    const persisted = await this.attachmentStorage.save({
-      tenantId: ticket.tenant_id,
-      ticketId: ticket.id,
-      file,
-    });
-    const attachment = await this.supportRepository.createAttachment({
-      tenant_id: ticket.tenant_id,
-      ticket_id: ticket.id,
-      message_id: dto.message_id?.trim() || null,
-      internal_note_id: dto.internal_note_id?.trim() || null,
-      uploaded_by_user_id: this.getActorUserId(),
-      original_file_name: persisted.original_file_name,
-      stored_path: persisted.stored_path,
-      mime_type: persisted.mime_type,
-      size_bytes: persisted.size_bytes,
-      attachment_type: dto.internal_note_id ? 'internal_note' : dto.message_id ? 'message' : 'ticket',
-    });
+    const scannedFile = await this.scanUploadedAttachment(file);
 
-    await this.supportRepository.createStatusLog({
-      tenant_id: ticket.tenant_id,
-      ticket_id: ticket.id,
-      actor_user_id: this.getActorUserId(),
-      from_status: ticket.status,
-      to_status: ticket.status,
-      action: 'ticket.attachment_uploaded',
-      metadata: {
+    return this.databaseService.withRequestTransaction(async () => {
+      const ticket = await this.requireTicket(ticketId);
+      const persisted = await this.attachmentStorage.save({
+        tenantId: ticket.tenant_id,
+        ticketId: ticket.id,
+        file: scannedFile,
+      });
+      const attachment = await this.supportRepository.createAttachment({
+        tenant_id: ticket.tenant_id,
+        ticket_id: ticket.id,
+        message_id: dto.message_id?.trim() || null,
+        internal_note_id: dto.internal_note_id?.trim() || null,
+        uploaded_by_user_id: this.getActorUserId(),
         original_file_name: persisted.original_file_name,
         stored_path: persisted.stored_path,
+        mime_type: persisted.mime_type,
         size_bytes: persisted.size_bytes,
-      },
-    });
+        attachment_type: dto.internal_note_id ? 'internal_note' : dto.message_id ? 'message' : 'ticket',
+      });
 
-    return attachment;
+      await this.supportRepository.createStatusLog({
+        tenant_id: ticket.tenant_id,
+        ticket_id: ticket.id,
+        actor_user_id: this.getActorUserId(),
+        from_status: ticket.status,
+        to_status: ticket.status,
+        action: 'ticket.attachment_uploaded',
+        metadata: {
+          original_file_name: persisted.original_file_name,
+          stored_path: persisted.stored_path,
+          size_bytes: persisted.size_bytes,
+        },
+      });
+
+      return attachment;
+    });
+  }
+
+  private async scanUploadedAttachment(file: UploadedSupportFile): Promise<UploadedSupportFile> {
+    validateUploadedFile(file);
+
+    const providerMalwareScan = await this.uploadMalwareScan?.scanIfConfigured(file);
+
+    if (!providerMalwareScan) {
+      return file;
+    }
+
+    const scannedFile = { ...file, providerMalwareScan };
+    validateUploadedFile(scannedFile);
+    return scannedFile;
   }
 
   async listKnowledgeBase(query: KnowledgeBaseQueryDto) {
@@ -414,6 +445,14 @@ export class SupportService {
     return this.supportRepository.listNotifications({
       tenantId: supportOperator ? undefined : this.requireTenantId(),
       recipientType: supportOperator ? 'support' : 'school',
+      limit: 30,
+    });
+  }
+
+  async listNotificationDeadLetters() {
+    this.requireSupportOperator();
+
+    return this.supportRepository.listNotificationDeadLetters({
       limit: 30,
     });
   }
@@ -472,6 +511,16 @@ export class SupportService {
     }
   }
 
+  private async createAndDispatchNotifications(
+    inputs: Parameters<SupportRepository['createNotifications']>[0],
+  ): Promise<void> {
+    const notifications = await this.supportRepository.createNotifications(inputs);
+
+    if (this.notificationDelivery && Array.isArray(notifications)) {
+      await this.notificationDelivery.deliverCreatedNotifications(notifications);
+    }
+  }
+
   private buildDiagnosticContext(dto: CreateSupportTicketDto): Record<string, unknown> {
     const context = this.requestContext.requireStore();
 
@@ -511,7 +560,7 @@ export class SupportService {
     };
 
     if (ticket.priority === 'Critical') {
-      return [
+      const criticalNotifications: Parameters<SupportRepository['createNotifications']>[0] = [
         {
           ...base,
           channel: 'in_app' as const,
@@ -521,6 +570,15 @@ export class SupportService {
           channel: 'email' as const,
         },
       ];
+
+      if (this.isSupportSmsConfigured()) {
+        criticalNotifications.push({
+          ...base,
+          channel: 'sms' as const,
+        });
+      }
+
+      return criticalNotifications;
     }
 
     return [
@@ -588,11 +646,30 @@ export class SupportService {
     ];
   }
 
+  private isSupportSmsConfigured(): boolean {
+    const webhookUrl = this.configService?.get<string>('support.notificationSmsWebhookUrl') ?? '';
+    const recipients = this.configService?.get<string[] | string>('support.notificationSmsRecipients') ?? [];
+    const recipientList = Array.isArray(recipients) ? recipients : recipients.split(',');
+
+    return Boolean(
+      webhookUrl.trim()
+      && recipientList.some((recipient) => recipient.trim().length > 0),
+    );
+  }
+
   private resolveReplyStatus(
     ticket: SupportTicketRecord,
     requestedStatus: SupportStatus | undefined,
     supportOperator: boolean,
   ): SupportStatus {
+    if (!supportOperator && requestedStatus) {
+      throw new ForbiddenException('Only support agents can set ticket status while replying');
+    }
+
+    if (supportOperator && ticket.status === 'Closed' && !requestedStatus) {
+      throw new BadRequestException('Closed support tickets require an explicit reopen status before replying');
+    }
+
     if (requestedStatus) {
       return requestedStatus;
     }
@@ -601,11 +678,21 @@ export class SupportService {
       return 'Waiting for School';
     }
 
+    if (ticket.status === 'Resolved' || ticket.status === 'Closed') {
+      return 'In Progress';
+    }
+
     if (ticket.status === 'Waiting for School' || ticket.status === 'Open') {
       return 'In Progress';
     }
 
     return ticket.status;
+  }
+
+  private isReopenTransition(fromStatus: SupportStatus, toStatus: SupportStatus): boolean {
+    return (fromStatus === 'Resolved' || fromStatus === 'Closed')
+      && toStatus !== 'Resolved'
+      && toStatus !== 'Closed';
   }
 
   private requireText(value: string | undefined, fieldName: string): string {

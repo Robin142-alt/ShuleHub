@@ -7,11 +7,15 @@ import { AuthCard } from "@/components/auth/auth-card";
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthMessage } from "@/components/auth/auth-message";
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
+import { SecurityBadge, SessionWarning } from "@/components/auth/auth-security";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
+import {
+  requestPasswordRecovery,
+  resetPassword,
+} from "@/lib/auth/recovery-client";
 
-function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
+type RecoveryAudience = "superadmin" | "school" | "portal";
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function ForgotPasswordView({
   title,
@@ -21,6 +25,8 @@ export function ForgotPasswordView({
   submitLabel,
   backHref,
   successMessage,
+  audience = "school",
+  tenantSlug = null,
 }: {
   title: string;
   subtitle: string;
@@ -29,6 +35,8 @@ export function ForgotPasswordView({
   submitLabel: string;
   backHref: string;
   successMessage: string;
+  audience?: RecoveryAudience;
+  tenantSlug?: string | null;
 }) {
   const [identifier, setIdentifier] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,24 +44,44 @@ export function ForgotPasswordView({
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    if (identifier.trim().length < 4) {
-      setError("Enter the email, phone number, or admission number tied to this account.");
+    const normalizedIdentifier = identifier.trim();
+
+    if (!emailPattern.test(normalizedIdentifier)) {
+      setError("Enter a valid email address for this account.");
       return;
     }
 
     setError(null);
     setBusy(true);
-    await wait(800);
-    setBusy(false);
-    setSuccess(true);
+
+    try {
+      await requestPasswordRecovery({
+        audience,
+        identifier: normalizedIdentifier,
+        tenantSlug,
+      });
+      setSuccess(true);
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to send recovery instructions right now.",
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <AuthCard>
       <div className="space-y-6">
         <div className="space-y-3">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">{title}</h2>
-          <p className="text-sm leading-6 text-muted">{subtitle}</p>
+          <div className="flex flex-wrap gap-2">
+            <SecurityBadge label="Secure recovery" tone="success" />
+            <SecurityBadge label="Short-lived link" />
+          </div>
+          <h2 className="text-3xl font-bold leading-tight text-slate-950">{title}</h2>
+          <p className="text-sm leading-6 text-slate-600">{subtitle}</p>
         </div>
 
         {success ? (
@@ -67,6 +95,7 @@ export function ForgotPasswordView({
             <AuthField
               label={identifierLabel}
               placeholder={identifierPlaceholder}
+              autoComplete="username"
               value={identifier}
               onChange={(event) => setIdentifier(event.target.value)}
               error={error ?? undefined}
@@ -77,7 +106,9 @@ export function ForgotPasswordView({
           </div>
         )}
 
-        <Link href={backHref} className="inline-flex text-sm font-medium text-foreground underline-offset-4 hover:underline">
+        <SessionWarning mode="normal" />
+
+        <Link href={backHref} className="inline-flex text-sm font-bold text-slate-700 underline-offset-4 hover:text-emerald-700 hover:underline">
           Back to login
         </Link>
       </div>
@@ -91,14 +122,20 @@ export function ResetPasswordView({
   secretLabel,
   secretPlaceholder,
   backHref,
+  audience = "school",
+  tenantSlug = null,
+  initialToken = "",
 }: {
   title: string;
   subtitle: string;
   secretLabel: string;
   secretPlaceholder: string;
   backHref: string;
+  audience?: RecoveryAudience;
+  tenantSlug?: string | null;
+  initialToken?: string;
 }) {
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(initialToken);
   const [secret, setSecret] = useState("");
   const [confirmSecret, setConfirmSecret] = useState("");
   const [busy, setBusy] = useState(false);
@@ -112,12 +149,18 @@ export function ResetPasswordView({
       nextErrors.code = "Enter the reset code or token from your recovery message.";
     }
 
-    if (secret.trim().length < 4) {
-      nextErrors.secret = "Enter your new secret.";
+    if (
+      secret.trim().length < 10 ||
+      !/[A-Z]/.test(secret) ||
+      !/[a-z]/.test(secret) ||
+      !/\d/.test(secret)
+    ) {
+      nextErrors.secret =
+        "Use at least 10 characters with uppercase, lowercase, and a number.";
     }
 
     if (confirmSecret !== secret) {
-      nextErrors.confirmSecret = "The confirmation does not match the new secret.";
+      nextErrors.confirmSecret = "The confirmation does not match the new password.";
     }
 
     setFieldErrors(nextErrors);
@@ -127,17 +170,37 @@ export function ResetPasswordView({
     }
 
     setBusy(true);
-    await wait(850);
-    setBusy(false);
-    setSuccess(true);
+
+    try {
+      await resetPassword({
+        audience,
+        token: code.trim(),
+        password: secret,
+        tenantSlug,
+      });
+      setSuccess(true);
+    } catch (submitError) {
+      setFieldErrors({
+        code:
+          submitError instanceof Error
+            ? submitError.message
+            : "Unable to reset this password right now.",
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <AuthCard>
       <div className="space-y-6">
         <div className="space-y-3">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">{title}</h2>
-          <p className="text-sm leading-6 text-muted">{subtitle}</p>
+          <div className="flex flex-wrap gap-2">
+            <SecurityBadge label="Password policy" tone="success" />
+            <SecurityBadge label="Verified code" />
+          </div>
+          <h2 className="text-3xl font-bold leading-tight text-slate-950">{title}</h2>
+          <p className="text-sm leading-6 text-slate-600">{subtitle}</p>
         </div>
 
         {success ? (
@@ -151,6 +214,7 @@ export function ResetPasswordView({
             <AuthField
               label="Recovery code"
               placeholder="Enter the code you received"
+              autoComplete="one-time-code"
               value={code}
               onChange={(event) => setCode(event.target.value)}
               error={fieldErrors.code}
@@ -158,24 +222,28 @@ export function ResetPasswordView({
             <AuthPasswordField
               label={secretLabel}
               placeholder={secretPlaceholder}
+              autoComplete="new-password"
               value={secret}
               onChange={(event) => setSecret(event.target.value)}
               error={fieldErrors.secret}
             />
             <AuthPasswordField
-              label="Confirm new secret"
-              placeholder="Re-enter your new secret"
+              label="Confirm new password"
+              placeholder="Re-enter your new password"
+              autoComplete="new-password"
               value={confirmSecret}
               onChange={(event) => setConfirmSecret(event.target.value)}
               error={fieldErrors.confirmSecret}
             />
             <AuthSubmitButton busy={busy} onClick={submit}>
-              Save new secret
+              Save new password
             </AuthSubmitButton>
           </div>
         )}
 
-        <Link href={backHref} className="inline-flex text-sm font-medium text-foreground underline-offset-4 hover:underline">
+        <SessionWarning mode="normal" />
+
+        <Link href={backHref} className="inline-flex text-sm font-bold text-slate-700 underline-offset-4 hover:text-emerald-700 hover:underline">
           Back to login
         </Link>
       </div>

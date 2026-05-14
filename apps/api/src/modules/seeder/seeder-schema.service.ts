@@ -34,7 +34,7 @@ export class SeederSchemaService {
         CONSTRAINT ck_tenants_tenant_id_not_blank CHECK (btrim(tenant_id) <> ''),
         CONSTRAINT ck_tenants_name_not_blank CHECK (btrim(name) <> ''),
         CONSTRAINT ck_tenants_subdomain_not_blank CHECK (btrim(subdomain) <> ''),
-        CONSTRAINT ck_tenants_status CHECK (status IN ('active', 'inactive', 'demo')),
+        CONSTRAINT ck_tenants_status CHECK (status IN ('active', 'inactive')),
         CONSTRAINT uq_tenants_tenant_id UNIQUE (tenant_id),
         CONSTRAINT uq_tenants_subdomain UNIQUE (subdomain)
       );

@@ -9,6 +9,10 @@ import {
 } from '@nestjs/common';
 
 import { Permissions } from '../../auth/decorators/permissions.decorator';
+import {
+  ReportExportQueueService,
+  type QueueReportExportRequest,
+} from '../../common/reports/report-export-queue';
 import { FeatureGate } from './decorators/feature-gate.decorator';
 import { BILLING_MPESA_FEATURE } from './billing.constants';
 import { CreateBillingPaymentIntentDto } from './dto/create-billing-payment-intent.dto';
@@ -32,6 +36,7 @@ export class BillingController {
     private readonly billingService: BillingService,
     private readonly usageMeterService: UsageMeterService,
     private readonly billingMpesaService: BillingMpesaService,
+    private readonly reportExportQueueService: ReportExportQueueService,
   ) {}
 
   @Post('subscriptions')
@@ -88,6 +93,27 @@ export class BillingController {
   @Permissions('billing:read')
   async listInvoices(@Query() query: ListInvoicesQueryDto): Promise<InvoiceResponseDto[]> {
     return this.billingService.listInvoices(query);
+  }
+
+  @Post('reports/:reportId/export-jobs')
+  @Permissions('billing:read')
+  async queueReportExport(
+    @Param('reportId') reportId: string,
+    @Body() body: QueueReportExportRequest = {},
+  ) {
+    return this.reportExportQueueService.enqueueCurrentRequestReportExport({
+      module: 'billing',
+      report_id: reportId,
+      format: body.format ?? 'csv',
+      filters: body.filters,
+      estimated_rows: body.estimated_rows,
+    });
+  }
+
+  @Get('reports/:reportId/export')
+  @Permissions('billing:read')
+  async exportReport(@Param('reportId') reportId: string) {
+    return this.billingService.exportReportCsv(reportId);
   }
 
   @Get('invoices/:invoiceId')

@@ -1,5 +1,18 @@
+"use client";
+
 import type { ReactNode } from "react";
-import { CheckCircle2, LockKeyhole, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  Activity,
+  CheckCircle2,
+  LockKeyhole,
+  Moon,
+  ShieldCheck,
+  Sparkles,
+  SunMedium,
+  Wifi,
+} from "lucide-react";
 
 type AuthHighlight = {
   id: string;
@@ -25,86 +38,186 @@ function resolveTrustIcon(icon: AuthTrustNote["icon"]) {
   return ShieldCheck;
 }
 
+function AnimatedBackground({ dark }: { dark: boolean }) {
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
+      <div
+        className={`absolute inset-0 ${
+          dark
+            ? "bg-[linear-gradient(135deg,#020617_0%,#0f172a_52%,#064e3b_100%)]"
+            : "bg-[linear-gradient(135deg,#ecfdf5_0%,#f8fafc_48%,#e0f2fe_100%)]"
+        }`}
+      />
+      <motion.div
+        className="absolute -left-28 top-12 h-96 w-96 rounded-full bg-emerald-300/20 blur-3xl"
+        animate={
+          reduceMotion
+            ? undefined
+            : {
+                x: [0, 18, 0],
+                y: [0, 10, 0],
+              }
+        }
+        transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="absolute -right-24 bottom-0 h-80 w-80 rounded-full bg-sky-300/20 blur-3xl"
+        animate={
+          reduceMotion
+            ? undefined
+            : {
+                x: [0, -16, 0],
+                y: [0, -12, 0],
+              }
+        }
+        transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:44px_44px] opacity-40" />
+    </div>
+  );
+}
+
+function TrustIndicators({
+  notes,
+  dark,
+}: {
+  notes: AuthTrustNote[];
+  dark: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {notes.map((note) => {
+        const Icon = resolveTrustIcon(note.icon);
+
+        return (
+          <span
+            key={note.id}
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${
+              dark
+                ? "border-white/10 bg-white/[0.08] text-emerald-50"
+                : "border-slate-200 bg-white/80 text-slate-700"
+            } shadow-sm backdrop-blur`}
+          >
+            <Icon className={dark ? "h-3.5 w-3.5 text-emerald-300" : "h-3.5 w-3.5 text-emerald-600"} />
+            {note.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function SecurityStrip({ dark }: { dark: boolean }) {
+  const items = [
+    { icon: ShieldCheck, label: "Email verified" },
+    { icon: Activity, label: "Audit trail" },
+    { icon: Wifi, label: "Session health" },
+  ];
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      {items.map((item) => {
+        const Icon = item.icon;
+
+        return (
+          <div
+            key={item.label}
+            className={`rounded-2xl border px-4 py-3 ${
+              dark
+                ? "border-white/10 bg-white/[0.06] text-slate-200"
+                : "border-slate-200 bg-white/70 text-slate-700"
+            }`}
+          >
+            <Icon className="h-4 w-4 text-emerald-500" />
+            <p className="mt-2 text-xs font-semibold">{item.label}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function AuthHero({
   eyebrow,
   title,
   description,
   badge,
-  highlights,
   trustNotes,
   logoMark,
   helper,
+  dark,
 }: {
   eyebrow: string;
   title: string;
   description: string;
   badge: string;
-  highlights: AuthHighlight[];
   trustNotes: AuthTrustNote[];
   logoMark: string;
   helper: string;
+  dark: boolean;
 }) {
   return (
-    <section className="relative overflow-hidden border-b border-border bg-surface-muted px-6 py-8 lg:border-b-0 lg:border-r lg:px-10 lg:py-10">
-      <div className="absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top_left,rgba(22,163,74,0.12),transparent_56%)]" />
-      <div className="relative flex h-full flex-col justify-between gap-8">
-        <div className="space-y-6">
+    <section className="relative isolate hidden overflow-hidden p-8 text-slate-950 lg:flex lg:min-h-[calc(100vh-32px)] lg:flex-col lg:justify-between xl:p-10">
+      <AnimatedBackground dark={dark} />
+      <div className="relative z-10 space-y-8">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-base font-semibold text-foreground shadow-sm">
+            <span
+              className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl text-sm font-bold shadow-sm ${
+                dark ? "bg-white text-slate-950" : "bg-slate-950 text-white"
+              }`}
+            >
               {logoMark}
             </span>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-                {eyebrow}
+              <p className={dark ? "text-sm font-semibold text-white" : "text-sm font-semibold text-slate-950"}>
+                ShuleHub ERP
               </p>
-              <p className="mt-1 text-sm font-medium text-foreground">{badge}</p>
-            </div>
-          </div>
-
-          <div className="max-w-xl space-y-4">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-              {title}
-            </h1>
-            <p className="text-sm leading-7 text-muted md:text-base">
-              {description}
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-          {highlights.map((highlight) => (
-            <div
-              key={highlight.id}
-              className="rounded-2xl border border-border bg-white/80 px-4 py-4 shadow-sm backdrop-blur"
-            >
-              <p className="text-sm font-semibold text-foreground">
-                {highlight.title}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-muted">
-                {highlight.description}
+              <p className={dark ? "mt-1 text-xs text-slate-300" : "mt-1 text-xs text-slate-500"}>
+                {badge}
               </p>
             </div>
-          ))}
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {trustNotes.map((note) => {
-              const Icon = resolveTrustIcon(note.icon);
-
-              return (
-                <span
-                  key={note.id}
-                  className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground shadow-sm"
-                >
-                  <Icon className="h-3.5 w-3.5 text-accent" />
-                  {note.label}
-                </span>
-              );
-            })}
           </div>
-          <p className="max-w-xl text-sm leading-6 text-muted">{helper}</p>
+          <div
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold ${
+              dark
+                ? "border border-white/10 bg-white/[0.08] text-emerald-100"
+                : "border border-slate-200 bg-white/80 text-slate-700"
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
+            {eyebrow}
+          </div>
         </div>
+
+        <div className="max-w-2xl space-y-5">
+          <motion.h1
+            className={dark ? "text-4xl font-bold leading-[1.08] text-white xl:text-5xl" : "text-4xl font-bold leading-[1.08] text-slate-950 xl:text-5xl"}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          >
+            {title}
+          </motion.h1>
+          <motion.p
+            className={dark ? "max-w-xl text-base leading-7 text-slate-300" : "max-w-xl text-base leading-7 text-slate-600"}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08, duration: 0.4, ease: "easeOut" }}
+          >
+            {description}
+          </motion.p>
+        </div>
+      </div>
+
+      <div className="relative z-10 space-y-5">
+        <SecurityStrip dark={dark} />
+        <TrustIndicators notes={trustNotes} dark={dark} />
+        <p className={dark ? "max-w-2xl text-sm leading-6 text-slate-300" : "max-w-2xl text-sm leading-6 text-slate-600"}>
+          {helper}
+        </p>
       </div>
     </section>
   );
@@ -117,7 +230,6 @@ export function AuthShell({
   badge,
   logoMark,
   helper,
-  highlights,
   trustNotes,
   children,
 }: {
@@ -131,25 +243,69 @@ export function AuthShell({
   trustNotes: AuthTrustNote[];
   children: ReactNode;
 }) {
-  return (
-    <main className="min-h-screen bg-background px-4 py-4 md:px-6 md:py-6">
-      <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1400px] items-stretch">
-        <div className="grid w-full overflow-hidden rounded-[32px] border border-border bg-white shadow-[0_16px_48px_rgba(15,23,42,0.08)] lg:grid-cols-[1.08fr_0.92fr]">
-          <AuthHero
-            eyebrow={eyebrow}
-            title={heroTitle}
-            description={heroDescription}
-            badge={badge}
-            logoMark={logoMark}
-            helper={helper}
-            highlights={highlights}
-            trustNotes={trustNotes}
-          />
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const dark = theme === "dark";
 
-          <section className="flex items-center justify-center px-5 py-8 md:px-8 md:py-10 lg:px-10">
-            <div className="w-full max-w-md auth-enter">{children}</div>
-          </section>
-        </div>
+  return (
+    <main
+      className={`min-h-screen px-3 py-3 transition-colors duration-300 md:px-4 md:py-4 ${
+        dark ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-950"
+      }`}
+    >
+      <div
+        className={`mx-auto grid min-h-[calc(100vh-24px)] max-w-[1500px] overflow-hidden rounded-[32px] border shadow-2xl lg:grid-cols-[1.1fr_0.9fr] ${
+          dark
+            ? "border-white/10 bg-slate-950 shadow-emerald-950/30"
+            : "border-white bg-white shadow-slate-300/40"
+        }`}
+      >
+        <AuthHero
+          eyebrow={eyebrow}
+          title={heroTitle}
+          description={heroDescription}
+          badge={badge}
+          logoMark={logoMark}
+          helper={helper}
+          trustNotes={trustNotes}
+          dark={dark}
+        />
+
+        <section
+          className={`relative flex min-h-[calc(100vh-24px)] items-center justify-center overflow-hidden px-4 py-6 transition-colors duration-300 sm:px-6 md:px-8 lg:min-h-full ${
+            dark
+              ? "bg-slate-950"
+              : "bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)]"
+          }`}
+        >
+          <div
+            aria-hidden="true"
+            className={`absolute inset-x-0 top-0 h-40 lg:hidden ${
+              dark
+                ? "bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.22),transparent_62%)]"
+                : "bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.16),transparent_62%)]"
+            }`}
+          />
+          <button
+            type="button"
+            onClick={() => setTheme((value) => (value === "light" ? "dark" : "light"))}
+            className={`absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border transition hover:scale-[1.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${
+              dark
+                ? "border-white/10 bg-white/[0.08] text-white hover:bg-white/[0.12]"
+                : "border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
+            }`}
+            aria-label={dark ? "Use light theme" : "Use dark theme"}
+          >
+            {dark ? <SunMedium className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
+          <motion.div
+            className="relative z-10 w-full max-w-[480px]"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+          >
+            {children}
+          </motion.div>
+        </section>
       </div>
     </main>
   );

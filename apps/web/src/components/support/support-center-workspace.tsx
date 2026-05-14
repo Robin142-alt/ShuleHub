@@ -19,9 +19,8 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { StatusPill } from "@/components/ui/status-pill";
 import { isDashboardApiConfigured } from "@/lib/dashboard/api-client";
+import { getSupportAppVersion } from "@/lib/support/app-version";
 import {
-  buildAttachmentPath,
-  createSupportTickets,
   knowledgeBaseArticles,
   priorityTone,
   statusTone,
@@ -71,7 +70,7 @@ function createBrowserContext(defaultView: SchoolSupportView, moduleAffected = "
         ? "Mobile device"
         : "Windows laptop",
     pageUrl: moduleAffected === "Support" ? path : `/school/admin/${moduleAffected.toLowerCase().replace(/\s+/g, "-")}`,
-    appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? "2026.05.08",
+    appVersion: getSupportAppVersion(),
     errorLogs: ["No client errors captured in the last 5 minutes"],
   };
 }
@@ -84,20 +83,16 @@ function upsertTicket(tickets: SupportTicket[], nextTicket: SupportTicket) {
 }
 
 export function SupportCenterWorkspace({
-  tenantSlug = "barakaacademy",
+  tenantSlug = null,
   defaultView,
 }: {
   tenantSlug?: string | null;
   defaultView: SchoolSupportView;
 }) {
-  const normalizedTenantSlug = tenantSlug ?? "barakaacademy";
+  const normalizedTenantSlug = tenantSlug?.trim() ?? "";
   const apiConfigured = isDashboardApiConfigured();
   const queryClient = useQueryClient();
-  const seededTickets = useMemo(
-    () => createSupportTickets().filter((ticket) => ticket.tenantSlug === normalizedTenantSlug),
-    [normalizedTenantSlug],
-  );
-  const [localTickets, setLocalTickets] = useState<SupportTicket[]>(seededTickets);
+  const [localTickets, setLocalTickets] = useState<SupportTicket[]>([]);
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState<string>("MPESA");
   const [priority, setPriority] = useState<SupportPriority>("Medium");
@@ -120,26 +115,26 @@ export function SupportCenterWorkspace({
   const liveTicketsQuery = useQuery({
     queryKey: ticketsQueryKey,
     queryFn: () => fetchSupportTicketsLive({ tenantSlug: normalizedTenantSlug, audience: "school" }),
-    enabled: apiConfigured,
+    enabled: apiConfigured && Boolean(normalizedTenantSlug),
     retry: false,
     placeholderData: (previous) => previous,
   });
   const liveCategoriesQuery = useQuery({
     queryKey: ["support-categories", normalizedTenantSlug],
     queryFn: () => fetchSupportCategoriesLive(normalizedTenantSlug),
-    enabled: apiConfigured,
+    enabled: apiConfigured && Boolean(normalizedTenantSlug),
     retry: false,
   });
   const liveKnowledgeBaseQuery = useQuery({
     queryKey: ["support-kb", normalizedTenantSlug],
     queryFn: () => fetchKnowledgeBaseLive(normalizedTenantSlug),
-    enabled: apiConfigured && defaultView === "support-knowledge-base",
+    enabled: apiConfigured && Boolean(normalizedTenantSlug) && defaultView === "support-knowledge-base",
     retry: false,
   });
   const liveSystemStatusQuery = useQuery({
     queryKey: ["support-status", normalizedTenantSlug],
     queryFn: () => fetchSystemStatusLive(normalizedTenantSlug),
-    enabled: apiConfigured && defaultView === "support-system-status",
+    enabled: apiConfigured && Boolean(normalizedTenantSlug) && defaultView === "support-system-status",
     retry: false,
   });
   const liveTicketDetailQuery = useQuery({
@@ -150,7 +145,7 @@ export function SupportCenterWorkspace({
         tenantSlug: normalizedTenantSlug,
         audience: "school",
       }),
-    enabled: apiConfigured && Boolean(selectedTicketId),
+    enabled: apiConfigured && Boolean(normalizedTenantSlug) && Boolean(selectedTicketId),
     retry: false,
   });
   const isLiveMode = Boolean(apiConfigured && liveTicketsQuery.data);
@@ -175,105 +170,57 @@ export function SupportCenterWorkspace({
       return;
     }
 
-    if (apiConfigured) {
-      try {
-        const liveTicket = await createSupportTicketLive({
-          tenantSlug: normalizedTenantSlug,
-          subject: subject.trim(),
-          category,
-          priority,
-          moduleAffected,
-          description: description.trim(),
-          browser: context.browser,
-          device: context.device,
-          currentPageUrl: context.pageUrl,
-          appVersion: context.appVersion,
-          errorLogs: context.errorLogs,
-        });
-        const attachment = selectedFile
-          ? await uploadSupportAttachmentLive({
-              tenantSlug: normalizedTenantSlug,
-              ticketId: liveTicket.id,
-              file: selectedFile,
-            })
-          : null;
-        const savedTicket = attachment
-          ? { ...liveTicket, attachments: [attachment] }
-          : liveTicket;
-
-        queryClient.setQueryData<SupportTicket[]>(ticketsQueryKey, (current = []) =>
-          upsertTicket(current, savedTicket),
-        );
-        setLocalTickets((current) => upsertTicket(current, savedTicket));
-        setFormError(null);
-        setSuccessMessage(`Ticket ${savedTicket.ticketNumber} created and ${savedTicket.status.toLowerCase()}.`);
-        setCreatedAttachmentPath(attachment?.storedPath ?? null);
-        setSubject("");
-        setDescription("");
-        setSelectedFile(null);
-        return;
-      } catch (error) {
-        setFormError(
-          error instanceof Error
-            ? error.message
-            : "Unable to create the live support ticket.",
-        );
-      }
+    if (!normalizedTenantSlug) {
+      setFormError("A school workspace is required before support can create a tenant-scoped ticket.");
+      return;
     }
 
-    createLocalTicket();
-  }
+    if (!apiConfigured) {
+      setFormError("Support ticket creation is temporarily unavailable for this workspace.");
+      return;
+    }
 
-  function createLocalTicket() {
-    const ticketNumber = `SUP-2026-${String(145 + tickets.length + 1).padStart(6, "0")}`;
-    const attachmentPath = selectedFile
-      ? buildAttachmentPath(normalizedTenantSlug, ticketNumber, selectedFile.name)
-      : null;
-    const newTicket: SupportTicket = {
-      id: `ticket-${Date.now()}`,
-      ticketNumber,
-      tenantId: normalizedTenantSlug,
-      tenantSlug: normalizedTenantSlug,
-      schoolName: "Baraka Academy",
-      subject: subject.trim(),
-      category,
-      priority,
-      moduleAffected,
-      description: description.trim(),
-      status: priority === "Critical" ? "Escalated" : "Open",
-      owner: priority === "Critical" ? "Support escalation desk" : "Unassigned",
-      requester: "School admin",
-      updatedAt: "now",
-      firstResponseDue: priority === "Critical" ? "15 min" : "4 hr",
-      resolutionDue: priority === "Critical" ? "4 hr" : "2 days",
-      context,
-      attachments: attachmentPath
-        ? [
-            {
-              id: `attachment-${Date.now()}`,
-              name: selectedFile?.name ?? "attachment",
-              type: selectedFile?.type || "application/octet-stream",
-              size: selectedFile ? `${Math.max(1, Math.ceil(selectedFile.size / 1024))} KB` : "0 KB",
-              storedPath: attachmentPath,
-            },
-          ]
-        : [],
-      messages: [
-        {
-          id: `message-${Date.now()}`,
-          author: "School admin",
-          authorType: "school",
-          body: description.trim(),
-          createdAt: "now",
-        },
-      ],
-      internalNotes: [],
-    };
+    try {
+      const liveTicket = await createSupportTicketLive({
+        tenantSlug: normalizedTenantSlug,
+        subject: subject.trim(),
+        category,
+        priority,
+        moduleAffected,
+        description: description.trim(),
+        browser: context.browser,
+        device: context.device,
+        currentPageUrl: context.pageUrl,
+        appVersion: context.appVersion,
+        errorLogs: context.errorLogs,
+      });
+      const attachment = selectedFile
+        ? await uploadSupportAttachmentLive({
+            tenantSlug: normalizedTenantSlug,
+            ticketId: liveTicket.id,
+            file: selectedFile,
+          })
+        : null;
+      const savedTicket = attachment
+        ? { ...liveTicket, attachments: [attachment] }
+        : liveTicket;
 
-    setLocalTickets((current) => [newTicket, ...current]);
+      queryClient.setQueryData<SupportTicket[]>(ticketsQueryKey, (current = []) =>
+        upsertTicket(current, savedTicket),
+      );
+      setLocalTickets((current) => upsertTicket(current, savedTicket));
+      setSuccessMessage(`Ticket ${savedTicket.ticketNumber} created and ${savedTicket.status.toLowerCase()}.`);
+      setCreatedAttachmentPath(attachment?.storedPath ?? null);
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create the live support ticket.",
+      );
+      return;
+    }
+
     setFormError(null);
-    setSuccessMessage(`Ticket ${ticketNumber} created and ${newTicket.status.toLowerCase()}.`);
-    setCreatedAttachmentPath(attachmentPath);
     setSubject("");
     setDescription("");
     setSelectedFile(null);
@@ -382,7 +329,7 @@ export function SupportCenterWorkspace({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill label="Tenant isolated" tone="ok" />
-            <StatusPill label={isLiveMode ? "Live backend" : "Review fallback"} tone={isLiveMode ? "ok" : "warning"} />
+            <StatusPill label={isLiveMode ? "Support connected" : "Support connection required"} tone={isLiveMode ? "ok" : "warning"} />
           </div>
         </div>
       </Card>
@@ -552,7 +499,7 @@ export function SupportCenterWorkspace({
             subtitle="Quickly see whether an issue is platform-wide before opening duplicate tickets."
             columns={[
               { id: "name", header: "Component", render: (row) => row.name },
-              { id: "status", header: "Status", render: (row) => <StatusPill label={row.status} tone={row.status === "Degraded" ? "warning" : "ok"} /> },
+              { id: "status", header: "Status", render: (row) => <StatusPill label={row.status} tone={row.status === "Operational" ? "ok" : "warning"} /> },
               { id: "uptime", header: "Uptime", render: (row) => row.uptime },
               { id: "latency", header: "Latency", render: (row) => row.latency },
             ]}
@@ -564,12 +511,12 @@ export function SupportCenterWorkspace({
             <p className="mt-4 text-lg font-semibold text-foreground">Current incident note</p>
             <p className="mt-2 text-sm leading-6 text-muted">
               {currentIncident?.update_summary
-                ?? "MPESA callbacks are degraded for a subset of providers. Schools can keep collecting payments while support monitors callback replay and reconciliation."}
+                ?? "No active platform incident has been published by the live status service."}
             </p>
             <div className="mt-5 flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-muted" />
               <span className="text-sm text-muted">
-                {currentIncident?.updated_at ? `Updated ${currentIncident.updated_at}` : "Updated 8 minutes ago"}
+                {currentIncident?.updated_at ? `Updated ${currentIncident.updated_at}` : "Status feed pending"}
               </span>
             </div>
           </Card>

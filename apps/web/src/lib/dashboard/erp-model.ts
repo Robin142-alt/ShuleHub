@@ -5,14 +5,14 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { formatCurrency, formatPercent } from "./format";
+import { formatCurrency } from "./format";
 import type {
   DashboardRole,
   KpiCard,
   StatusTone,
-  SyncState,
   TenantOption,
 } from "./types";
+import { isProductionReadyHref } from "@/lib/features/module-readiness";
 
 export interface SchoolSelectorOption {
   id: string;
@@ -82,14 +82,6 @@ export interface FeeStructureRow {
   frequency: string;
 }
 
-export interface StudentAttendanceRow {
-  id: string;
-  date: string;
-  status: string;
-  statusTone: StatusTone;
-  note: string;
-}
-
 export interface StudentAcademicRow {
   id: string;
   subject: string;
@@ -110,7 +102,6 @@ export interface StudentProfileData {
   metrics: StudentProfileMetric[];
   feeStructure: FeeStructureRow[];
   paymentHistory: StudentPaymentRow[];
-  attendance: StudentAttendanceRow[];
   academics: StudentAcademicRow[];
 }
 
@@ -134,14 +125,6 @@ export interface MpesaTransactionRow {
   statusTone: StatusTone;
   matchedStudent: string;
   receivedAt: string;
-}
-
-export interface AttendanceMarkRow {
-  id: string;
-  student: string;
-  className: string;
-  state: "present" | "absent";
-  synced: SyncState;
 }
 
 export interface AcademicSubjectRow {
@@ -223,12 +206,6 @@ export interface MpesaPageData {
   rows: MpesaTransactionRow[];
 }
 
-export interface AttendancePageData {
-  summary: DashboardMetricCard[];
-  rows: AttendanceMarkRow[];
-  dateLabel: string;
-}
-
 export interface AcademicsPageData {
   summary: DashboardMetricCard[];
   subjects: AcademicSubjectRow[];
@@ -263,7 +240,6 @@ export interface SchoolErpModel {
   studentProfiles: StudentProfileData[];
   finance: FinancePageData;
   mpesa: MpesaPageData;
-  attendance: AttendancePageData;
   academics: AcademicsPageData;
   communication: CommunicationPageData;
   reports: ReportsPageData;
@@ -280,7 +256,6 @@ type BaseStudent = {
   balance: number;
   totalExpected: number;
   paidThisTerm: number;
-  attendanceRate: number;
   mostRecentPaymentDate: string;
 };
 
@@ -296,356 +271,56 @@ const yearOptions: SchoolSelectorOption[] = [
   { id: "2027", label: "2027" },
 ];
 
-const feeStructureBase = [
-  { id: "tuition", item: "Tuition", amount: 32_000, frequency: "Per term" },
-  { id: "transport", item: "Transport", amount: 8_500, frequency: "Per term" },
-  { id: "lunch", item: "Lunch", amount: 6_200, frequency: "Per term" },
-];
-
-const baseStudents: BaseStudent[] = [
-  {
-    id: "learner-aisha-njeri",
-    name: "Aisha Njeri",
-    admissionNumber: "SH-24011",
-    className: "Grade 7 Hope",
-    parentName: "Grace Njeri",
-    parentPhone: "254712345801",
-    balance: 0,
-    totalExpected: 46_700,
-    paidThisTerm: 46_700,
-    attendanceRate: 97.2,
-    mostRecentPaymentDate: "22 Apr 2026",
-  },
-  {
-    id: "learner-brian-otieno",
-    name: "Brian Otieno",
-    admissionNumber: "SH-24012",
-    className: "Grade 8 Unity",
-    parentName: "Linet Achieng",
-    parentPhone: "254723456810",
-    balance: 12_000,
-    totalExpected: 46_700,
-    paidThisTerm: 34_700,
-    attendanceRate: 92.1,
-    mostRecentPaymentDate: "18 Apr 2026",
-  },
-  {
-    id: "learner-carol-wanjiku",
-    name: "Carol Wanjiku",
-    admissionNumber: "SH-24013",
-    className: "Grade 6 Peace",
-    parentName: "Peter Wanjiku",
-    parentPhone: "254734567821",
-    balance: 4_500,
-    totalExpected: 46_700,
-    paidThisTerm: 42_200,
-    attendanceRate: 95.6,
-    mostRecentPaymentDate: "26 Apr 2026",
-  },
-  {
-    id: "learner-daniel-mutua",
-    name: "Daniel Mutua",
-    admissionNumber: "SH-24014",
-    className: "Grade 9 Courage",
-    parentName: "Loise Mutua",
-    parentPhone: "254745678832",
-    balance: 18_200,
-    totalExpected: 46_700,
-    paidThisTerm: 28_500,
-    attendanceRate: 90.4,
-    mostRecentPaymentDate: "12 Apr 2026",
-  },
-  {
-    id: "learner-esther-chebet",
-    name: "Esther Chebet",
-    admissionNumber: "SH-24015",
-    className: "Grade 5 Joy",
-    parentName: "Jane Chebet",
-    parentPhone: "254756789843",
-    balance: 0,
-    totalExpected: 46_700,
-    paidThisTerm: 46_700,
-    attendanceRate: 98.4,
-    mostRecentPaymentDate: "20 Apr 2026",
-  },
-  {
-    id: "learner-faith-ndungu",
-    name: "Faith Ndungu",
-    admissionNumber: "SH-24016",
-    className: "Grade 4 Light",
-    parentName: "Joseph Ndungu",
-    parentPhone: "254767890854",
-    balance: 6_800,
-    totalExpected: 46_700,
-    paidThisTerm: 39_900,
-    attendanceRate: 94.3,
-    mostRecentPaymentDate: "15 Apr 2026",
-  },
-  {
-    id: "learner-george-ochieng",
-    name: "George Ochieng",
-    admissionNumber: "SH-24017",
-    className: "Grade 3 Star",
-    parentName: "Janet Ochieng",
-    parentPhone: "254778901865",
-    balance: 0,
-    totalExpected: 46_700,
-    paidThisTerm: 46_700,
-    attendanceRate: 96.1,
-    mostRecentPaymentDate: "24 Apr 2026",
-  },
-  {
-    id: "learner-hassan-abdi",
-    name: "Hassan Abdi",
-    admissionNumber: "SH-24018",
-    className: "Grade 2 Joy",
-    parentName: "Sahra Abdi",
-    parentPhone: "254789012876",
-    balance: 9_500,
-    totalExpected: 46_700,
-    paidThisTerm: 37_200,
-    attendanceRate: 93.8,
-    mostRecentPaymentDate: "10 Apr 2026",
-  },
-];
-
-const paymentRowsBase = [
-  {
-    id: "payment-01",
-    studentId: "learner-aisha-njeri",
-    amount: 18_500,
-    method: "M-PESA",
-    date: "22 Apr 2026",
-    reference: "QJT8M4P21",
-    status: "Posted",
-    statusTone: "ok" as const,
-  },
-  {
-    id: "payment-02",
-    studentId: "learner-brian-otieno",
-    amount: 10_000,
-    method: "M-PESA",
-    date: "18 Apr 2026",
-    reference: "QJT8L1R31",
-    status: "Posted",
-    statusTone: "ok" as const,
-  },
-  {
-    id: "payment-03",
-    studentId: "learner-carol-wanjiku",
-    amount: 12_500,
-    method: "Bank",
-    date: "26 Apr 2026",
-    reference: "BNK-440182",
-    status: "Posted",
-    statusTone: "ok" as const,
-  },
-  {
-    id: "payment-04",
-    studentId: "learner-daniel-mutua",
-    amount: 8_500,
-    method: "Cash",
-    date: "12 Apr 2026",
-    reference: "CSH-1184",
-    status: "Posted",
-    statusTone: "ok" as const,
-  },
-  {
-    id: "payment-05",
-    studentId: "learner-faith-ndungu",
-    amount: 6_000,
-    method: "M-PESA",
-    date: "15 Apr 2026",
-    reference: "QJT7W8P10",
-    status: "Posted",
-    statusTone: "ok" as const,
-  },
-  {
-    id: "payment-06",
-    studentId: "learner-hassan-abdi",
-    amount: 4_200,
-    method: "M-PESA",
-    date: "10 Apr 2026",
-    reference: "QJT6A2P02",
-    status: "Reversed",
-    statusTone: "critical" as const,
-  },
-];
-
-const mpesaRowsBase = [
-  {
-    id: "mpesa-01",
-    studentId: "learner-aisha-njeri",
-    phone: "254712345801",
-    amount: 18_500,
-    code: "QJT8M4P21",
-    status: "Matched",
-    statusTone: "ok" as const,
-    receivedAt: "08:11 AM",
-  },
-  {
-    id: "mpesa-02",
-    studentId: "learner-brian-otieno",
-    phone: "254723456810",
-    amount: 10_000,
-    code: "QJT8L1R31",
-    status: "Matched",
-    statusTone: "ok" as const,
-    receivedAt: "08:42 AM",
-  },
-  {
-    id: "mpesa-03",
-    studentId: "learner-daniel-mutua",
-    phone: "254745678832",
-    amount: 6_000,
-    code: "QJT8V9H33",
-    status: "Pending match",
-    statusTone: "warning" as const,
-    receivedAt: "09:15 AM",
-  },
-  {
-    id: "mpesa-04",
-    studentId: "learner-faith-ndungu",
-    phone: "254767890854",
-    amount: 6_000,
-    code: "QJT7W8P10",
-    status: "Failed",
-    statusTone: "critical" as const,
-    receivedAt: "09:58 AM",
-  },
-  {
-    id: "mpesa-05",
-    studentId: "learner-hassan-abdi",
-    phone: "254789012876",
-    amount: 9_000,
-    code: "QJT8Z3P55",
-    status: "Matched",
-    statusTone: "ok" as const,
-    receivedAt: "10:22 AM",
-  },
-];
-
-const attendanceRowsBase = [
-  {
-    id: "attendance-01",
-    studentId: "learner-aisha-njeri",
-    state: "present" as const,
-    synced: "synced" as const,
-  },
-  {
-    id: "attendance-02",
-    studentId: "learner-brian-otieno",
-    state: "present" as const,
-    synced: "synced" as const,
-  },
-  {
-    id: "attendance-03",
-    studentId: "learner-carol-wanjiku",
-    state: "absent" as const,
-    synced: "pending" as const,
-  },
-  {
-    id: "attendance-04",
-    studentId: "learner-daniel-mutua",
-    state: "present" as const,
-    synced: "synced" as const,
-  },
-  {
-    id: "attendance-05",
-    studentId: "learner-esther-chebet",
-    state: "present" as const,
-    synced: "synced" as const,
-  },
-];
-
-const subjectRowsBase = [
-  { id: "subject-01", subject: "Mathematics", teacher: "Mr. Kiptoo", className: "Grade 8 Unity", average: "74%" },
-  { id: "subject-02", subject: "English", teacher: "Ms. Mwende", className: "Grade 7 Hope", average: "76%" },
-  { id: "subject-03", subject: "Integrated Science", teacher: "Ms. Naliaka", className: "Grade 9 Courage", average: "71%" },
-  { id: "subject-04", subject: "Social Studies", teacher: "Mr. Ouma", className: "Grade 6 Peace", average: "69%" },
-];
-
-const marksRowsBase = [
-  { id: "marks-01", studentId: "learner-aisha-njeri", english: "81", maths: "85", science: "79", socialStudies: "74" },
-  { id: "marks-02", studentId: "learner-brian-otieno", english: "73", maths: "69", science: "71", socialStudies: "66" },
-  { id: "marks-03", studentId: "learner-carol-wanjiku", english: "84", maths: "78", science: "82", socialStudies: "75" },
-  { id: "marks-04", studentId: "learner-daniel-mutua", english: "70", maths: "72", science: "68", socialStudies: "65" },
-];
-
-const reportRowsBase = [
-  { id: "report-01", studentId: "learner-aisha-njeri", reportType: "Mid-term report", status: "Ready", statusTone: "ok" as const },
-  { id: "report-02", studentId: "learner-brian-otieno", reportType: "Fee statement", status: "Ready", statusTone: "ok" as const },
-  { id: "report-03", studentId: "learner-daniel-mutua", reportType: "Progress report", status: "Draft", statusTone: "warning" as const },
-];
-
-const smsHistoryBase = [
-  {
-    id: "sms-01",
-    audience: "Defaulters",
-    message: "Fee reminder sent for balances above KES 10,000.",
-    sentAt: "Today, 07:40 AM",
-    status: "Delivered",
-    statusTone: "ok" as const,
-  },
-  {
-    id: "sms-02",
-    audience: "Grade 7 Hope",
-    message: "Parents reminded about Thursday CBC exhibition.",
-    sentAt: "Yesterday, 04:12 PM",
-    status: "Delivered",
-    statusTone: "ok" as const,
-  },
-  {
-    id: "sms-03",
-    audience: "All parents",
-    message: "School transport route change shared before opening bell.",
-    sentAt: "Yesterday, 06:35 AM",
-    status: "Queued",
-    statusTone: "warning" as const,
-  },
-];
-
-const systemUsersBase = [
-  {
-    id: "user-01",
-    name: "Mercy Wairimu",
-    role: "Principal",
-    phone: "254711223344",
-    status: "Active",
-    statusTone: "ok" as const,
-  },
-  {
-    id: "user-02",
-    name: "John Kiptoo",
-    role: "Bursar",
-    phone: "254722334455",
-    status: "Active",
-    statusTone: "ok" as const,
-  },
-  {
-    id: "user-03",
-    name: "Lucy Atieno",
-    role: "School Admin",
-    phone: "254733445566",
-    status: "Pending reset",
-    statusTone: "warning" as const,
-  },
-];
+const feeStructureBase: Array<{ id: string; item: string; amount: number; frequency: string }> = [];
+const baseStudents: BaseStudent[] = [];
+const paymentRowsBase: Array<{
+  id: string;
+  studentId: string;
+  amount: number;
+  method: string;
+  date: string;
+  reference: string;
+  status: string;
+  statusTone: StatusTone;
+}> = [];
+const mpesaRowsBase: Array<{
+  id: string;
+  studentId: string;
+  phone: string;
+  amount: number;
+  code: string;
+  status: string;
+  statusTone: StatusTone;
+  receivedAt: string;
+}> = [];
+const subjectRowsBase: AcademicSubjectRow[] = [];
+const marksRowsBase: Array<{
+  id: string;
+  studentId: string;
+  english: string;
+  maths: string;
+  science: string;
+  socialStudies: string;
+}> = [];
+const reportRowsBase: Array<{
+  id: string;
+  studentId: string;
+  reportType: string;
+  status: string;
+  statusTone: StatusTone;
+}> = [];
+const smsHistoryBase: SmsHistoryRow[] = [];
+const systemUsersBase: Array<{
+  id: string;
+  name: string;
+  role: string;
+  phone: string;
+  status: string;
+  statusTone: StatusTone;
+}> = [];
 
 function roleVisibleStudentIds(role: DashboardRole) {
-  if (role === "parent") {
-    return ["learner-aisha-njeri", "learner-brian-otieno"];
-  }
-
-  if (role === "teacher") {
-    return [
-      "learner-aisha-njeri",
-      "learner-brian-otieno",
-      "learner-carol-wanjiku",
-      "learner-daniel-mutua",
-    ];
-  }
-
+  void role;
   return baseStudents.map((student) => student.id);
 }
 
@@ -695,30 +370,6 @@ function buildStudentProfiles(role: DashboardRole) {
           statusTone: payment.statusTone,
         }));
 
-      const attendance = [
-        {
-          id: `${student.id}-att-01`,
-          date: "28 Apr 2026",
-          status: student.attendanceRate > 95 ? "Present" : "Late",
-          statusTone: student.attendanceRate > 95 ? "ok" : "warning",
-          note: "Morning roll call captured before 7:30 a.m.",
-        },
-        {
-          id: `${student.id}-att-02`,
-          date: "27 Apr 2026",
-          status: "Present",
-          statusTone: "ok",
-          note: "All lessons attended.",
-        },
-        {
-          id: `${student.id}-att-03`,
-          date: "25 Apr 2026",
-          status: student.balance > 15_000 ? "Absent" : "Present",
-          statusTone: student.balance > 15_000 ? "critical" : "ok",
-          note: student.balance > 15_000 ? "Parent contacted by class teacher." : "Normal attendance day.",
-        },
-      ] satisfies StudentAttendanceRow[];
-
       const academics = subjectRowsBase.slice(0, 4).map<StudentAcademicRow>((entry) => ({
         id: `${student.id}-${entry.id}`,
         subject: entry.subject,
@@ -760,12 +411,6 @@ function buildStudentProfiles(role: DashboardRole) {
             helper: "All posted collections",
           },
           {
-            id: "attendance",
-            label: "Attendance",
-            value: formatPercent(student.attendanceRate),
-            helper: "Current term roll-call rate",
-          },
-          {
             id: "payment-date",
             label: "Last payment",
             value: student.mostRecentPaymentDate,
@@ -779,7 +424,6 @@ function buildStudentProfiles(role: DashboardRole) {
           frequency: row.frequency,
         })),
         paymentHistory,
-        attendance,
         academics,
       };
     });
@@ -842,28 +486,28 @@ function buildHomeKpis(role: DashboardRole, visibleStudents: BaseStudent[]): Kpi
 
   if (role === "teacher") {
     return [
-      makeCard("class-attendance", "Attendance Today", "95.2%", "Morning roll call completion", "/dashboard/teacher/attendance", "+1.2%", "up", [88, 91, 92, 93, 94, 95, 95]),
-      makeCard("classes-unmarked", "Unmarked Classes", "1", "Still pending morning mark", "/dashboard/teacher/attendance", "-1", "down", [4, 3, 3, 2, 2, 2, 1]),
-      makeCard("marks-pending", "Marks Pending", "18", "CBC entry queue waiting review", "/dashboard/teacher/academics", "-3", "down", [28, 24, 23, 22, 20, 19, 18]),
-      makeCard("reports-ready", "Report Cards Ready", "24", "Ready for family sharing", "/dashboard/teacher/reports", "+6", "up", [8, 10, 13, 15, 18, 21, 24]),
-    ];
+      makeCard("class-planner", "Class Planner", "0", "No live timetable sessions have been created yet.", "/dashboard/teacher/academics", "0", "up", []),
+      makeCard("classes-active", "Active Classes", "0", "No class assignments exist yet.", "/dashboard/teacher/academics", "0", "down", []),
+      makeCard("marks-pending", "Marks Pending", "0", "No assessment records exist yet.", "/dashboard/teacher/academics", "0", "down", []),
+      makeCard("reports-ready", "Report Cards Ready", "0", "No report cards exist yet.", "/dashboard/teacher/reports", "0", "up", []),
+    ].filter((card) => isProductionReadyHref(card.href));
   }
 
   if (role === "parent") {
     return [
-      makeCard("home-balance", "Current Balance", formatCurrency(12_000), "Family fee position this term", "/dashboard/parent/finance", "-8.0%", "down", [26, 24, 22, 19, 18, 15, 12]),
-      makeCard("home-attendance", "Attendance", "97.2%", "Current learner attendance", "/dashboard/parent/attendance", "+1.0%", "up", [93, 94, 95, 95, 96, 97, 97]),
-      makeCard("home-next-fee", "Next Due", "Transport", "Next charge awaiting payment", "/dashboard/parent/finance", "Due", "down", [22, 22, 21, 20, 18, 16, 15]),
-      makeCard("home-messages", "Unread Notices", "3", "Recent school updates", "/dashboard/parent/communication", "+1", "up", [1, 1, 2, 2, 2, 3, 3]),
-    ];
+      makeCard("home-balance", "Current Balance", formatCurrency(0), "No linked learner fee records yet.", "/dashboard/parent/finance", "0", "down", []),
+      makeCard("home-academics", "Academic Progress", "0", "No linked learner academic records yet.", "/dashboard/parent/academics", "0", "up", []),
+      makeCard("home-next-fee", "Next Due", "None", "No billing schedule exists yet.", "/dashboard/parent/finance", "0", "down", []),
+      makeCard("home-messages", "Unread Notices", "0", "No school notices yet.", "/dashboard/parent/communication", "0", "up", []),
+    ].filter((card) => isProductionReadyHref(card.href));
   }
 
   return [
-    makeCard("fees-collected-today", "Fees Collected Today", formatCurrency(todayCollections), "Posted by cash office and M-PESA today", `/dashboard/${role}/finance`, "+7.4%", "up", [18, 22, 24, 29, 31, 35, 39]),
-    makeCard("total-fees-term", "Total Fees This Term", formatCurrency(totalFees), "All billed lines across tuition, lunch, and transport", `/dashboard/${role}/finance`, "+4.2%", "up", [62, 65, 66, 69, 71, 74, 76]),
-    makeCard("outstanding-balance", "Outstanding Balance", formatCurrency(outstanding), "Still awaiting follow-up and collection", `/dashboard/${role}/finance`, "-3.1%", "down", [48, 46, 44, 42, 40, 39, 36]),
-    makeCard("students-with-balance", "Students with Balance", `${withBalance}`, "Learners still carrying arrears", `/dashboard/${role}/students`, "-2", "down", [14, 13, 12, 12, 11, 10, 9]),
-  ];
+    makeCard("fees-collected-today", "Fees Collected Today", formatCurrency(todayCollections), "No live receipts have been posted yet.", `/dashboard/${role}/finance`, "0", "up", []),
+    makeCard("total-fees-term", "Total Fees This Term", formatCurrency(totalFees), "No live invoices have been created yet.", `/dashboard/${role}/finance`, "0", "up", []),
+    makeCard("outstanding-balance", "Outstanding Balance", formatCurrency(outstanding), "No outstanding balances exist yet.", `/dashboard/${role}/finance`, "0", "down", []),
+    makeCard("students-with-balance", "Students with Balance", `${withBalance}`, "No students have been onboarded yet.", `/dashboard/${role}/students`, "0", "down", []),
+  ].filter((card) => isProductionReadyHref(card.href));
 }
 
 function reportActionCards(): ReportActionCard[] {
@@ -877,7 +521,7 @@ function reportActionCards(): ReportActionCard[] {
     {
       id: "report-class-summary",
       title: "Class summary",
-      description: "See enrolment, attendance, and balances grouped by class and stream.",
+      description: "See enrolment and balances grouped by class and stream.",
       icon: Users,
     },
     {
@@ -898,6 +542,7 @@ export function buildSchoolErpModel({
   tenant: TenantOption;
   online: boolean;
 }): SchoolErpModel {
+  void online;
   const visibleStudents = baseStudents.filter((student) =>
     roleVisibleStudentIds(role).includes(student.id),
   );
@@ -948,20 +593,6 @@ export function buildSchoolErpModel({
       };
     });
 
-  const attendanceRows = attendanceRowsBase
-    .filter((entry) => roleVisibleStudentIds(role).includes(entry.studentId))
-    .map<AttendanceMarkRow>((entry) => {
-      const student = baseStudents.find((item) => item.id === entry.studentId)!;
-
-      return {
-        id: entry.id,
-        student: student.name,
-        className: student.className,
-        state: entry.state,
-        synced: online ? "synced" : entry.synced,
-      };
-    });
-
   const marksRows = marksRowsBase
     .filter((row) => roleVisibleStudentIds(role).includes(row.studentId))
     .map<MarksEntryRow>((row) => {
@@ -994,8 +625,8 @@ export function buildSchoolErpModel({
 
   return {
     schoolName: tenant.name,
-    currentTerm: "Term 2",
-    academicYear: "2026",
+    currentTerm: "Not configured",
+    academicYear: "Not configured",
     termOptions,
     yearOptions,
     dashboard: {
@@ -1010,11 +641,6 @@ export function buildSchoolErpModel({
         statusTone: entry.statusTone,
       })),
       feeTrend: [
-        { label: "Mon", value: 160_000 },
-        { label: "Tue", value: 185_000 },
-        { label: "Wed", value: 198_000 },
-        { label: "Thu", value: 232_000 },
-        { label: "Fri", value: 248_000 },
       ],
       defaulters,
     },
@@ -1069,30 +695,6 @@ export function buildSchoolErpModel({
       ],
       rows: mpesaRows,
     },
-    attendance: {
-      summary: [
-        {
-          id: "attendance-present",
-          label: "Present",
-          value: `${attendanceRows.filter((row) => row.state === "present").length}`,
-          helper: "Students marked present today",
-        },
-        {
-          id: "attendance-absent",
-          label: "Absent",
-          value: `${attendanceRows.filter((row) => row.state === "absent").length}`,
-          helper: "Students absent this morning",
-        },
-        {
-          id: "attendance-sync",
-          label: "Sync posture",
-          value: online ? "Live" : "Offline queue",
-          helper: online ? "Daily save goes straight to school records" : "Attendance remains safe and will sync later",
-        },
-      ],
-      rows: attendanceRows,
-      dateLabel: "Tuesday, 28 April 2026",
-    },
     academics: {
       summary: [
         {
@@ -1123,14 +725,14 @@ export function buildSchoolErpModel({
         {
           id: "sms-sent",
           label: "SMS sent today",
-          value: "148",
-          helper: "Delivery bursts sent before and after school",
+          value: "0",
+          helper: "No communication campaigns have been sent yet",
         },
         {
           id: "delivery-rate",
           label: "Delivery rate",
-          value: "97.8%",
-          helper: "Successful delivery across current campaigns",
+          value: "0%",
+          helper: "Delivery analytics appear after live messages are sent",
         },
         {
           id: "defaulters-targeted",
@@ -1146,8 +748,8 @@ export function buildSchoolErpModel({
         {
           id: "reports-generated",
           label: "Reports today",
-          value: "12",
-          helper: "Printed or exported during the day",
+          value: "0",
+          helper: "No reports have been generated yet",
         },
         {
           id: "fee-statements",
@@ -1168,8 +770,8 @@ export function buildSchoolErpModel({
       schoolProfile: [
         { id: "school-name", label: "School name", value: tenant.name },
         { id: "county", label: "County", value: tenant.county },
-        { id: "term", label: "Current term", value: "Term 2" },
-        { id: "year", label: "Academic year", value: "2026" },
+        { id: "term", label: "Current term", value: "Not configured" },
+        { id: "year", label: "Academic year", value: "Not configured" },
       ],
       feeStructure: feeStructureBase.map((row) => ({
         id: row.id,

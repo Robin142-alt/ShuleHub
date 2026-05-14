@@ -11,6 +11,7 @@ import {
   BILLING_ALLOWED_BILLING_PATH_PREFIXES,
   BILLING_ALLOWED_EXPORT_PATH_PREFIXES,
   BILLING_ALLOWED_READ_ONLY_METHODS,
+  BILLING_ALLOWED_SYSTEM_EXACT_PATHS,
 } from '../modules/billing/billing.constants';
 
 @Injectable()
@@ -58,7 +59,8 @@ export class BillingLifecycleGuard implements CanActivate {
 
   private isAlwaysAllowedPath(path: string): boolean {
     return (
-      BILLING_ALLOWED_BILLING_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))
+      BILLING_ALLOWED_SYSTEM_EXACT_PATHS.includes(path)
+      || BILLING_ALLOWED_BILLING_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))
       || BILLING_ALLOWED_EXPORT_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))
     );
   }

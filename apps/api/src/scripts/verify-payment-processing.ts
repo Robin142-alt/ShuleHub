@@ -20,13 +20,16 @@ async function main(): Promise<void> {
   try {
     const requestContext = app.get(RequestContextService);
     const databaseService = app.get(DatabaseService);
-    const tenantId = process.env.TEST_PAYMENT_TENANT_ID ?? 'tenant-demo';
+    const tenantId = process.env.TEST_PAYMENT_TENANT_ID;
     const checkoutRequestId = process.env.TEST_PAYMENT_CHECKOUT_REQUEST_ID;
     const timeoutMs = Number(process.env.TEST_PAYMENT_VERIFY_TIMEOUT_MS ?? 30000);
     const pollIntervalMs = Number(process.env.TEST_PAYMENT_VERIFY_POLL_MS ?? 1000);
 
     if (!checkoutRequestId) {
       throw new Error('TEST_PAYMENT_CHECKOUT_REQUEST_ID is required to verify a payment job');
+    }
+    if (!tenantId) {
+      throw new Error('TEST_PAYMENT_TENANT_ID is required to verify a payment job');
     }
 
     const startedAt = Date.now();

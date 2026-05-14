@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 import { RequestContextService } from '../../common/request-context/request-context.service';
@@ -6,6 +7,7 @@ import { BillingLifecycleGuard } from '../../guards/billing-lifecycle.guard';
 import { BillingLifecycleService } from './billing-lifecycle.service';
 import { BillingMpesaService } from './billing-mpesa.service';
 import { BillingService } from './billing.service';
+import { StudentFeePaymentAllocationService } from './student-fee-payment-allocation.service';
 import { UsageMeterService } from './usage-meter.service';
 
 test('BillingService provisions a plan-backed subscription', async () => {
@@ -130,7 +132,7 @@ test('UsageMeterService records usage against the current subscription period', 
     status: 'active',
     billing_phone_number: null,
     currency_code: 'KES',
-    features: ['students', 'attendance', 'billing.mpesa'],
+    features: ['students', 'billing.mpesa'],
     limits: {},
     seats_allocated: 1,
     current_period_start: new Date('2026-04-01T00:00:00.000Z'),
@@ -264,7 +266,7 @@ test('BillingMpesaService creates a separate MPESA payment intent for an invoice
         status: 'active',
         lifecycle_state: 'ACTIVE',
         access_mode: 'full',
-        features: ['students', 'attendance', 'billing.mpesa'],
+        features: ['students', 'billing.mpesa'],
         limits: {},
         current_period_start: new Date('2026-04-01T00:00:00.000Z').toISOString(),
         current_period_end: new Date('2026-05-01T00:00:00.000Z').toISOString(),
@@ -358,7 +360,7 @@ test('BillingMpesaService creates a separate MPESA payment intent for an invoice
         status: 'active',
         lifecycle_state: 'ACTIVE',
         access_mode: 'full',
-        features: ['students', 'attendance', 'billing.mpesa'],
+        features: ['students', 'billing.mpesa'],
         limits: {},
         current_period_start: new Date('2026-04-01T00:00:00.000Z').toISOString(),
         current_period_end: new Date('2026-05-01T00:00:00.000Z').toISOString(),
@@ -388,6 +390,192 @@ test('BillingMpesaService creates a separate MPESA payment intent for an invoice
   assert.equal(
     mpesaPayload.external_reference,
     '00000000-0000-0000-0000-000000000401',
+  );
+});
+
+test('BillingService delegates completed student-fee payment intents to the allocation service', async () => {
+  const requestContext = new RequestContextService();
+  let allocatedInput: Record<string, unknown> | null = null;
+  let legacyInvoiceLookupCount = 0;
+  const allocationService = {
+    allocateConfirmedPayment: async (input: Record<string, unknown>) => {
+      allocatedInput = input;
+      return {
+        duplicate: false,
+        allocated_amount_minor: '10000',
+        credit_amount_minor: '0',
+        invoice_allocations: [{ invoice_id: 'invoice-1', amount_minor: '10000' }],
+      };
+    },
+  } as unknown as StudentFeePaymentAllocationService;
+
+  const service = new BillingService(
+    requestContext,
+    { withRequestTransaction: async <T>(callback: () => Promise<T>): Promise<T> => callback() } as never,
+    { invalidateTenant: async (): Promise<void> => undefined } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {
+      lockByPaymentIntentId: async () => {
+        legacyInvoiceLookupCount += 1;
+        return null;
+      },
+    } as never,
+    allocationService,
+  );
+
+  await service.handlePaymentIntentCompleted(
+    'tenant-a',
+    'payment-intent-1',
+    '10000',
+    {
+      id: 'payment-intent-1',
+      tenant_id: 'tenant-a',
+      student_id: 'student-1',
+      user_id: 'parent-1',
+      external_reference: 'invoice-1',
+      account_reference: 'INV-001',
+      amount_minor: '10000',
+      ledger_transaction_id: 'ledger-1',
+      metadata: { parent_user_id: 'parent-1' },
+    },
+    'ledger-1',
+  );
+
+  assert.equal(
+    (allocatedInput as { paymentIntent?: { student_id?: string } } | null)?.paymentIntent?.student_id,
+    'student-1',
+  );
+  assert.equal(legacyInvoiceLookupCount, 0);
+});
+
+test('BillingService exports invoices as a server-side CSV artifact with checksum', async () => {
+  const requestContext = new RequestContextService();
+  let tenantUsed: string | null = null;
+  let statusUsed: string | undefined;
+
+  const service = new BillingService(
+    requestContext,
+    {} as never,
+    {
+      invalidateTenant: async (): Promise<void> => undefined,
+    } as never,
+    {
+      buildOverview: () => ({}),
+      ensureCurrentLifecycle: async () => ({ subscription: null, overview: null }),
+      getNextRenewalWindow: () => ({
+        start_at: new Date('2026-05-01T00:00:00.000Z'),
+        end_at: new Date('2026-05-31T00:00:00.000Z'),
+      }),
+      toResponse: () => ({}),
+    } as never,
+    {
+      listSubscriptionNotifications: async () => [],
+    } as never,
+    {} as never,
+    {
+      listInvoices: async (tenantId: string, status?: string) => {
+        tenantUsed = tenantId;
+        statusUsed = status;
+        return [
+          {
+            id: '00000000-0000-0000-0000-000000000401',
+            tenant_id: tenantId,
+            subscription_id: '00000000-0000-0000-0000-000000000201',
+            invoice_number: 'INV-20260514-001',
+            status: 'open',
+            currency_code: 'KES',
+            description: 'Growth renewal, May',
+            subtotal_amount_minor: '250000',
+            tax_amount_minor: '0',
+            total_amount_minor: '250000',
+            amount_paid_minor: '0',
+            billing_phone_number: '+254700000001',
+            payment_intent_id: null,
+            issued_at: new Date('2026-05-14T08:00:00.000Z'),
+            due_at: new Date('2026-05-21T08:00:00.000Z'),
+            paid_at: null,
+            voided_at: null,
+            metadata: {},
+            created_at: new Date('2026-05-14T08:00:00.000Z'),
+            updated_at: new Date('2026-05-14T08:00:00.000Z'),
+          },
+        ];
+      },
+    } as never,
+  );
+
+  const artifact = await requestContext.run(
+    {
+      request_id: 'req-billing-report-export',
+      tenant_id: 'tenant-a',
+      user_id: '00000000-0000-0000-0000-000000000001',
+      role: 'owner',
+      session_id: 'session-1',
+      permissions: ['billing:*'],
+      is_authenticated: true,
+      client_ip: '127.0.0.1',
+      user_agent: 'test-suite',
+      method: 'GET',
+      path: '/billing/reports/invoices/export',
+      started_at: '2026-05-14T00:00:00.000Z',
+    },
+    () => service.exportReportCsv('invoices'),
+  );
+
+  assert.equal(tenantUsed, 'tenant-a');
+  assert.equal(statusUsed, undefined);
+  assert.equal(artifact.report_id, 'invoices');
+  assert.equal(artifact.filename, 'billing-invoices.csv');
+  assert.equal(artifact.content_type, 'text/csv; charset=utf-8');
+  assert.equal(artifact.row_count, 1);
+  assert.equal(
+    artifact.csv,
+    'Invoice No,Description,Status,Currency,Total Minor,Paid Minor,Issued At,Due At,Paid At\r\nINV-20260514-001,"Growth renewal, May",open,KES,250000,0,2026-05-14T08:00:00.000Z,2026-05-21T08:00:00.000Z,\r\n',
+  );
+  assert.equal(
+    artifact.checksum_sha256,
+    createHash('sha256').update(artifact.csv).digest('hex'),
+  );
+});
+
+test('BillingService rejects unknown server-side report exports', async () => {
+  const requestContext = new RequestContextService();
+  const service = new BillingService(
+    requestContext,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {
+      listInvoices: async () => {
+        throw new Error('invoices should not be loaded for an unknown export');
+      },
+    } as never,
+  );
+
+  await assert.rejects(
+    () =>
+      requestContext.run(
+        {
+          request_id: 'req-billing-report-export-missing',
+          tenant_id: 'tenant-a',
+          user_id: '00000000-0000-0000-0000-000000000001',
+          role: 'owner',
+          session_id: 'session-1',
+          permissions: ['billing:*'],
+          is_authenticated: true,
+          client_ip: '127.0.0.1',
+          user_agent: 'test-suite',
+          method: 'GET',
+          path: '/billing/reports/unknown/export',
+          started_at: '2026-05-14T00:00:00.000Z',
+        },
+        () => service.exportReportCsv('unknown'),
+      ),
+    /Unknown billing report export/,
   );
 });
 
@@ -503,4 +691,61 @@ test('BillingLifecycleGuard blocks writes in restricted mode but allows billing 
   );
 
   assert.equal(allowed, true);
+
+  const supportAllowed = requestContext.run(
+    {
+      ...restrictedContext,
+      method: 'POST',
+      path: '/support/tickets',
+    },
+    () =>
+      guard.canActivate({
+        switchToHttp: () => ({
+          getRequest: () => ({
+            method: 'POST',
+            path: '/support/tickets',
+          }),
+        }),
+      } as never),
+  );
+
+  assert.equal(supportAllowed, true);
+
+  const platformAllowed = requestContext.run(
+    {
+      ...restrictedContext,
+      method: 'POST',
+      path: '/platform/schools',
+    },
+    () =>
+      guard.canActivate({
+        switchToHttp: () => ({
+          getRequest: () => ({
+            method: 'POST',
+            path: '/platform/schools',
+          }),
+        }),
+      } as never),
+  );
+
+  assert.equal(platformAllowed, true);
+
+  const opsAllowed = requestContext.run(
+    {
+      ...restrictedContext,
+      method: 'GET',
+      path: '/ops',
+    },
+    () =>
+      guard.canActivate({
+        switchToHttp: () => ({
+          getRequest: () => ({
+            method: 'GET',
+            path: '/ops',
+          }),
+        }),
+      } as never),
+  );
+
+  assert.equal(opsAllowed, true);
 });

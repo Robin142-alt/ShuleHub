@@ -1,17 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { Readable } from 'node:stream';
+import { posix as pathPosix } from 'node:path';
+
+import type { ProviderMalwareScanResult } from '../../../common/uploads/malware-scan';
+import { StreamingUploadService } from '../../../common/uploads/streaming-upload.service';
 
 export interface UploadedSupportFile {
   originalname: string;
   mimetype: string;
   size: number;
   buffer: Buffer;
+  providerMalwareScan?: ProviderMalwareScanResult;
 }
 
 @Injectable()
 export class SupportAttachmentStorageService {
+  constructor(private readonly streamingUploads: StreamingUploadService) {}
+
   async save(input: {
     tenantId: string;
     ticketId: string;
@@ -19,19 +25,21 @@ export class SupportAttachmentStorageService {
   }) {
     const extension = this.extractExtension(input.file.originalname);
     const fileName = `${this.slugify(input.file.originalname.replace(extension, ''))}-${randomUUID()}${extension}`;
-    const relativeDirectory = join('tenant', input.tenantId, 'support', input.ticketId);
-    const relativePath = join(relativeDirectory, fileName);
-    const targetDirectory = join(process.cwd(), 'artifacts', 'uploads', relativeDirectory);
+    const storedPath = pathPosix.join('tenant', input.tenantId, 'support', input.ticketId, fileName);
 
-    await mkdir(targetDirectory, { recursive: true });
-    await writeFile(join(process.cwd(), 'artifacts', 'uploads', relativePath), input.file.buffer);
-
-    return {
-      stored_path: relativePath.replace(/\\/g, '/'),
-      original_file_name: input.file.originalname,
-      mime_type: input.file.mimetype,
-      size_bytes: input.file.size,
-    };
+    return this.streamingUploads.consume({
+      tenantId: input.tenantId,
+      storagePath: storedPath,
+      originalName: input.file.originalname,
+      mimeType: input.file.mimetype,
+      stream: Readable.from(input.file.buffer),
+      ownerType: 'support_attachment',
+      providerMalwareScan: input.file.providerMalwareScan,
+      metadata: {
+        domain: 'support',
+        ticket_id: input.ticketId,
+      },
+    });
   }
 
   private extractExtension(filename: string) {

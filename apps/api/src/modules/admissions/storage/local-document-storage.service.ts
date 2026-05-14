@@ -1,17 +1,23 @@
 import { Injectable } from '@nestjs/common';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { posix as pathPosix } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
+
+import type { ProviderMalwareScanResult } from '../../../common/uploads/malware-scan';
+import { StreamingUploadService } from '../../../common/uploads/streaming-upload.service';
 
 export interface UploadedBinaryFile {
   originalname: string;
   mimetype: string;
   size: number;
   buffer: Buffer;
+  providerMalwareScan?: ProviderMalwareScanResult;
 }
 
 @Injectable()
-export class LocalDocumentStorageService {
+export class AdmissionDocumentStorageService {
+  constructor(private readonly streamingUploads: StreamingUploadService) {}
+
   async save(input: {
     tenantId: string;
     scope: string;
@@ -22,19 +28,20 @@ export class LocalDocumentStorageService {
     const month = String(now.getUTCMonth() + 1).padStart(2, '0');
     const extension = this.extractExtension(input.file.originalname);
     const fileName = `${this.slugify(input.scope)}-${randomUUID()}${extension}`;
-    const relativeDirectory = join(input.tenantId, input.scope, year, month);
-    const relativePath = join(relativeDirectory, fileName);
-    const targetDirectory = join(process.cwd(), 'artifacts', 'uploads', relativeDirectory);
+    const storedPath = pathPosix.join('tenant', input.tenantId, input.scope, year, month, fileName);
 
-    await mkdir(targetDirectory, { recursive: true });
-    await writeFile(join(process.cwd(), 'artifacts', 'uploads', relativePath), input.file.buffer);
-
-    return {
-      stored_path: relativePath.replace(/\\/g, '/'),
-      original_file_name: input.file.originalname,
-      mime_type: input.file.mimetype,
-      size_bytes: input.file.size,
-    };
+    return this.streamingUploads.consume({
+      tenantId: input.tenantId,
+      storagePath: storedPath,
+      originalName: input.file.originalname,
+      mimeType: input.file.mimetype,
+      stream: Readable.from(input.file.buffer),
+      ownerType: 'admission_document',
+      providerMalwareScan: input.file.providerMalwareScan,
+      metadata: {
+        domain: input.scope,
+      },
+    });
   }
 
   private extractExtension(filename: string) {

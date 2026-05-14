@@ -1,11 +1,17 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 
+import {
+  createCsvReportArtifact,
+  type ReportCsvValue,
+} from '../../common/reports/report-csv-artifact';
 import { RequestContextService } from '../../common/request-context/request-context.service';
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -26,9 +32,55 @@ import { SubscriptionLifecycleResponseDto } from './dto/subscription-lifecycle-r
 import { SubscriptionResponseDto } from './dto/subscription-response.dto';
 import { BillingNotificationResponseDto } from './dto/billing-notification-response.dto';
 import { InvoiceEntity } from './entities/invoice.entity';
+import {
+  type CompletedStudentFeePaymentIntent,
+  StudentFeePaymentAllocationService,
+} from './student-fee-payment-allocation.service';
 import { SubscriptionEntity } from './entities/subscription.entity';
 import { InvoicesRepository } from './repositories/invoices.repository';
 import { SubscriptionsRepository } from './repositories/subscriptions.repository';
+
+type BillingReportExportDefinition = {
+  id: string;
+  title: string;
+  filename: string;
+  headers: string[];
+  rows: (repository: InvoicesRepository, tenantId: string) => Promise<ReportCsvValue[][]>;
+};
+
+const BILLING_REPORT_EXPORTS = new Map<string, BillingReportExportDefinition>([
+  [
+    'invoices',
+    {
+      id: 'invoices',
+      title: 'Billing invoices',
+      filename: 'billing-invoices.csv',
+      headers: [
+        'Invoice No',
+        'Description',
+        'Status',
+        'Currency',
+        'Total Minor',
+        'Paid Minor',
+        'Issued At',
+        'Due At',
+        'Paid At',
+      ],
+      rows: async (repository, tenantId) =>
+        (await repository.listInvoices(tenantId)).map((invoice) => [
+          invoice.invoice_number,
+          invoice.description,
+          invoice.status,
+          invoice.currency_code,
+          invoice.total_amount_minor,
+          invoice.amount_paid_minor,
+          invoice.issued_at,
+          invoice.due_at,
+          invoice.paid_at,
+        ]),
+    },
+  ],
+]);
 
 @Injectable()
 export class BillingService {
@@ -40,6 +92,7 @@ export class BillingService {
     private readonly billingNotificationService: BillingNotificationService,
     private readonly subscriptionsRepository: SubscriptionsRepository,
     private readonly invoicesRepository: InvoicesRepository,
+    @Optional() private readonly studentFeePaymentAllocation?: StudentFeePaymentAllocationService,
   ) {}
 
   async createSubscription(dto: CreateSubscriptionDto): Promise<SubscriptionResponseDto> {
@@ -225,11 +278,41 @@ export class BillingService {
     return this.mapInvoice(invoice);
   }
 
+  async exportReportCsv(reportId: string) {
+    const normalizedReportId = reportId.trim().toLowerCase();
+    const definition = BILLING_REPORT_EXPORTS.get(normalizedReportId);
+
+    if (!definition) {
+      throw new BadRequestException(`Unknown billing report export "${reportId}"`);
+    }
+
+    return createCsvReportArtifact({
+      reportId: definition.id,
+      title: definition.title,
+      filename: definition.filename,
+      headers: definition.headers,
+      rows: await definition.rows(this.invoicesRepository, this.requireTenantId()),
+    });
+  }
+
   async handlePaymentIntentCompleted(
     tenantId: string,
     paymentIntentId: string,
     amountPaidMinor: string,
+    paymentIntent?: CompletedStudentFeePaymentIntent,
+    ledgerTransactionId?: string | null,
   ): Promise<void> {
+    if (paymentIntent?.student_id && this.studentFeePaymentAllocation) {
+      await this.studentFeePaymentAllocation.allocateConfirmedPayment({
+        tenantId,
+        paymentIntent,
+        amountPaidMinor,
+        ledgerTransactionId,
+      });
+      await this.billingAccessService.invalidateTenant(tenantId);
+      return;
+    }
+
     await this.databaseService.withRequestTransaction(async () => {
       const invoice = await this.invoicesRepository.lockByPaymentIntentId(
         tenantId,

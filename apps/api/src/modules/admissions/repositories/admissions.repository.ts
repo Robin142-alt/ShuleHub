@@ -305,6 +305,52 @@ export class AdmissionsRepository {
     return result.rows[0] ?? null;
   }
 
+  async findApplicationByIdForUpdate(
+    tenantId: string,
+    applicationId: string,
+  ): Promise<AdmissionApplicationRecord | null> {
+    const result = await this.databaseService.query<AdmissionApplicationRecord>(
+      `
+        SELECT
+          id,
+          tenant_id,
+          application_number,
+          full_name,
+          date_of_birth::text,
+          gender,
+          birth_certificate_number,
+          nationality,
+          previous_school,
+          kcpe_results,
+          cbc_level,
+          class_applying,
+          parent_name,
+          parent_phone,
+          parent_email,
+          parent_occupation,
+          relationship,
+          allergies,
+          conditions,
+          emergency_contact,
+          status,
+          interview_date::text,
+          review_notes,
+          approved_at::text,
+          admitted_student_id::text,
+          created_at,
+          updated_at
+        FROM admission_applications
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [tenantId, applicationId],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
   async updateApplication(
     tenantId: string,
     applicationId: string,
@@ -584,6 +630,626 @@ export class AdmissionsRepository {
     return result.rows[0];
   }
 
+  async findCurrentAllocationByStudentId(tenantId: string, studentId: string) {
+    const result = await this.databaseService.query(
+      `
+        SELECT id, class_name, stream_name, dormitory_name, transport_route, effective_from
+        FROM student_allocations
+        WHERE tenant_id = $1
+          AND student_id = $2::uuid
+          AND is_current = TRUE
+        ORDER BY effective_from DESC
+        LIMIT 1
+      `,
+      [tenantId, studentId],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async upsertStudentGuardianLink(input: {
+    tenant_id: string;
+    student_id: string;
+    invitation_id?: string | null;
+    display_name: string;
+    email: string;
+    phone: string;
+    relationship: string;
+  }) {
+    const result = await this.databaseService.query(
+      `
+        WITH updated AS (
+          UPDATE student_guardians
+          SET
+            invitation_id = $3::uuid,
+            display_name = $4,
+            phone = $6,
+            relationship = $7,
+            is_primary = TRUE,
+            status = CASE WHEN user_id IS NULL THEN 'invited' ELSE 'active' END,
+            updated_at = NOW()
+          WHERE tenant_id = $1
+            AND student_id = $2::uuid
+            AND lower(email) = lower($5)
+          RETURNING
+            id,
+            student_id::text,
+            user_id::text,
+            invitation_id::text,
+            display_name,
+            lower(email) AS email,
+            phone,
+            relationship,
+            is_primary,
+            status,
+            accepted_at,
+            created_at,
+            updated_at
+        ),
+        inserted AS (
+          INSERT INTO student_guardians (
+            tenant_id,
+            student_id,
+            invitation_id,
+            display_name,
+            email,
+            phone,
+            relationship,
+            is_primary,
+            status
+          )
+          SELECT $1, $2::uuid, $3::uuid, $4, lower($5), $6, $7, TRUE, 'invited'
+          WHERE NOT EXISTS (SELECT 1 FROM updated)
+          RETURNING
+            id,
+            student_id::text,
+            user_id::text,
+            invitation_id::text,
+            display_name,
+            lower(email) AS email,
+            phone,
+            relationship,
+            is_primary,
+            status,
+            accepted_at,
+            created_at,
+            updated_at
+        )
+        SELECT * FROM updated
+        UNION ALL
+        SELECT * FROM inserted
+        LIMIT 1
+      `,
+      [
+        input.tenant_id,
+        input.student_id,
+        input.invitation_id ?? null,
+        input.display_name,
+        input.email,
+        input.phone,
+        input.relationship,
+      ],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async findAcademicClassSectionForUpdate(
+    tenantId: string,
+    className: string,
+    streamName: string,
+  ) {
+    const result = await this.databaseService.query(
+      `
+        WITH selected_section AS (
+          SELECT
+            id,
+            tenant_id,
+            class_name,
+            stream_name,
+            academic_year,
+            capacity
+          FROM academic_class_sections
+          WHERE tenant_id = $1
+            AND lower(class_name) = lower($2)
+            AND lower(stream_name) = lower($3)
+            AND is_active = TRUE
+          ORDER BY academic_year DESC, created_at DESC
+          LIMIT 1
+          FOR UPDATE
+        )
+        SELECT
+          selected_section.id,
+          selected_section.class_name,
+          selected_section.stream_name,
+          selected_section.academic_year,
+          selected_section.capacity,
+          (
+            SELECT COUNT(*)::int
+            FROM student_academic_enrollments enrollment
+            WHERE enrollment.tenant_id = selected_section.tenant_id
+              AND enrollment.class_section_id = selected_section.id
+              AND enrollment.status = 'active'
+          ) AS current_enrollments
+        FROM selected_section
+      `,
+      [tenantId, className, streamName],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async createStudentAcademicEnrollment(input: {
+    tenant_id: string;
+    student_id: string;
+    application_id: string;
+    class_section_id?: string | null;
+    class_name: string;
+    stream_name: string;
+    academic_year: string;
+  }) {
+    const result = await this.databaseService.query(
+      `
+        INSERT INTO student_academic_enrollments (
+          tenant_id,
+          student_id,
+          application_id,
+          class_section_id,
+          class_name,
+          stream_name,
+          academic_year,
+          status
+        )
+        VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, 'active')
+        ON CONFLICT (tenant_id, student_id, academic_year)
+        DO UPDATE SET
+          application_id = EXCLUDED.application_id,
+          class_section_id = EXCLUDED.class_section_id,
+          class_name = EXCLUDED.class_name,
+          stream_name = EXCLUDED.stream_name,
+          status = 'active',
+          updated_at = NOW()
+        RETURNING
+          id,
+          student_id::text,
+          application_id::text,
+          class_section_id::text,
+          class_name,
+          stream_name,
+          academic_year,
+          status,
+          enrolled_at,
+          created_at,
+          updated_at
+      `,
+      [
+        input.tenant_id,
+        input.student_id,
+        input.application_id,
+        input.class_section_id ?? null,
+        input.class_name,
+        input.stream_name,
+        input.academic_year,
+      ],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async findActiveAcademicEnrollmentForUpdate(tenantId: string, studentId: string) {
+    const result = await this.databaseService.query(
+      `
+        SELECT
+          id,
+          student_id::text,
+          application_id::text,
+          class_section_id::text,
+          class_name,
+          stream_name,
+          academic_year,
+          status,
+          enrolled_at,
+          created_at,
+          updated_at
+        FROM student_academic_enrollments
+        WHERE tenant_id = $1
+          AND student_id = $2::uuid
+          AND status = 'active'
+        ORDER BY enrolled_at DESC, created_at DESC
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [tenantId, studentId],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async completeStudentAcademicEnrollment(
+    tenantId: string,
+    enrollmentId: string,
+    status: 'completed' | 'withdrawn',
+  ) {
+    const result = await this.databaseService.query(
+      `
+        UPDATE student_academic_enrollments
+        SET status = $3,
+            updated_at = NOW()
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+          AND status = 'active'
+        RETURNING
+          id,
+          student_id::text,
+          application_id::text,
+          class_section_id::text,
+          class_name,
+          stream_name,
+          academic_year,
+          status,
+          enrolled_at,
+          created_at,
+          updated_at
+      `,
+      [tenantId, enrollmentId, status],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async createStudentAcademicLifecycleEvent(input: {
+    tenant_id: string;
+    student_id: string;
+    source_enrollment_id: string;
+    target_enrollment_id?: string | null;
+    event_type: 'promotion' | 'graduation' | 'archive';
+    from_class_name: string;
+    from_stream_name: string;
+    from_academic_year: string;
+    to_class_section_id?: string | null;
+    to_class_name?: string | null;
+    to_stream_name?: string | null;
+    to_academic_year?: string | null;
+    reason: string;
+    notes?: string | null;
+    created_by_user_id?: string | null;
+  }) {
+    const result = await this.databaseService.query(
+      `
+        INSERT INTO student_academic_lifecycle_events (
+          tenant_id,
+          student_id,
+          source_enrollment_id,
+          target_enrollment_id,
+          event_type,
+          from_class_name,
+          from_stream_name,
+          from_academic_year,
+          to_class_section_id,
+          to_class_name,
+          to_stream_name,
+          to_academic_year,
+          reason,
+          notes,
+          created_by_user_id
+        )
+        VALUES (
+          $1,
+          $2::uuid,
+          $3::uuid,
+          $4::uuid,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9::uuid,
+          $10,
+          $11,
+          $12,
+          $13,
+          $14,
+          $15::uuid
+        )
+        RETURNING
+          id,
+          student_id::text,
+          source_enrollment_id::text,
+          target_enrollment_id::text,
+          event_type,
+          from_class_name,
+          from_stream_name,
+          from_academic_year,
+          to_class_section_id::text,
+          to_class_name,
+          to_stream_name,
+          to_academic_year,
+          reason,
+          notes,
+          created_by_user_id::text,
+          created_at
+      `,
+      [
+        input.tenant_id,
+        input.student_id,
+        input.source_enrollment_id,
+        input.target_enrollment_id ?? null,
+        input.event_type,
+        input.from_class_name,
+        input.from_stream_name,
+        input.from_academic_year,
+        input.to_class_section_id ?? null,
+        input.to_class_name ?? null,
+        input.to_stream_name ?? null,
+        input.to_academic_year ?? null,
+        input.reason,
+        input.notes ?? null,
+        input.created_by_user_id ?? null,
+      ],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async enrollStudentSubjectsAndTimetable(input: {
+    tenant_id: string;
+    student_id: string;
+    academic_enrollment_id: string;
+    class_section_id: string;
+  }) {
+    const result = await this.databaseService.query(
+      `
+        WITH subject_rows AS (
+          INSERT INTO student_subject_enrollments (
+            tenant_id,
+            student_id,
+            academic_enrollment_id,
+            subject_offering_id,
+            subject_code,
+            subject_name,
+            status
+          )
+          SELECT
+            offering.tenant_id,
+            $2::uuid,
+            $3::uuid,
+            offering.id,
+            offering.subject_code,
+            offering.subject_name,
+            'active'
+          FROM academic_subject_offerings offering
+          WHERE offering.tenant_id = $1
+            AND offering.class_section_id = $4::uuid
+            AND offering.is_active = TRUE
+          ON CONFLICT (tenant_id, student_id, subject_offering_id)
+          DO UPDATE SET
+            academic_enrollment_id = EXCLUDED.academic_enrollment_id,
+            subject_code = EXCLUDED.subject_code,
+            subject_name = EXCLUDED.subject_name,
+            status = 'active',
+            updated_at = NOW()
+          RETURNING
+            id,
+            subject_offering_id::text,
+            subject_code,
+            subject_name,
+            status,
+            enrolled_at,
+            created_at,
+            updated_at
+        ),
+        timetable_rows AS (
+          INSERT INTO student_timetable_enrollments (
+            tenant_id,
+            student_id,
+            academic_enrollment_id,
+            timetable_slot_id,
+            day_of_week,
+            starts_at,
+            ends_at,
+            subject_name,
+            room_name,
+            status
+          )
+          SELECT
+            slot.tenant_id,
+            $2::uuid,
+            $3::uuid,
+            slot.id,
+            slot.day_of_week,
+            slot.starts_at,
+            slot.ends_at,
+            COALESCE(offering.subject_name, slot.subject_name),
+            slot.room_name,
+            'active'
+          FROM academic_timetable_slots slot
+          LEFT JOIN academic_subject_offerings offering
+            ON offering.tenant_id = slot.tenant_id
+           AND offering.id = slot.subject_offering_id
+          WHERE slot.tenant_id = $1
+            AND slot.class_section_id = $4::uuid
+            AND slot.is_active = TRUE
+          ON CONFLICT (tenant_id, student_id, timetable_slot_id)
+          DO UPDATE SET
+            academic_enrollment_id = EXCLUDED.academic_enrollment_id,
+            day_of_week = EXCLUDED.day_of_week,
+            starts_at = EXCLUDED.starts_at,
+            ends_at = EXCLUDED.ends_at,
+            subject_name = EXCLUDED.subject_name,
+            room_name = EXCLUDED.room_name,
+            status = 'active',
+            updated_at = NOW()
+          RETURNING
+            id,
+            timetable_slot_id::text,
+            day_of_week,
+            starts_at,
+            ends_at,
+            subject_name,
+            room_name,
+            status,
+            created_at,
+            updated_at
+        )
+        SELECT
+          COALESCE((SELECT json_agg(row_to_json(subject_rows.*)) FROM subject_rows), '[]'::json) AS subject_enrollments,
+          COALESCE((SELECT json_agg(row_to_json(timetable_rows.*)) FROM timetable_rows), '[]'::json) AS timetable_enrollments
+      `,
+      [
+        input.tenant_id,
+        input.student_id,
+        input.academic_enrollment_id,
+        input.class_section_id,
+      ],
+    );
+
+    return {
+      subject_enrollments: result.rows[0]?.subject_enrollments ?? [],
+      timetable_enrollments: result.rows[0]?.timetable_enrollments ?? [],
+    };
+  }
+
+  async findActiveFeeStructureForClass(tenantId: string, className: string) {
+    const result = await this.databaseService.query(
+      `
+        SELECT
+          id,
+          class_name,
+          academic_year,
+          term_name,
+          description,
+          currency_code,
+          amount_minor::text,
+          due_days_after_registration
+        FROM student_fee_structures
+        WHERE tenant_id = $1
+          AND lower(class_name) = lower($2)
+          AND is_active = TRUE
+        ORDER BY academic_year DESC, term_name DESC, created_at DESC
+        LIMIT 1
+      `,
+      [tenantId, className],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async createStudentFeeAssignmentInvoice(input: {
+    tenant_id: string;
+    student_id: string;
+    application_id: string;
+    fee_structure_id: string;
+    invoice_number: string;
+    description: string;
+    currency_code: string;
+    amount_minor: string;
+    due_date: string;
+  }) {
+    const result = await this.databaseService.query(
+      `
+        WITH assignment AS (
+          INSERT INTO student_fee_assignments (
+            tenant_id,
+            student_id,
+            application_id,
+            fee_structure_id,
+            status,
+            amount_minor,
+            currency_code
+          )
+          VALUES ($1, $2::uuid, $3::uuid, $4::uuid, 'assigned', $8::bigint, $7)
+          ON CONFLICT (tenant_id, student_id, fee_structure_id)
+          DO UPDATE SET
+            application_id = EXCLUDED.application_id,
+            amount_minor = EXCLUDED.amount_minor,
+            currency_code = EXCLUDED.currency_code,
+            status = CASE
+              WHEN student_fee_assignments.status = 'voided' THEN 'assigned'
+              ELSE student_fee_assignments.status
+            END,
+            updated_at = NOW()
+          RETURNING
+            id,
+            student_id::text,
+            application_id::text,
+            fee_structure_id::text,
+            status,
+            amount_minor::text,
+            currency_code,
+            assigned_at,
+            created_at,
+            updated_at
+        ),
+        invoice AS (
+          INSERT INTO student_fee_invoices (
+            tenant_id,
+            assignment_id,
+            student_id,
+            invoice_number,
+            status,
+            description,
+            currency_code,
+            amount_due_minor,
+            amount_paid_minor,
+            issued_date,
+            due_date
+          )
+          SELECT
+            $1,
+            assignment.id,
+            $2::uuid,
+            $5,
+            'open',
+            $6,
+            $7,
+            $8::bigint,
+            0,
+            CURRENT_DATE,
+            $9::date
+          FROM assignment
+          ON CONFLICT (tenant_id, assignment_id)
+          DO UPDATE SET
+            description = EXCLUDED.description,
+            currency_code = EXCLUDED.currency_code,
+            amount_due_minor = EXCLUDED.amount_due_minor,
+            due_date = EXCLUDED.due_date,
+            updated_at = NOW()
+          RETURNING
+            id,
+            assignment_id::text,
+            student_id::text,
+            invoice_number,
+            status,
+            description,
+            currency_code,
+            amount_due_minor::text,
+            amount_paid_minor::text,
+            issued_date::text,
+            due_date::text,
+            created_at,
+            updated_at
+        )
+        SELECT
+          row_to_json(assignment.*) AS assignment,
+          row_to_json(invoice.*) AS invoice
+        FROM assignment, invoice
+        LIMIT 1
+      `,
+      [
+        input.tenant_id,
+        input.student_id,
+        input.application_id,
+        input.fee_structure_id,
+        input.invoice_number,
+        input.description,
+        input.currency_code,
+        input.amount_minor,
+        input.due_date,
+      ],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
   async listAllocations(tenantId: string) {
     const result = await this.databaseService.query(
       `
@@ -664,7 +1330,18 @@ export class AdmissionsRepository {
   }
 
   async getStudentProfile(tenantId: string, studentId: string) {
-    const [studentResult, documentsResult, allocationResult, attendanceResult] = await Promise.all([
+    const [
+      studentResult,
+      documentsResult,
+      allocationResult,
+      academicEnrollmentResult,
+      subjectEnrollmentsResult,
+      timetableEnrollmentsResult,
+      lifecycleEventsResult,
+      guardianLinksResult,
+      feeAssignmentResult,
+      feeInvoiceResult,
+    ] = await Promise.all([
       this.databaseService.query(
         `
           SELECT
@@ -708,12 +1385,160 @@ export class AdmissionsRepository {
       ),
       this.databaseService.query(
         `
-          SELECT attendance_date::text, status, notes
-          FROM attendance_records
+          SELECT
+            id,
+            class_name,
+            stream_name,
+            academic_year,
+            status,
+            enrolled_at,
+            updated_at
+          FROM student_academic_enrollments
           WHERE tenant_id = $1
             AND student_id = $2::uuid
-          ORDER BY attendance_date DESC
+            AND status = 'active'
+          ORDER BY enrolled_at DESC, created_at DESC
+          LIMIT 1
+        `,
+        [tenantId, studentId],
+      ),
+      this.databaseService.query(
+        `
+          SELECT
+            id,
+            subject_code,
+            subject_name,
+            status,
+            enrolled_at
+          FROM student_subject_enrollments
+          WHERE tenant_id = $1
+            AND student_id = $2::uuid
+            AND status = 'active'
+          ORDER BY subject_name ASC
+        `,
+        [tenantId, studentId],
+      ),
+      this.databaseService.query(
+        `
+          SELECT
+            id,
+            day_of_week,
+            starts_at,
+            ends_at,
+            subject_name,
+            room_name,
+            status
+          FROM student_timetable_enrollments
+          WHERE tenant_id = $1
+            AND student_id = $2::uuid
+            AND status = 'active'
+          ORDER BY
+            CASE day_of_week
+              WHEN 'Monday' THEN 1
+              WHEN 'Tuesday' THEN 2
+              WHEN 'Wednesday' THEN 3
+              WHEN 'Thursday' THEN 4
+              WHEN 'Friday' THEN 5
+              WHEN 'Saturday' THEN 6
+              WHEN 'Sunday' THEN 7
+              ELSE 8
+            END,
+            starts_at ASC
+        `,
+        [tenantId, studentId],
+      ),
+      this.databaseService.query(
+        `
+          SELECT
+            id,
+            event_type,
+            from_class_name,
+            from_stream_name,
+            from_academic_year,
+            to_class_name,
+            to_stream_name,
+            to_academic_year,
+            reason,
+            created_at
+          FROM student_academic_lifecycle_events
+          WHERE tenant_id = $1
+            AND student_id = $2::uuid
+          ORDER BY created_at DESC
           LIMIT 10
+        `,
+        [tenantId, studentId],
+      ),
+      this.databaseService.query(
+        `
+          SELECT
+            id,
+            display_name,
+            email,
+            phone,
+            relationship,
+            status,
+            user_id::text,
+            invitation_id::text,
+            accepted_at,
+            created_at,
+            updated_at
+          FROM student_guardians
+          WHERE tenant_id = $1
+            AND student_id = $2::uuid
+          ORDER BY
+            CASE status
+              WHEN 'active' THEN 1
+              WHEN 'invited' THEN 2
+              ELSE 3
+            END,
+            created_at DESC
+        `,
+        [tenantId, studentId],
+      ),
+      this.databaseService.query(
+        `
+          SELECT
+            assignment.id,
+            assignment.status,
+            assignment.amount_minor::text,
+            assignment.currency_code,
+            assignment.assigned_at,
+            assignment.created_at,
+            structure.description,
+            structure.term_name,
+            structure.academic_year
+          FROM student_fee_assignments assignment
+          LEFT JOIN student_fee_structures structure
+            ON structure.tenant_id = assignment.tenant_id
+           AND structure.id = assignment.fee_structure_id
+          WHERE assignment.tenant_id = $1
+            AND assignment.student_id = $2::uuid
+            AND assignment.status <> 'voided'
+          ORDER BY assignment.assigned_at DESC, assignment.created_at DESC
+          LIMIT 1
+        `,
+        [tenantId, studentId],
+      ),
+      this.databaseService.query(
+        `
+          SELECT
+            invoice.id,
+            invoice.assignment_id::text,
+            invoice.invoice_number,
+            invoice.status,
+            invoice.description,
+            invoice.currency_code,
+            invoice.amount_due_minor::text,
+            invoice.amount_paid_minor::text,
+            invoice.issued_date::text,
+            invoice.due_date::text,
+            invoice.created_at
+          FROM student_fee_invoices invoice
+          WHERE invoice.tenant_id = $1
+            AND invoice.student_id = $2::uuid
+            AND invoice.status <> 'voided'
+          ORDER BY invoice.due_date DESC, invoice.created_at DESC
+          LIMIT 1
         `,
         [tenantId, studentId],
       ),
@@ -727,7 +1552,13 @@ export class AdmissionsRepository {
       student: studentResult.rows[0],
       allocation: allocationResult.rows[0] ?? null,
       documents: documentsResult.rows,
-      attendance: attendanceResult.rows,
+      academic_enrollment: academicEnrollmentResult.rows[0] ?? null,
+      subject_enrollments: subjectEnrollmentsResult.rows,
+      timetable_enrollments: timetableEnrollmentsResult.rows,
+      lifecycle_events: lifecycleEventsResult.rows,
+      guardian_links: guardianLinksResult.rows,
+      fee_assignment: feeAssignmentResult.rows[0] ?? null,
+      fee_invoice: feeInvoiceResult.rows[0] ?? null,
     };
   }
 

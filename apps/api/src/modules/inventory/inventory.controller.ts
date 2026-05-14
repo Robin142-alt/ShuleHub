@@ -1,17 +1,24 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 
 import { Permissions } from '../../auth/decorators/permissions.decorator';
+import {
+  ReportExportQueueService,
+  type QueueReportExportRequest,
+} from '../../common/reports/report-export-queue';
 import { AdjustStockDto, CreateInventoryItemDto, UpdateInventoryItemDto } from './dto/create-inventory-item.dto';
 import {
   CreateInventoryCategoryDto,
+  CreateInventoryLocationDto,
   CreateInventorySupplierDto,
   UpdateInventoryCategoryDto,
+  UpdateInventoryLocationDto,
   UpdateInventorySupplierDto,
 } from './dto/inventory-master-data.dto';
 import {
   CreateIncidentDto,
   CreateInventoryRequestDto,
   CreatePurchaseOrderDto,
+  PostStockCountDto,
   CreateStockIssueDto,
   CreateStockReceiptDto,
   CreateTransferDto,
@@ -22,7 +29,10 @@ import { InventoryService } from './inventory.service';
 
 @Controller('inventory')
 export class InventoryController {
-  constructor(private readonly inventoryService: InventoryService) {}
+  constructor(
+    private readonly inventoryService: InventoryService,
+    private readonly reportExportQueueService: ReportExportQueueService,
+  ) {}
 
   @Get('summary')
   @Permissions('inventory:read')
@@ -81,6 +91,27 @@ export class InventoryController {
     return this.inventoryService.updateCategory(categoryId, dto);
   }
 
+  @Get('locations')
+  @Permissions('inventory:read')
+  listLocations() {
+    return this.inventoryService.listLocations();
+  }
+
+  @Post('locations')
+  @Permissions('inventory:write')
+  createLocation(@Body() dto: CreateInventoryLocationDto) {
+    return this.inventoryService.createLocation(dto);
+  }
+
+  @Patch('locations/:locationId')
+  @Permissions('inventory:write')
+  updateLocation(
+    @Param('locationId', new ParseUUIDPipe()) locationId: string,
+    @Body() dto: UpdateInventoryLocationDto,
+  ) {
+    return this.inventoryService.updateLocation(locationId, dto);
+  }
+
   @Get('stock-movements')
   @Permissions('inventory:read')
   listStockMovements(@Query() query: ListInventoryQueryDto) {
@@ -97,6 +128,12 @@ export class InventoryController {
   @Permissions('inventory:write')
   receiveSupplierStock(@Body() dto: CreateStockReceiptDto) {
     return this.inventoryService.receiveSupplierStock(dto);
+  }
+
+  @Post('stock-counts')
+  @Permissions('inventory:write')
+  postStockCount(@Body() dto: PostStockCountDto) {
+    return this.inventoryService.postStockCount(dto);
   }
 
   @Get('suppliers')
@@ -199,5 +236,26 @@ export class InventoryController {
   @Permissions('inventory:read')
   getReports() {
     return this.inventoryService.getReports();
+  }
+
+  @Post('reports/:reportId/export-jobs')
+  @Permissions('inventory:read')
+  queueReportExport(
+    @Param('reportId') reportId: string,
+    @Body() body: QueueReportExportRequest = {},
+  ) {
+    return this.reportExportQueueService.enqueueCurrentRequestReportExport({
+      module: 'inventory',
+      report_id: reportId,
+      format: body.format ?? 'csv',
+      filters: body.filters,
+      estimated_rows: body.estimated_rows,
+    });
+  }
+
+  @Get('reports/:reportId/export')
+  @Permissions('inventory:read')
+  exportReport(@Param('reportId') reportId: string) {
+    return this.inventoryService.exportReportCsv(reportId);
   }
 }

@@ -1,7 +1,14 @@
 import { AuthShell } from "@/components/auth/auth-shell";
 import { ResetPasswordView } from "@/components/auth/auth-recovery-view";
+import { readResetToken, type ResetSearchParams } from "@/lib/auth/reset-token";
 
-export default function SuperadminResetPasswordPage() {
+export default async function SuperadminResetPasswordPage({
+  searchParams,
+}: {
+  searchParams?: ResetSearchParams;
+}) {
+  const initialToken = await readResetToken(searchParams);
+
   return (
     <AuthShell
       eyebrow="Super admin reset"
@@ -12,7 +19,7 @@ export default function SuperadminResetPasswordPage() {
       helper="We recommend a unique password plus your authenticator app for ongoing platform access."
       highlights={[
         { id: "policy", title: "Strong policy", description: "Passwords should be unique, memorable, and hard to reuse elsewhere." },
-        { id: "confirm-device", title: "Device-aware", description: "Recent device context helps teams spot unusual reset activity quickly." },
+        { id: "confirm-device", title: "Audit-aware", description: "Recent request context helps teams spot unusual reset activity quickly." },
         { id: "fast-return", title: "Fast return", description: "Move from recovery to platform control with minimal friction." },
       ]}
       trustNotes={[
@@ -26,6 +33,8 @@ export default function SuperadminResetPasswordPage() {
         secretLabel="New password"
         secretPlaceholder="Create a strong platform password"
         backHref="/superadmin/login"
+        audience="superadmin"
+        initialToken={initialToken}
       />
     </AuthShell>
   );

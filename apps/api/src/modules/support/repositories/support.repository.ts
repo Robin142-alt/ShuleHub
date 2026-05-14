@@ -16,6 +16,38 @@ export interface SupportCategoryRecord {
   is_active: boolean;
 }
 
+export interface SupportNotificationRecord {
+  id: string;
+  tenant_id: string;
+  ticket_id: string | null;
+  recipient_user_id: string | null;
+  recipient_type: 'school' | 'support';
+  channel: 'in_app' | 'email' | 'sms';
+  title: string;
+  body: string;
+  delivery_status: string;
+  delivery_attempts: number;
+  last_delivery_error: string | null;
+  next_delivery_attempt_at: string | null;
+  delivered_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  ticket_number?: string | null;
+  ticket_subject?: string | null;
+  school_name?: string | null;
+}
+
+export interface SupportStatusSubscriberRecord {
+  id: string;
+  tenant_id: string;
+  contact_hash: string;
+  contact_type: 'email';
+  locale: string | null;
+  status: 'active' | 'unsubscribed';
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SupportTicketRecord {
   id: string;
   tenant_id: string;
@@ -44,6 +76,11 @@ export interface SupportTicketRecord {
   attachment_count?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface SupportSlaBreachCandidateRecord extends SupportTicketRecord {
+  sla_breach_type: 'first_response' | 'resolution';
+  sla_due_at: string;
 }
 
 export interface SupportMessageRecord {
@@ -302,7 +339,7 @@ export class SupportRepository {
           OR ticket.module_affected ILIKE $${parameterIndex}
           OR ticket.category ILIKE $${parameterIndex}
           OR ticket.requester_user_id::text ILIKE $${parameterIndex}
-          OR tenant.school_name ILIKE $${parameterIndex})`,
+          OR tenant.name ILIKE $${parameterIndex})`,
       );
       values.push(`%${options.search}%`);
       parameterIndex += 1;
@@ -352,7 +389,7 @@ export class SupportRepository {
           ticket.last_school_reply_at::text,
           ticket.last_support_reply_at::text,
           ticket.context,
-          tenant.school_name,
+          tenant.name AS school_name,
           agent.display_name AS assigned_agent_name,
           COUNT(DISTINCT message.id)::int AS message_count,
           COUNT(DISTINCT attachment.id)::int AS attachment_count,
@@ -370,7 +407,7 @@ export class SupportRepository {
           ON attachment.tenant_id = ticket.tenant_id
          AND attachment.ticket_id = ticket.id
         ${whereSql}
-        GROUP BY ticket.id, tenant.school_name, agent.display_name
+        GROUP BY ticket.id, tenant.name, agent.display_name
         ORDER BY
           CASE ticket.priority
             WHEN 'Critical' THEN 0
@@ -413,7 +450,7 @@ export class SupportRepository {
           ticket.last_school_reply_at::text,
           ticket.last_support_reply_at::text,
           ticket.context,
-          tenant.school_name,
+          tenant.name AS school_name,
           agent.display_name AS assigned_agent_name,
           ticket.created_at::text,
           ticket.updated_at::text
@@ -629,8 +666,16 @@ export class SupportRepository {
         UPDATE support_tickets
         SET
           status = $2,
-          resolved_at = CASE WHEN $2 = 'Resolved' THEN NOW() ELSE resolved_at END,
-          closed_at = CASE WHEN $2 = 'Closed' THEN NOW() ELSE closed_at END,
+          resolved_at = CASE
+            WHEN $2 = 'Resolved' THEN NOW()
+            WHEN $2 NOT IN ('Resolved', 'Closed') THEN NULL
+            ELSE resolved_at
+          END,
+          closed_at = CASE
+            WHEN $2 = 'Closed' THEN NOW()
+            WHEN $2 <> 'Closed' THEN NULL
+            ELSE closed_at
+          END,
           escalated_at = CASE WHEN $2 = 'Escalated' THEN COALESCE(escalated_at, NOW()) ELSE escalated_at END,
           updated_by_user_id = $3::uuid,
           updated_at = NOW()
@@ -853,9 +898,11 @@ export class SupportRepository {
     title: string;
     body: string;
     metadata?: Record<string, unknown>;
-  }>): Promise<void> {
+  }>): Promise<SupportNotificationRecord[]> {
+    const notifications: SupportNotificationRecord[] = [];
+
     for (const input of inputs) {
-      await this.databaseService.query(
+      const result = await this.databaseService.query<SupportNotificationRecord>(
         `
           INSERT INTO support_notifications (
             tenant_id,
@@ -868,6 +915,22 @@ export class SupportRepository {
             metadata
           )
           VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8::jsonb)
+          RETURNING
+            id,
+            tenant_id,
+            ticket_id,
+            recipient_user_id,
+            recipient_type,
+            channel,
+            title,
+            body,
+            delivery_status,
+            delivery_attempts,
+            last_delivery_error,
+            next_delivery_attempt_at::text,
+            delivered_at::text,
+            metadata,
+            created_at::text
         `,
         [
           input.tenant_id,
@@ -880,7 +943,125 @@ export class SupportRepository {
           JSON.stringify(input.metadata ?? {}),
         ],
       );
+      notifications.push(...result.rows);
     }
+
+    return notifications;
+  }
+
+  async markNotificationDelivery(
+    notificationId: string,
+    deliveryStatus: 'queued' | 'sent' | 'failed' | 'read',
+    details: {
+      deliveryAttempts?: number;
+      lastError?: string | null;
+      nextAttemptAt?: string | null;
+      deliveredAt?: string | null;
+    } = {},
+  ): Promise<void> {
+    await this.databaseService.query(
+      `
+        UPDATE support_notifications
+        SET delivery_status = $2,
+            delivery_attempts = COALESCE($3, delivery_attempts),
+            last_delivery_error = $4,
+            next_delivery_attempt_at = $5::timestamptz,
+            delivered_at = CASE
+              WHEN $2 = 'sent' THEN COALESCE($6::timestamptz, NOW())
+              ELSE delivered_at
+            END,
+            updated_at = NOW()
+        WHERE id = $1::uuid
+      `,
+      [
+        notificationId,
+        deliveryStatus,
+        details.deliveryAttempts ?? null,
+        details.lastError ?? null,
+        details.nextAttemptAt ?? null,
+        details.deliveredAt ?? null,
+      ],
+    );
+  }
+
+  async claimDueQueuedNotifications(
+    limit: number,
+    leaseMs: number,
+    channels: Array<'email' | 'sms'> = ['email', 'sms'],
+  ): Promise<SupportNotificationRecord[]> {
+    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 500);
+    const safeLeaseMs = Math.min(Math.max(Math.floor(leaseMs), 30000), 900000);
+    const safeChannels = channels.filter((channel) => channel === 'email' || channel === 'sms');
+    const result = await this.databaseService.query<SupportNotificationRecord>(
+      `
+        WITH due AS (
+          SELECT
+            id,
+            tenant_id,
+            ticket_id,
+            recipient_user_id,
+            recipient_type,
+            channel,
+            title,
+            body,
+            delivery_status,
+            delivery_attempts,
+            last_delivery_error,
+            next_delivery_attempt_at::text,
+            delivered_at::text,
+            metadata,
+            created_at::text
+          FROM support_notifications
+          WHERE delivery_status = 'queued'
+            AND channel = ANY($3::text[])
+            AND (
+              next_delivery_attempt_at IS NULL
+              OR next_delivery_attempt_at <= NOW()
+            )
+          ORDER BY COALESCE(next_delivery_attempt_at, created_at) ASC, created_at ASC
+          LIMIT $1
+          FOR UPDATE SKIP LOCKED
+        ),
+        leased AS (
+          UPDATE support_notifications AS target
+          SET
+            next_delivery_attempt_at = NOW() + ($2::integer * INTERVAL '1 millisecond'),
+            updated_at = NOW()
+          FROM due
+          WHERE target.tenant_id = due.tenant_id
+            AND target.id = due.id
+          RETURNING target.id
+        )
+        SELECT due.*
+        FROM due
+        INNER JOIN leased
+          ON leased.id = due.id
+      `,
+      [safeLimit, safeLeaseMs, safeChannels.length > 0 ? safeChannels : ['email']],
+    );
+
+    return result.rows;
+  }
+
+  async claimDueQueuedEmailNotifications(
+    limit: number,
+    leaseMs: number,
+  ): Promise<SupportNotificationRecord[]> {
+    return this.claimDueQueuedNotifications(limit, leaseMs, ['email']);
+  }
+
+  async findUserEmailForNotification(userId: string): Promise<string | null> {
+    const result = await this.databaseService.query<{ email: string }>(
+      `
+        SELECT email
+        FROM users
+        WHERE id = $1::uuid
+        LIMIT 1
+      `,
+      [userId],
+    );
+
+    return result.rows[0]?.email ?? null;
   }
 
   async listNotifications(options: { tenantId?: string; recipientType?: 'school' | 'support'; limit: number }) {
@@ -915,6 +1096,10 @@ export class SupportRepository {
           body,
           read_at::text,
           delivery_status,
+          delivery_attempts,
+          last_delivery_error,
+          next_delivery_attempt_at::text,
+          delivered_at::text,
           metadata,
           created_at::text
         FROM support_notifications
@@ -926,6 +1111,133 @@ export class SupportRepository {
     );
 
     return result.rows;
+  }
+
+  async listNotificationDeadLetters(options: { limit: number }): Promise<SupportNotificationRecord[]> {
+    const safeLimit = Math.min(Math.max(Math.floor(options.limit), 1), 100);
+    const result = await this.databaseService.query<SupportNotificationRecord>(
+      `
+        SELECT
+          notification.id,
+          notification.tenant_id,
+          notification.ticket_id,
+          notification.recipient_user_id,
+          notification.recipient_type,
+          notification.channel,
+          notification.title,
+          notification.body,
+          notification.delivery_status,
+          notification.delivery_attempts,
+          notification.last_delivery_error,
+          notification.next_delivery_attempt_at::text,
+          notification.delivered_at::text,
+          notification.metadata,
+          notification.created_at::text,
+          ticket.ticket_number,
+          ticket.subject AS ticket_subject,
+          tenant.name AS school_name
+        FROM support_notifications notification
+        LEFT JOIN support_tickets ticket
+          ON ticket.tenant_id = notification.tenant_id
+         AND ticket.id = notification.ticket_id
+        LEFT JOIN tenants tenant
+          ON tenant.tenant_id = notification.tenant_id
+        WHERE notification.delivery_status = 'failed'
+        ORDER BY notification.updated_at DESC, notification.created_at DESC
+        LIMIT $1
+      `,
+      [safeLimit],
+    );
+
+    return result.rows;
+  }
+
+  async listSlaBreachCandidates(options: { limit: number }): Promise<SupportSlaBreachCandidateRecord[]> {
+    const safeLimit = Math.min(Math.max(Math.floor(options.limit), 1), 500);
+    const result = await this.databaseService.query<SupportSlaBreachCandidateRecord>(
+      `
+        WITH candidates AS (
+          SELECT
+            ticket.id,
+            ticket.tenant_id,
+            ticket.ticket_number,
+            ticket.subject,
+            ticket.category,
+            ticket.priority,
+            ticket.module_affected,
+            ticket.description,
+            ticket.status,
+            ticket.requester_user_id,
+            ticket.assigned_agent_id,
+            ticket.merged_into_ticket_id,
+            ticket.first_response_due_at::text,
+            ticket.resolution_due_at::text,
+            ticket.first_responded_at::text,
+            ticket.resolved_at::text,
+            ticket.closed_at::text,
+            ticket.escalated_at::text,
+            ticket.last_school_reply_at::text,
+            ticket.last_support_reply_at::text,
+            ticket.context,
+            tenant.name AS school_name,
+            agent.display_name AS assigned_agent_name,
+            ticket.created_at::text,
+            ticket.updated_at::text,
+            CASE
+              WHEN ticket.first_responded_at IS NULL
+               AND ticket.first_response_due_at < NOW()
+                THEN 'first_response'
+              WHEN ticket.resolution_due_at < NOW()
+                THEN 'resolution'
+            END AS sla_breach_type,
+            CASE
+              WHEN ticket.first_responded_at IS NULL
+               AND ticket.first_response_due_at < NOW()
+                THEN ticket.first_response_due_at::text
+              WHEN ticket.resolution_due_at < NOW()
+                THEN ticket.resolution_due_at::text
+            END AS sla_due_at
+          FROM support_tickets ticket
+          LEFT JOIN tenants tenant
+            ON tenant.tenant_id = ticket.tenant_id
+          LEFT JOIN support_agents agent
+            ON agent.id = ticket.assigned_agent_id
+          WHERE ticket.status NOT IN ('Resolved', 'Closed')
+            AND (
+              ticket.first_responded_at IS NULL
+              AND ticket.first_response_due_at < NOW()
+              OR ticket.resolution_due_at < NOW()
+            )
+        )
+        SELECT *
+        FROM candidates candidate
+        WHERE candidate.sla_breach_type IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM support_status_logs log
+            WHERE log.tenant_id = candidate.tenant_id
+              AND log.ticket_id = candidate.id
+              AND log.action = 'ticket.sla_breached'
+              AND log.metadata->>'breach_type' = candidate.sla_breach_type
+          )
+        ORDER BY
+          CASE candidate.priority
+            WHEN 'Critical' THEN 0
+            WHEN 'High' THEN 1
+            WHEN 'Medium' THEN 2
+            ELSE 3
+          END,
+          candidate.sla_due_at ASC
+        LIMIT $1
+      `,
+      [safeLimit],
+    );
+
+    return result.rows.map((row) => ({
+      ...this.mapTicket(row),
+      sla_breach_type: row.sla_breach_type,
+      sla_due_at: row.sla_due_at,
+    }));
   }
 
   async listKnowledgeBase(options: { search?: string; category?: string }) {
@@ -972,6 +1284,224 @@ export class SupportRepository {
     );
 
     return result.rows;
+  }
+
+  async countRecentStatusSubscriptionAttempts(input: {
+    contactHash: string;
+    ipHash?: string | null;
+    since: string;
+  }): Promise<number> {
+    const result = await this.databaseService.query<{ total: string }>(
+      `
+        SELECT COUNT(*)::text AS total
+        FROM support_status_subscriptions
+        WHERE created_at >= $3::timestamptz
+          AND (
+            contact_hash = $1
+            OR (
+              $2::text IS NOT NULL
+              AND client_ip_hash = $2
+            )
+          )
+      `,
+      [input.contactHash, input.ipHash ?? null, input.since],
+    );
+
+    return Number(result.rows[0]?.total ?? 0);
+  }
+
+  async createStatusSubscription(input: {
+    contact_hash: string;
+    consent_source: string;
+    consent_at: string;
+    locale?: string | null;
+    client_ip_hash?: string | null;
+  }): Promise<SupportStatusSubscriberRecord> {
+    const result = await this.databaseService.query<SupportStatusSubscriberRecord>(
+      `
+        INSERT INTO support_status_subscriptions (
+          tenant_id,
+          contact_hash,
+          contact_type,
+          locale,
+          consent_source,
+          consent_at,
+          client_ip_hash,
+          status,
+          unsubscribed_at
+        )
+        VALUES ('global', $1, 'email', $2, $3, $4::timestamptz, $5, 'active', NULL)
+        ON CONFLICT (tenant_id, contact_hash)
+        DO UPDATE SET
+          locale = EXCLUDED.locale,
+          consent_source = EXCLUDED.consent_source,
+          consent_at = EXCLUDED.consent_at,
+          client_ip_hash = EXCLUDED.client_ip_hash,
+          status = 'active',
+          unsubscribed_at = NULL,
+          updated_at = NOW()
+        RETURNING
+          id,
+          tenant_id,
+          contact_hash,
+          contact_type,
+          locale,
+          status,
+          created_at::text,
+          updated_at::text
+      `,
+      [
+        input.contact_hash,
+        input.locale ?? null,
+        input.consent_source,
+        input.consent_at,
+        input.client_ip_hash ?? null,
+      ],
+    );
+
+    return result.rows[0];
+  }
+
+  async createStatusUnsubscribeToken(input: {
+    contact_hash: string;
+    token_hash: string;
+    expires_at: string;
+  }): Promise<{ id: string }> {
+    const result = await this.databaseService.query<{ id: string }>(
+      `
+        INSERT INTO support_status_unsubscribe_tokens (
+          tenant_id,
+          contact_hash,
+          token_hash,
+          expires_at
+        )
+        VALUES ('global', $1, $2, $3::timestamptz)
+        ON CONFLICT (token_hash)
+        DO UPDATE SET
+          contact_hash = EXCLUDED.contact_hash,
+          expires_at = EXCLUDED.expires_at,
+          used_at = NULL,
+          updated_at = NOW()
+        RETURNING id
+      `,
+      [input.contact_hash, input.token_hash, input.expires_at],
+    );
+
+    return result.rows[0];
+  }
+
+  async unsubscribeStatusSubscriber(contactHash: string): Promise<void> {
+    await this.databaseService.query(
+      `
+        UPDATE support_status_subscriptions
+        SET status = 'unsubscribed',
+            unsubscribed_at = NOW(),
+            updated_at = NOW()
+        WHERE tenant_id = 'global'
+          AND contact_hash = $1
+      `,
+      [contactHash],
+    );
+  }
+
+  async revokeStatusUnsubscribeToken(tokenHash: string): Promise<void> {
+    await this.databaseService.query(
+      `
+        UPDATE support_status_unsubscribe_tokens
+        SET used_at = NOW(),
+            updated_at = NOW()
+        WHERE token_hash = $1
+      `,
+      [tokenHash],
+    );
+  }
+
+  async listActiveStatusSubscribers(): Promise<SupportStatusSubscriberRecord[]> {
+    const result = await this.databaseService.query<SupportStatusSubscriberRecord>(
+      `
+        SELECT
+          id,
+          tenant_id,
+          contact_hash,
+          contact_type,
+          locale,
+          status,
+          created_at::text,
+          updated_at::text
+        FROM support_status_subscriptions
+        WHERE tenant_id = 'global'
+          AND status = 'active'
+        ORDER BY created_at ASC
+      `,
+    );
+
+    return result.rows;
+  }
+
+  async createStatusNotificationAttempt(input: {
+    subscription_id: string;
+    contact_hash: string;
+    incident_id: string;
+    channel: 'email';
+    status: 'queued' | 'sent' | 'failed';
+    payload: Record<string, unknown>;
+  }): Promise<{ id: string }> {
+    const result = await this.databaseService.query<{ id: string }>(
+      `
+        INSERT INTO support_status_notification_attempts (
+          tenant_id,
+          incident_id,
+          subscription_id,
+          contact_hash,
+          channel,
+          delivery_status,
+          payload
+        )
+        VALUES (
+          'global',
+          $1::uuid,
+          $2::uuid,
+          $3,
+          $4,
+          $5,
+          $6::jsonb
+        )
+        RETURNING id
+      `,
+      [
+        input.incident_id,
+        input.subscription_id,
+        input.contact_hash,
+        input.channel,
+        input.status,
+        JSON.stringify(input.payload),
+      ],
+    );
+
+    return result.rows[0];
+  }
+
+  async updateStatusComponentFromSloBreach(input: {
+    componentSlug: string;
+    status: 'degraded' | 'partial_outage' | 'major_outage';
+    reason: string;
+  }): Promise<void> {
+    await this.databaseService.query(
+      `
+        UPDATE support_system_components
+        SET status = $2,
+            metadata = jsonb_set(
+              metadata,
+              '{last_slo_breach}',
+              jsonb_build_object('reason', $3, 'updated_at', NOW())::jsonb,
+              true
+            ),
+            updated_at = NOW()
+        WHERE tenant_id = 'global'
+          AND slug = $1
+      `,
+      [input.componentSlug, input.status, input.reason],
+    );
   }
 
   async getSystemStatus() {

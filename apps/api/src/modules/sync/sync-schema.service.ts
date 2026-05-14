@@ -55,7 +55,7 @@ export class SyncSchemaService implements OnModuleInit {
         last_version bigint NOT NULL DEFAULT 0,
         created_at timestamptz NOT NULL DEFAULT NOW(),
         updated_at timestamptz NOT NULL DEFAULT NOW(),
-        CONSTRAINT ck_sync_cursors_entity CHECK (entity IN ('attendance', 'finance')),
+        CONSTRAINT ck_sync_cursors_entity CHECK (entity IN ('finance')),
         CONSTRAINT ck_sync_cursors_last_version_non_negative CHECK (last_version >= 0),
         CONSTRAINT uq_sync_cursors_tenant_id_id UNIQUE (tenant_id, id),
         CONSTRAINT uq_sync_cursors_tenant_device_entity UNIQUE (tenant_id, device_id, entity)
@@ -70,34 +70,22 @@ export class SyncSchemaService implements OnModuleInit {
         version bigint GENERATED ALWAYS AS IDENTITY,
         created_at timestamptz NOT NULL DEFAULT NOW(),
         updated_at timestamptz NOT NULL DEFAULT NOW(),
-        CONSTRAINT ck_sync_operation_logs_entity CHECK (entity IN ('attendance', 'finance')),
+        CONSTRAINT ck_sync_operation_logs_entity CHECK (entity IN ('finance')),
         CONSTRAINT uq_sync_operation_logs_tenant_version UNIQUE (tenant_id, version)
-      );
-
-      CREATE TABLE IF NOT EXISTS attendance_records (
-        id uuid PRIMARY KEY,
-        tenant_id text NOT NULL,
-        student_id uuid NOT NULL,
-        attendance_date date NOT NULL,
-        status text NOT NULL,
-        notes text,
-        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-        source_device_id text,
-        last_modified_at timestamptz NOT NULL,
-        last_operation_id uuid,
-        sync_version bigint,
-        created_at timestamptz NOT NULL DEFAULT NOW(),
-        updated_at timestamptz NOT NULL DEFAULT NOW(),
-        CONSTRAINT ck_attendance_records_status CHECK (
-          status IN ('present', 'absent', 'late', 'excused')
-        ),
-        CONSTRAINT uq_attendance_records_tenant_id_id UNIQUE (tenant_id, id),
-        CONSTRAINT uq_attendance_records_tenant_student_date
-          UNIQUE (tenant_id, student_id, attendance_date)
       );
 
       DO $$
       BEGIN
+        ALTER TABLE sync_cursors
+        DROP CONSTRAINT IF EXISTS ck_sync_cursors_entity;
+        ALTER TABLE sync_cursors
+        ADD CONSTRAINT ck_sync_cursors_entity CHECK (entity IN ('finance')) NOT VALID;
+
+        ALTER TABLE sync_operation_logs
+        DROP CONSTRAINT IF EXISTS ck_sync_operation_logs_entity;
+        ALTER TABLE sync_operation_logs
+        ADD CONSTRAINT ck_sync_operation_logs_entity CHECK (entity IN ('finance')) NOT VALID;
+
         IF NOT EXISTS (
           SELECT 1
           FROM pg_constraint
@@ -128,25 +116,6 @@ export class SyncSchemaService implements OnModuleInit {
         IF NOT EXISTS (
           SELECT 1
           FROM pg_constraint
-          WHERE conname = 'uq_attendance_records_tenant_id_id'
-        ) THEN
-          ALTER TABLE attendance_records
-          ADD CONSTRAINT uq_attendance_records_tenant_id_id UNIQUE (tenant_id, id);
-        END IF;
-
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'uq_attendance_records_tenant_student_date'
-        ) THEN
-          ALTER TABLE attendance_records
-          ADD CONSTRAINT uq_attendance_records_tenant_student_date
-            UNIQUE (tenant_id, student_id, attendance_date);
-        END IF;
-
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
           WHERE conname = 'fk_sync_cursors_device'
         ) THEN
           ALTER TABLE sync_cursors
@@ -156,29 +125,6 @@ export class SyncSchemaService implements OnModuleInit {
             ON DELETE CASCADE;
         END IF;
 
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'fk_attendance_records_last_operation'
-        ) THEN
-          ALTER TABLE attendance_records
-          ADD CONSTRAINT fk_attendance_records_last_operation
-            FOREIGN KEY (last_operation_id)
-            REFERENCES sync_operation_logs (op_id)
-            ON DELETE SET NULL;
-        END IF;
-
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'fk_attendance_records_sync_version'
-        ) THEN
-          ALTER TABLE attendance_records
-          ADD CONSTRAINT fk_attendance_records_sync_version
-            FOREIGN KEY (tenant_id, sync_version)
-            REFERENCES sync_operation_logs (tenant_id, version)
-            ON DELETE SET NULL;
-        END IF;
       END;
       $$;
 
@@ -192,12 +138,6 @@ export class SyncSchemaService implements OnModuleInit {
         ON sync_operation_logs (tenant_id, entity, version);
       CREATE INDEX IF NOT EXISTS ix_sync_operation_logs_device_created_at
         ON sync_operation_logs (tenant_id, device_id, created_at DESC);
-      CREATE INDEX IF NOT EXISTS ix_attendance_records_student_date
-        ON attendance_records (tenant_id, student_id, attendance_date DESC);
-      CREATE INDEX IF NOT EXISTS ix_attendance_records_last_modified_at
-        ON attendance_records (tenant_id, last_modified_at DESC);
-      CREATE INDEX IF NOT EXISTS ix_attendance_records_sync_version
-        ON attendance_records (tenant_id, sync_version);
 
       ALTER TABLE sync_devices ENABLE ROW LEVEL SECURITY;
       ALTER TABLE sync_devices FORCE ROW LEVEL SECURITY;
@@ -205,8 +145,6 @@ export class SyncSchemaService implements OnModuleInit {
       ALTER TABLE sync_cursors FORCE ROW LEVEL SECURITY;
       ALTER TABLE sync_operation_logs ENABLE ROW LEVEL SECURITY;
       ALTER TABLE sync_operation_logs FORCE ROW LEVEL SECURITY;
-      ALTER TABLE attendance_records ENABLE ROW LEVEL SECURITY;
-      ALTER TABLE attendance_records FORCE ROW LEVEL SECURITY;
 
       DROP POLICY IF EXISTS sync_devices_rls_policy ON sync_devices;
       CREATE POLICY sync_devices_rls_policy ON sync_devices
@@ -230,12 +168,6 @@ export class SyncSchemaService implements OnModuleInit {
       FOR INSERT
       WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
-      DROP POLICY IF EXISTS attendance_records_rls_policy ON attendance_records;
-      CREATE POLICY attendance_records_rls_policy ON attendance_records
-      FOR ALL
-      USING (tenant_id = current_setting('app.tenant_id', true))
-      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
-
       DROP TRIGGER IF EXISTS trg_sync_devices_set_updated_at ON sync_devices;
       CREATE TRIGGER trg_sync_devices_set_updated_at
       BEFORE UPDATE ON sync_devices
@@ -248,12 +180,6 @@ export class SyncSchemaService implements OnModuleInit {
       FOR EACH ROW
       EXECUTE FUNCTION set_updated_at();
 
-      DROP TRIGGER IF EXISTS trg_attendance_records_set_updated_at ON attendance_records;
-      CREATE TRIGGER trg_attendance_records_set_updated_at
-      BEFORE UPDATE ON attendance_records
-      FOR EACH ROW
-      EXECUTE FUNCTION set_updated_at();
-
       DROP TRIGGER IF EXISTS trg_sync_operation_logs_set_updated_at ON sync_operation_logs;
       DROP TRIGGER IF EXISTS trg_sync_operation_logs_prevent_update ON sync_operation_logs;
       CREATE TRIGGER trg_sync_operation_logs_prevent_update
@@ -262,6 +188,6 @@ export class SyncSchemaService implements OnModuleInit {
       EXECUTE FUNCTION app.prevent_append_only_mutation();
     `);
 
-    this.logger.log('Offline sync schema, device registry, and conflict tables verified');
+    this.logger.log('Finance sync schema and device registry verified');
   }
 }

@@ -4,7 +4,6 @@ import {
 } from "@/lib/dashboard/api-client";
 import { formatCurrency } from "@/lib/dashboard/format";
 import {
-  createInventoryDataset,
   type DepartmentRequest,
   type InventoryCategory,
   type InventoryDataset,
@@ -146,15 +145,26 @@ export interface LiveInventoryReportsResponse {
     purchase_orders: number;
     total_spend: number;
   }>;
+  stock_reconciliation?: Array<{
+    item_name: string;
+    sku: string;
+    item_quantity_on_hand: number;
+    location_quantity_on_hand: number;
+    variance_quantity: number;
+    status: string;
+  }>;
 }
 
-const fallbackInventory = createInventoryDataset();
-const categoryDefaults = new Map(
-  fallbackInventory.categories.map((category) => [category.name.toLowerCase(), category]),
-);
-const supplierDefaults = new Map(
-  fallbackInventory.suppliers.map((supplier) => [supplier.name.toLowerCase(), supplier]),
-);
+export interface LiveInventoryReportExportResponse {
+  report_id: string;
+  title: string;
+  filename: string;
+  content_type: string;
+  generated_at: string;
+  row_count: number;
+  checksum_sha256: string;
+  csv: string;
+}
 
 function formatDate(value?: string | null, withTime = false) {
   if (!value) {
@@ -201,30 +211,26 @@ function formatRequestQuantity(lines: Array<Record<string, unknown>>) {
 }
 
 function mapCategory(category: LiveInventoryCategory): InventoryCategory {
-  const fallback = categoryDefaults.get(category.name.toLowerCase());
-
   return {
     id: category.id,
     code: category.code,
     name: category.name,
-    manager: category.manager ?? fallback?.manager ?? "Stores Office",
-    storageZones: category.storage_zones ?? fallback?.storageZones ?? "Main Store",
-    notes: fallback?.notes ?? category.description ?? "Operational inventory category.",
+    manager: category.manager ?? "Not assigned",
+    storageZones: category.storage_zones ?? "Not configured",
+    notes: category.description ?? "No notes recorded.",
   };
 }
 
 function mapSupplier(supplier: LiveInventorySupplier): InventorySupplier {
-  const fallback = supplierDefaults.get(supplier.supplier_name.toLowerCase());
-
   return {
     id: supplier.id,
     name: supplier.supplier_name,
-    contact: supplier.contact_person ?? fallback?.contact ?? "Stores contact",
-    email: supplier.email ?? fallback?.email ?? "not-available@school.local",
-    phone: supplier.phone ?? fallback?.phone ?? "Not on file",
+    contact: supplier.contact_person ?? "Not recorded",
+    email: supplier.email ?? "",
+    phone: supplier.phone ?? "Not on file",
     lastDelivery: formatDate(supplier.last_delivery_at),
     status: supplier.status === "on_hold" ? "on_hold" : "active",
-    county: supplier.county ?? fallback?.county ?? "Nairobi",
+    county: supplier.county ?? "Not recorded",
   };
 }
 
@@ -239,8 +245,8 @@ function mapItem(item: LiveInventoryItem): InventoryItem {
     supplier: item.supplier_name ?? "Unassigned supplier",
     unitPrice: Number(item.unit_price ?? 0),
     reorderLevel: Number(item.reorder_level ?? 0),
-    location: item.storage_location ?? "Main Store",
-    notes: item.notes ?? "",
+    location: item.storage_location ?? "Not assigned",
+    notes: item.notes ?? "No notes recorded.",
     archived: Boolean(item.is_archived),
   };
 }
@@ -360,6 +366,7 @@ export function mapInventoryReportsFromLive(
       title: "Stock valuation",
       description: "Quantity, price, and current stores value by item.",
       filename: "inventory-stock-valuation.csv",
+      serverExportId: "stock-valuation",
       headers: ["Item", "SKU", "Quantity", "Unit Price", "Total Value"],
       rows: reports.stock_valuation.map((row) => [
         row.item_name,
@@ -374,6 +381,7 @@ export function mapInventoryReportsFromLive(
       title: "Low stock report",
       description: "Lines that need replenishment before service disruption.",
       filename: "inventory-low-stock.csv",
+      serverExportId: "low-stock",
       headers: ["Item", "SKU", "Qty", "Reorder"],
       rows: reports.low_stock_report.map((row) => [
         row.item_name,
@@ -387,6 +395,7 @@ export function mapInventoryReportsFromLive(
       title: "Movement history",
       description: "Movement counts across issue, receipt, transfer, and damage workflows.",
       filename: "inventory-movement-history.csv",
+      serverExportId: "movement-history",
       headers: ["Movement Type", "Count"],
       rows: reports.movement_history.map((row) => [
         normalizeMovementType(row.movement_type).replaceAll("_", " "),
@@ -398,11 +407,28 @@ export function mapInventoryReportsFromLive(
       title: "Supplier purchases",
       description: "Supplier spend and purchase-order volume for procurement review.",
       filename: "inventory-supplier-purchases.csv",
+      serverExportId: "supplier-purchases",
       headers: ["Supplier", "Purchase Orders", "Total Spend"],
       rows: reports.supplier_purchases.map((row) => [
         row.supplier_name,
         `${row.purchase_orders}`,
         formatCurrency(row.total_spend, false),
+      ]),
+    },
+    {
+      id: "report-stock-reconciliation",
+      title: "Stock reconciliation",
+      description: "Item-level stock compared with location balances for variance review.",
+      filename: "inventory-stock-reconciliation.csv",
+      serverExportId: "stock-reconciliation",
+      headers: ["Item", "SKU", "Item Qty", "Location Qty", "Variance", "Status"],
+      rows: (reports.stock_reconciliation ?? []).map((row) => [
+        row.item_name,
+        row.sku,
+        `${row.item_quantity_on_hand}`,
+        `${row.location_quantity_on_hand}`,
+        `${row.variance_quantity}`,
+        row.status,
       ]),
     },
   ];
@@ -452,6 +478,16 @@ export async function fetchInventoryDatasetLive(session: LiveAuthSession) {
 export async function fetchInventoryReportsLive(session: LiveAuthSession) {
   return mapInventoryReportsFromLive(
     await withSession<LiveInventoryReportsResponse>(session, "/inventory/reports"),
+  );
+}
+
+export function fetchInventoryReportExportLive(
+  session: LiveAuthSession,
+  reportId: string,
+) {
+  return withSession<LiveInventoryReportExportResponse>(
+    session,
+    `/inventory/reports/${encodeURIComponent(reportId)}/export`,
   );
 }
 

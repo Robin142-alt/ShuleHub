@@ -4,11 +4,10 @@ import type { ReactElement } from "react";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { Topbar } from "@/components/dashboard/topbar";
 import { AcademicsWidget } from "@/components/dashboard/academics-widget";
-import { AttendanceWidget } from "@/components/dashboard/attendance-widget";
 import { FinanceWidget } from "@/components/dashboard/finance-widget";
 import { AppProviders } from "@/components/providers/app-providers";
 import { buildSchoolErpModel } from "@/lib/dashboard/erp-model";
-import { buildDashboardSnapshot } from "@/lib/dashboard/mock-data";
+import { buildDashboardSnapshot } from "@/lib/dashboard/empty-data";
 import { getRoleWidgetOrder } from "@/lib/dashboard/role-config";
 import type { DashboardRole, DashboardSnapshot } from "@/lib/dashboard/types";
 import { buildAdmissionsSearchItems } from "@/lib/modules/admissions-data";
@@ -106,7 +105,6 @@ export function renderDashboardScreen(options?: {
         widgetOrder={getRoleWidgetOrder(role)}
         onAction={onAction}
         FinanceWidgetComponent={FinanceWidget}
-        AttendanceWidgetComponent={AttendanceWidget}
         AcademicsWidgetComponent={AcademicsWidget}
       />
     </div>,

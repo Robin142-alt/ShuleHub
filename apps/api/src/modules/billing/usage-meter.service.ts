@@ -183,10 +183,6 @@ export class UsageMeterService {
   }
 
   private resolveFeatureLimitKey(featureKey: string): string | null {
-    if (featureKey === 'attendance.upserts') {
-      return 'attendance.upserts.monthly';
-    }
-
     return null;
   }
 

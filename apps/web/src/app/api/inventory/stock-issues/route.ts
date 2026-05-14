@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { validateCsrfRequest } from "@/lib/auth/csrf";
 import {
   readAccessCookie,
   readExperienceSessionCookie,
@@ -11,7 +13,14 @@ import {
   requestDashboardApi,
 } from "@/lib/dashboard/api-client";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  if (!validateCsrfRequest(request)) {
+    return NextResponse.json(
+      { synced: false, message: "Security check expired. Refresh the page and try again." },
+      { status: 403 },
+    );
+  }
+
   const cookieStore = await cookies();
   const session = readExperienceSessionCookie(cookieStore, "school");
 
@@ -25,13 +34,23 @@ export async function POST(request: Request) {
   const tenantId = readTenantCookie(cookieStore) ?? session.tenantSlug;
   const accessToken = readAccessCookie(cookieStore);
 
-  if (!isDashboardApiConfigured() || !tenantId || !accessToken) {
+  if (!tenantId || !accessToken) {
     return NextResponse.json(
       {
         synced: false,
-        message: "Live inventory API is not configured; stock issue was saved locally.",
+        message: "Storekeeper session expired. Sign in again to submit the stock issue.",
       },
-      { status: 202 },
+      { status: 401 },
+    );
+  }
+
+  if (!isDashboardApiConfigured()) {
+    return NextResponse.json(
+      {
+        synced: false,
+        message: "Live inventory API is unavailable. The stock issue was not submitted.",
+      },
+      { status: 503 },
     );
   }
 
@@ -56,7 +75,7 @@ export async function POST(request: Request) {
         message:
           error instanceof Error
             ? error.message
-            : "Live inventory API sync failed.",
+            : "Live inventory sync failed.",
       },
       { status: 502 },
     );

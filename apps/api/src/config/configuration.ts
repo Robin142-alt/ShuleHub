@@ -80,9 +80,62 @@ export default () => ({
       process.env.JWT_ACCESS_TOKEN_SECRET ?? process.env.JWT_SECRET ?? '',
     refreshTokenSecret:
       process.env.JWT_REFRESH_TOKEN_SECRET ?? process.env.JWT_SECRET ?? '',
+    systemOwnerEmail: process.env.SYSTEM_OWNER_EMAIL ?? '',
     accessTokenTtlSeconds: parseNumber(process.env.JWT_ACCESS_TOKEN_TTL_SECONDS, 900),
     refreshTokenTtlSeconds: parseNumber(process.env.JWT_REFRESH_TOKEN_TTL_SECONDS, 2592000),
     bcryptSaltRounds: parseNumber(process.env.BCRYPT_SALT_ROUNDS, 12),
+  },
+  email: {
+    provider: process.env.EMAIL_PROVIDER ?? 'resend',
+    resendApiKey: process.env.RESEND_API_KEY ?? '',
+    from: process.env.EMAIL_FROM ?? '',
+    publicAppUrl:
+      process.env.PUBLIC_APP_URL ??
+      process.env.WEB_APP_URL ??
+      'https://shule-hub-erp.vercel.app',
+    passwordRecoveryTtlMinutes: parseNumber(
+      process.env.PASSWORD_RECOVERY_TTL_MINUTES,
+      30,
+    ),
+    invitationTtlMinutes: parseNumber(
+      process.env.INVITATION_TTL_MINUTES,
+      10080,
+    ),
+  },
+  support: {
+    notificationEmails: parseCsv(process.env.SUPPORT_NOTIFICATION_EMAILS),
+    notificationSmsWebhookUrl: process.env.SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL ?? '',
+    notificationSmsWebhookToken: process.env.SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN ?? '',
+    notificationSmsRecipients: parseCsv(process.env.SUPPORT_NOTIFICATION_SMS_RECIPIENTS),
+    notificationMaxAttempts: parseNumber(process.env.SUPPORT_NOTIFICATION_MAX_ATTEMPTS, 3),
+    notificationRetryWorkerEnabled: parseBoolean(
+      process.env.SUPPORT_NOTIFICATION_RETRY_WORKER_ENABLED,
+      !isServerlessRuntime,
+    ),
+    notificationRetryIntervalMs: parseNumber(
+      process.env.SUPPORT_NOTIFICATION_RETRY_INTERVAL_MS,
+      60000,
+    ),
+    notificationRetryBatchSize: parseNumber(
+      process.env.SUPPORT_NOTIFICATION_RETRY_BATCH_SIZE,
+      50,
+    ),
+    notificationRetryLeaseMs: parseNumber(
+      process.env.SUPPORT_NOTIFICATION_RETRY_LEASE_MS,
+      300000,
+    ),
+    slaBreachMonitorEnabled: parseBoolean(
+      process.env.SUPPORT_SLA_BREACH_MONITOR_ENABLED,
+      !isServerlessRuntime,
+    ),
+    slaBreachMonitorIntervalMs: parseNumber(
+      process.env.SUPPORT_SLA_BREACH_MONITOR_INTERVAL_MS,
+      60000,
+    ),
+    slaBreachBatchSize: parseNumber(
+      process.env.SUPPORT_SLA_BREACH_BATCH_SIZE,
+      50,
+    ),
   },
   finance: {
     idempotencyTtlSeconds: parseNumber(process.env.FINANCE_IDEMPOTENCY_TTL_SECONDS, 86400),

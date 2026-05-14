@@ -6,6 +6,7 @@ import type {
   SidebarItem,
 } from "./types";
 import { DASHBOARD_ROLES } from "./types";
+import { isProductionReadyModule } from "@/lib/features/module-readiness";
 
 export const roleLabels: Record<DashboardRole, string> = {
   admin: "Admin",
@@ -23,7 +24,6 @@ export const sidebarItems: SidebarItem[] = [
   { id: "admissions", label: "Admissions", href: "admissions", roles: ["admin", "admissions"] },
   { id: "finance", label: "Fees / Payments", href: "finance", roles: ["admin", "bursar", "parent"] },
   { id: "mpesa", label: "MPESA Transactions", href: "mpesa", roles: ["admin", "bursar"] },
-  { id: "attendance", label: "Attendance", href: "attendance", roles: ["admin", "teacher", "parent"] },
   { id: "academics", label: "Academics", href: "academics", roles: ["admin", "teacher", "parent"] },
   { id: "reports", label: "Reports", href: "reports", roles: ["admin", "bursar", "teacher", "parent"] },
   { id: "communication", label: "Communication (SMS)", href: "communication", roles: ["admin", "bursar", "teacher", "parent"] },
@@ -51,18 +51,10 @@ export const quickActionsCatalog: QuickActionItem[] = [
   {
     id: "send-sms",
     label: "Send SMS",
-    description: "Notify families about attendance, fees, or timetable changes.",
+    description: "Notify families about fees, academics, or timetable changes.",
     href: "communication",
     roles: ["admin", "bursar", "teacher"],
     offlineAllowed: false,
-  },
-  {
-    id: "mark-attendance",
-    label: "Mark Attendance",
-    description: "Open the daily class register and save the roll call quickly.",
-    href: "attendance",
-    roles: ["teacher"],
-    offlineAllowed: true,
   },
   {
     id: "print-report",
@@ -75,7 +67,7 @@ export const quickActionsCatalog: QuickActionItem[] = [
   {
     id: "view-child",
     label: "View Child Summary",
-    description: "Open attendance, fee balance, and communication history.",
+    description: "Open academics, fee balance, and communication history.",
     href: "students",
     roles: ["parent"],
     offlineAllowed: true,
@@ -141,24 +133,6 @@ export const capabilityCatalog: CapabilityItem[] = [
     roles: ["admin", "teacher", "parent"],
     status: "ok",
     category: "academics",
-  },
-  {
-    id: "cap-attendance",
-    label: "Offline attendance",
-    description: "Class roll call with pending, failed, and synced device states.",
-    href: "attendance",
-    roles: ["admin", "teacher", "parent"],
-    status: "warning",
-    category: "attendance",
-  },
-  {
-    id: "cap-sync",
-    label: "Sync engine",
-    description: "Conflict tracking, device queues, and offline-first operational recovery.",
-    href: "attendance",
-    roles: ["admin", "teacher"],
-    status: "warning",
-    category: "attendance",
   },
   {
     id: "cap-billing",
@@ -235,7 +209,7 @@ export const capabilityCatalog: CapabilityItem[] = [
   {
     id: "cap-reports",
     label: "Reports and analytics",
-    description: "Cross-functional drill-downs for attendance, finance, and academic trend reading.",
+    description: "Cross-functional drill-downs for finance, academics, and operations trend reading.",
     href: "reports",
     roles: ["admin", "bursar", "teacher", "parent"],
     status: "ok",
@@ -262,10 +236,10 @@ export const capabilityCatalog: CapabilityItem[] = [
 ];
 
 const roleWidgetOrder: Record<DashboardRole, DashboardWidgetKey[]> = {
-  admin: ["finance", "attendance", "academics"],
-  bursar: ["finance", "attendance"],
-  teacher: ["attendance", "academics"],
-  parent: ["attendance", "finance", "academics"],
+  admin: ["finance", "academics"],
+  bursar: ["finance"],
+  teacher: ["academics"],
+  parent: ["finance", "academics"],
   storekeeper: ["inventory"],
   admissions: ["admissions", "students"],
 };
@@ -275,22 +249,31 @@ export function isDashboardRole(value: string): value is DashboardRole {
 }
 
 export function getRoleSidebar(role: DashboardRole): SidebarItem[] {
-  return sidebarItems.filter((item) => item.roles.includes(role));
+  return sidebarItems.filter((item) => item.roles.includes(role) && isProductionReadyModule(item.id));
 }
 
 export function getRoleQuickActions(role: DashboardRole) {
-  return quickActionsCatalog.filter((item) => item.roles.includes(role));
+  return quickActionsCatalog.filter((item) => item.roles.includes(role) && isProductionReadyModule(item.href));
 }
 
 export function getRoleWidgetOrder(role: DashboardRole) {
-  return roleWidgetOrder[role];
+  return roleWidgetOrder[role].filter((widget) => isProductionReadyModule(widget));
 }
 
 export function getRoleCapabilities(role: DashboardRole) {
-  return capabilityCatalog.filter((item) => item.roles.includes(role));
+  return capabilityCatalog.filter(
+    (item) =>
+      item.roles.includes(role)
+      && isProductionReadyModule(item.href)
+      && isProductionReadyModule(item.category),
+  );
 }
 
 export function canRoleAccessModule(role: DashboardRole, moduleName: string) {
+  if (!isProductionReadyModule(moduleName)) {
+    return false;
+  }
+
   const moduleItem = sidebarItems.find(
     (item) => item.id === moduleName || item.href === moduleName,
   );
@@ -299,6 +282,10 @@ export function canRoleAccessModule(role: DashboardRole, moduleName: string) {
 }
 
 export function doesModuleExist(moduleName: string) {
+  if (!isProductionReadyModule(moduleName)) {
+    return false;
+  }
+
   return sidebarItems.some(
     (item) => item.id === moduleName || item.href === moduleName,
   );

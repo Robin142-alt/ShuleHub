@@ -80,3 +80,25 @@ export class CreateTransferRecordDto {
   @IsString()
   notes?: string;
 }
+
+export class AdvanceAcademicLifecycleDto {
+  @IsString()
+  @IsIn(['promotion', 'graduation', 'archive'])
+  action!: 'promotion' | 'graduation' | 'archive';
+
+  @IsOptional()
+  @IsString()
+  class_name?: string;
+
+  @IsOptional()
+  @IsString()
+  stream_name?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}

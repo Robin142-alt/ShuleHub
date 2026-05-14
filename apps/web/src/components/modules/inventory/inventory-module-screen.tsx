@@ -24,7 +24,7 @@ import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { StatusPill } from "@/components/ui/status-pill";
 import { useLiveTenantSession } from "@/hooks/use-live-tenant-session";
-import { downloadCsvFile } from "@/lib/dashboard/export";
+import { downloadCsvFile, downloadTextFile } from "@/lib/dashboard/export";
 import type { DashboardRole, DashboardSnapshot } from "@/lib/dashboard/types";
 import {
   buildInventoryCategoryBreakdown,
@@ -50,6 +50,7 @@ import {
   type InventoryIncident,
   type InventoryItem,
   type InventoryMovement,
+  type InventoryReportCard,
   type InventorySectionId,
   type InventorySupplier,
   type PurchaseOrder,
@@ -75,6 +76,7 @@ import {
   createInventorySupplierLive,
   createInventoryTransferLive,
   fetchInventoryDatasetLive,
+  fetchInventoryReportExportLive,
   fetchInventoryReportsLive,
   updateInventoryCategoryLive,
   updateInventoryItemLive,
@@ -284,6 +286,18 @@ function createEmptyInventoryDataset(): InventoryDataset {
     transfers: [],
     incidents: [],
   };
+}
+
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function currentTimestampLabel() {
+  return new Date().toISOString().slice(0, 16).replace("T", " ");
+}
+
+function purchaseOrderNumber(nextIndex: number) {
+  return `PO-${todayIsoDate().replaceAll("-", "")}-${String(nextIndex + 1).padStart(3, "0")}`;
 }
 
 export function InventoryModuleScreen({
@@ -528,6 +542,42 @@ export function InventoryModuleScreen({
     ? (liveInventoryReportsQuery.data ?? buildInventoryReports(dataset))
     : buildInventoryReports(dataset);
   const sections = buildInventoryModuleSections(dataset);
+
+  async function exportInventoryReport(report: InventoryReportCard) {
+    setModuleError(null);
+
+    if (isLiveMode && liveSession.session && report.serverExportId) {
+      setActiveActionId(`${report.id}-export`);
+
+      try {
+        const artifact = await fetchInventoryReportExportLive(
+          liveSession.session,
+          report.serverExportId,
+        );
+        downloadTextFile({
+          filename: artifact.filename,
+          content: artifact.csv,
+          mimeType: artifact.content_type,
+        });
+      } catch (error) {
+        setModuleError(
+          error instanceof Error
+            ? error.message
+            : "Unable to export the inventory report.",
+        );
+      } finally {
+        setActiveActionId(null);
+      }
+
+      return;
+    }
+
+    downloadCsvFile({
+      filename: report.filename,
+      headers: report.headers,
+      rows: report.rows,
+    });
+  }
 
   function updateSection(sectionId: InventorySectionId) {
     const next = new URLSearchParams(searchParams.toString());
@@ -983,7 +1033,7 @@ export function InventoryModuleScreen({
               item: item.name,
               type: adjustmentForm.movementType,
               quantity,
-              date: "2026-05-04 15:45",
+              date: currentTimestampLabel(),
               user: role === "admin" ? "Admin override" : "Storekeeper desk",
               notes: adjustmentForm.notes.trim(),
             },
@@ -1065,10 +1115,10 @@ export function InventoryModuleScreen({
           purchaseOrders: [
             {
               id: `po-${Date.now()}`,
-              poNumber: `PO-2026-${String(current.purchaseOrders.length + 22).padStart(3, "0")}`,
+              poNumber: purchaseOrderNumber(current.purchaseOrders.length),
               supplier: purchaseOrderForm.supplier.trim(),
               requestedBy: purchaseOrderForm.requestedBy.trim(),
-              orderDate: "2026-05-04",
+              orderDate: todayIsoDate(),
               expectedDelivery: purchaseOrderForm.expectedDelivery,
               lineSummary: purchaseOrderSummary,
               totalAmount: purchaseOrderDraftTotal,
@@ -1115,8 +1165,8 @@ export function InventoryModuleScreen({
                     item: "Multi-line supplier receipt",
                     type: "stock_in",
                     quantity: 1,
-                    date: "2026-05-04 16:10",
-                    user: "Linet Auma",
+                    date: currentTimestampLabel(),
+                    user: "Storekeeper desk",
                     notes: `Stock received against ${purchaseOrderId}.`,
                   },
                   ...current.movements,
@@ -1174,7 +1224,7 @@ export function InventoryModuleScreen({
               department: requestForm.department.trim(),
               itemGroup: requestSummary,
               requestedBy: requestForm.requestedBy.trim(),
-              requestDate: "2026-05-04",
+              requestDate: todayIsoDate(),
               quantity: `${requestDraftUnits} units`,
               purpose: requestForm.purpose.trim(),
               status: "pending",
@@ -1265,7 +1315,7 @@ export function InventoryModuleScreen({
               toLocation: transferForm.toLocation.trim(),
               quantity: transferDraftUnits,
               requestedBy: transferForm.requestedBy.trim(),
-              date: "2026-05-04",
+              date: todayIsoDate(),
               status: "requested",
             },
             ...current.transfers,
@@ -1362,7 +1412,7 @@ export function InventoryModuleScreen({
               type: incidentForm.type,
               quantity: Number(incidentForm.quantity),
               department: incidentForm.department.trim(),
-              date: "2026-05-04",
+              date: todayIsoDate(),
               reason: incidentForm.reason.trim(),
               costImpact: Number(incidentForm.costImpact),
             },
@@ -1743,7 +1793,7 @@ export function InventoryModuleScreen({
             </p>
             <p className="mt-2 text-sm font-semibold text-foreground">
               {isLiveMode
-                ? `Signed in as ${liveSession.user?.display_name ?? "store staff"} for live backend operations.`
+                ? `Signed in as ${liveSession.user?.display_name ?? "store staff"} for live inventory operations.`
                 : "Procurement and stock valuation stay visible together in the review workspace until a live tenant session is active."}
             </p>
             <p className="mt-2 text-sm leading-6 text-muted">
@@ -2282,15 +2332,12 @@ export function InventoryModuleScreen({
                   <div className="mt-5 flex flex-wrap gap-3">
                     <Button
                       variant="secondary"
-                      onClick={() =>
-                        downloadCsvFile({
-                          filename: report.filename,
-                          headers: report.headers,
-                          rows: report.rows,
-                        })
-                      }
+                      onClick={() => void exportInventoryReport(report)}
+                      disabled={activeActionId === `${report.id}-export`}
                     >
-                      Export {report.filename.replace(".csv", "")}
+                      {activeActionId === `${report.id}-export`
+                        ? "Exporting..."
+                        : `Export ${report.filename.replace(".csv", "")}`}
                     </Button>
                   </div>
                   <div className="mt-5 rounded-xl border border-border bg-surface-muted px-4 py-4">
@@ -2353,7 +2400,7 @@ export function InventoryModuleScreen({
                   code: event.target.value.toUpperCase(),
                 }))
               }
-              placeholder="STAT"
+              placeholder="Category code"
             />
           </FieldWrapper>
           <FieldWrapper label="Category name" error={categoryFormErrors.name}>
@@ -2363,7 +2410,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setCategoryForm((current) => ({ ...current, name: event.target.value }))
               }
-              placeholder="Stationery"
+              placeholder="Category name"
             />
           </FieldWrapper>
           <FieldWrapper label="Category owner" error={categoryFormErrors.manager}>
@@ -2373,7 +2420,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setCategoryForm((current) => ({ ...current, manager: event.target.value }))
               }
-              placeholder="Academic Office"
+              placeholder="Category owner"
             />
           </FieldWrapper>
           <FieldWrapper label="Storage zones" error={categoryFormErrors.storageZones}>
@@ -2383,7 +2430,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setCategoryForm((current) => ({ ...current, storageZones: event.target.value }))
               }
-              placeholder="Admin Store, Block A"
+              placeholder="Storage zones"
             />
           </FieldWrapper>
           <div className="md:col-span-2">
@@ -2394,7 +2441,7 @@ export function InventoryModuleScreen({
                 onChange={(event) =>
                   setCategoryForm((current) => ({ ...current, notes: event.target.value }))
                 }
-                placeholder="Daily issue to class teachers and exams office."
+                placeholder="Operational notes"
               />
             </FieldWrapper>
           </div>
@@ -2429,7 +2476,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setSupplierForm((current) => ({ ...current, name: event.target.value }))
               }
-              placeholder="Crown Office Supplies"
+              placeholder="Supplier name"
             />
           </FieldWrapper>
           <FieldWrapper label="Contact person" error={supplierFormErrors.contact}>
@@ -2439,7 +2486,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setSupplierForm((current) => ({ ...current, contact: event.target.value }))
               }
-              placeholder="Lucy Njeri"
+              placeholder="Contact person"
             />
           </FieldWrapper>
           <FieldWrapper label="Email" error={supplierFormErrors.email}>
@@ -2449,7 +2496,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setSupplierForm((current) => ({ ...current, email: event.target.value }))
               }
-              placeholder="orders@crownoffice.co.ke"
+              placeholder="Supplier email address"
             />
           </FieldWrapper>
           <FieldWrapper label="Phone" error={supplierFormErrors.phone}>
@@ -2459,7 +2506,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setSupplierForm((current) => ({ ...current, phone: event.target.value }))
               }
-              placeholder="+254 722 441 885"
+              placeholder="Supplier phone number"
             />
           </FieldWrapper>
           <FieldWrapper label="County" error={supplierFormErrors.county}>
@@ -2469,7 +2516,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setSupplierForm((current) => ({ ...current, county: event.target.value }))
               }
-              placeholder="Nairobi"
+              placeholder="County"
             />
           </FieldWrapper>
           <FieldWrapper label="Status">
@@ -2512,7 +2559,7 @@ export function InventoryModuleScreen({
               className={fieldClassName}
               value={itemForm.name}
               onChange={(event) => setItemForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder="A4 Printing Paper"
+              placeholder="Item name"
             />
           </FieldWrapper>
           <FieldWrapper label="SKU" error={itemFormErrors.sku}>
@@ -2520,7 +2567,7 @@ export function InventoryModuleScreen({
               className={fieldClassName}
               value={itemForm.sku}
               onChange={(event) => setItemForm((current) => ({ ...current, sku: event.target.value }))}
-              placeholder="STAT-A4-001"
+              placeholder="Item code or SKU"
             />
           </FieldWrapper>
           <FieldWrapper label="Category" error={itemFormErrors.category}>
@@ -2572,7 +2619,7 @@ export function InventoryModuleScreen({
               className={fieldClassName}
               value={itemForm.unitPrice}
               onChange={(event) => setItemForm((current) => ({ ...current, unitPrice: event.target.value }))}
-              placeholder="650"
+              placeholder="0"
             />
           </FieldWrapper>
           <FieldWrapper label="Reorder level" error={itemFormErrors.reorderLevel}>
@@ -2580,7 +2627,7 @@ export function InventoryModuleScreen({
               className={fieldClassName}
               value={itemForm.reorderLevel}
               onChange={(event) => setItemForm((current) => ({ ...current, reorderLevel: event.target.value }))}
-              placeholder="25"
+              placeholder="0"
             />
           </FieldWrapper>
           <FieldWrapper label="Storage location" error={itemFormErrors.location}>
@@ -2588,7 +2635,7 @@ export function InventoryModuleScreen({
               className={fieldClassName}
               value={itemForm.location}
               onChange={(event) => setItemForm((current) => ({ ...current, location: event.target.value }))}
-              placeholder="Admin Store Shelf A2"
+              placeholder="Storage location"
             />
           </FieldWrapper>
           <div className="md:col-span-2">
@@ -2655,7 +2702,7 @@ export function InventoryModuleScreen({
                 onChange={(event) =>
                   setAdjustmentForm((current) => ({ ...current, notes: event.target.value }))
                 }
-                placeholder="Issued to Grade 7 stationery store"
+                placeholder="Reason for the stock movement"
               />
             </FieldWrapper>
           </div>
@@ -2702,7 +2749,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setPurchaseOrderForm((current) => ({ ...current, requestedBy: event.target.value }))
               }
-              placeholder="Mary Wanjiku"
+              placeholder="Request owner"
             />
           </FieldWrapper>
           <FieldWrapper label="Expected delivery" error={purchaseOrderErrors.expectedDelivery}>
@@ -2740,7 +2787,7 @@ export function InventoryModuleScreen({
                 onChange={(event) =>
                   setPurchaseOrderForm((current) => ({ ...current, notes: event.target.value }))
                 }
-                placeholder="Urgent before assessment week, confirm delivery at main gate receiving desk."
+                placeholder="Procurement notes"
               />
             </FieldWrapper>
           </div>
@@ -2779,7 +2826,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setRequestForm((current) => ({ ...current, department: event.target.value }))
               }
-              placeholder="Science Lab"
+              placeholder="Department"
             />
           </FieldWrapper>
           <FieldWrapper label="Requested by" error={requestErrors.requestedBy}>
@@ -2789,7 +2836,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setRequestForm((current) => ({ ...current, requestedBy: event.target.value }))
               }
-              placeholder="Moses Otieno"
+              placeholder="Request owner"
             />
           </FieldWrapper>
           <div className="md:col-span-2">
@@ -2811,7 +2858,7 @@ export function InventoryModuleScreen({
                 onChange={(event) =>
                   setRequestForm((current) => ({ ...current, purpose: event.target.value }))
                 }
-                placeholder="Grade 8 practical set-up for acids and indicators."
+                placeholder="Purpose for the requested stock"
               />
             </FieldWrapper>
           </div>
@@ -2848,7 +2895,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setTransferForm((current) => ({ ...current, fromLocation: event.target.value }))
               }
-              placeholder="Main Store"
+              placeholder="Source location"
             />
           </FieldWrapper>
           <FieldWrapper label="To location" error={transferErrors.toLocation}>
@@ -2858,7 +2905,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setTransferForm((current) => ({ ...current, toLocation: event.target.value }))
               }
-              placeholder="Girls Dorm Intake Wing"
+              placeholder="Destination location"
             />
           </FieldWrapper>
           <div className="md:col-span-2">
@@ -2869,7 +2916,7 @@ export function InventoryModuleScreen({
                 onChange={(event) =>
                   setTransferForm((current) => ({ ...current, requestedBy: event.target.value }))
                 }
-                placeholder="Susan Cherotich"
+                placeholder="Request owner"
               />
             </FieldWrapper>
           </div>
@@ -2961,7 +3008,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setIncidentForm((current) => ({ ...current, department: event.target.value }))
               }
-              placeholder="Science Lab"
+              placeholder="Responsible department"
             />
           </FieldWrapper>
           <FieldWrapper label="Cost impact" error={incidentErrors.costImpact}>
@@ -2971,7 +3018,7 @@ export function InventoryModuleScreen({
               onChange={(event) =>
                 setIncidentForm((current) => ({ ...current, costImpact: event.target.value }))
               }
-                placeholder="3600"
+                placeholder="Cost impact amount"
               />
             </FieldWrapper>
           {selectedIncidentItem ? (
@@ -2990,7 +3037,7 @@ export function InventoryModuleScreen({
                 onChange={(event) =>
                   setIncidentForm((current) => ({ ...current, reason: event.target.value }))
                 }
-                placeholder="Dropped during practical clean-up after chemistry session."
+                    placeholder="Reason for the damage or loss"
               />
             </FieldWrapper>
           </div>

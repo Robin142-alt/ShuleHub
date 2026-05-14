@@ -1,5 +1,4 @@
 import { createServerAuthClient } from "@/lib/auth/server-auth-client";
-import { schoolDemoCredentials, superadminDemoCredentials, portalDemoCredentials } from "@/lib/auth/demo-credentials";
 
 function buildRequest(host: string) {
   return {
@@ -11,11 +10,21 @@ function buildRequest(host: string) {
   } as unknown as Request;
 }
 
-describe("server auth client redirect targets", () => {
+function jsonResponse(body: unknown, init?: ResponseInit) {
+  return {
+    status: init?.status ?? 200,
+    ok: (init?.status ?? 200) >= 200 && (init?.status ?? 200) < 300,
+    json: async () => body,
+  } as Response;
+}
+
+describe("server auth client production gateway", () => {
   const originalApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
   const originalApiBaseDomain = process.env.NEXT_PUBLIC_API_BASE_DOMAIN;
 
   beforeEach(() => {
+    jest.restoreAllMocks();
+    Object.assign(global, { fetch: jest.fn() });
     delete process.env.NEXT_PUBLIC_API_BASE_URL;
     delete process.env.NEXT_PUBLIC_API_BASE_DOMAIN;
   });
@@ -34,79 +43,151 @@ describe("server auth client redirect targets", () => {
     }
   });
 
-  it("routes superadmin logins to the superadmin compatibility home", async () => {
-    const client = createServerAuthClient(buildRequest("shule-hub-erp.vercel.app"));
+  it("rejects sign-in when the live backend is unavailable", async () => {
+    const client = createServerAuthClient(buildRequest("localhost:3000"));
+
+    await expect(
+      client.login({
+        audience: "superadmin",
+        identifier: "system.owner@example.invalid",
+        password: "ManagedByPasswordVault!42",
+      }),
+    ).rejects.toThrow("Authentication service is temporarily unavailable.");
+  });
+
+  it("routes superadmin sign-in through the backend instead of local credentials", async () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.invalid";
+    const fetchMock = jest.mocked(global.fetch).mockResolvedValue(
+      jsonResponse({
+        tokens: {
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+        },
+        user: {
+          user_id: "user-platform-owner",
+          tenant_id: null,
+          role: "platform_owner",
+          audience: "superadmin",
+          email: "system.owner@example.invalid",
+          display_name: "System Owner",
+          permissions: ["*:*"],
+          session_id: "session-platform-owner",
+        },
+      }),
+    );
+    const client = createServerAuthClient(buildRequest("localhost:3000"));
 
     const session = await client.login({
       audience: "superadmin",
-      identifier: superadminDemoCredentials.email,
-      password: superadminDemoCredentials.password,
-      verificationCode: superadminDemoCredentials.verificationCode,
+      identifier: "system.owner@example.invalid",
+      password: "ManagedByPasswordVault!42",
+      verificationCode: "provided-by-email",
     });
 
     expect(session.homePath).toBe("/superadmin");
     expect(session.redirectTo).toBe("/superadmin");
+    expect(session.user.tenant_id).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.invalid/auth/login",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "x-auth-audience": "superadmin",
+        }),
+        body: JSON.stringify({
+          email: "system.owner@example.invalid",
+          password: "ManagedByPasswordVault!42",
+          audience: "superadmin",
+          verification_code: "provided-by-email",
+        }),
+      }),
+    );
   });
 
-  it("routes school logins to the role-specific school compatibility home", async () => {
-    const client = createServerAuthClient(buildRequest("shule-hub-erp.vercel.app"));
-
-    const session = await client.login({
-      audience: "school",
-      identifier: schoolDemoCredentials.bursar.identifier,
-      password: schoolDemoCredentials.bursar.password,
-      tenantSlug: "barakaacademy",
-    });
-
-    expect(session.homePath).toBe("/school/bursar");
-    expect(session.redirectTo).toBe("/school/bursar");
-  });
-
-  it("routes seeded storekeeper accounts to the dedicated inventory workspace", async () => {
-    const client = createServerAuthClient(buildRequest("shule-hub-erp.vercel.app"));
-
-    const session = await client.login({
-      audience: "school",
-      identifier: "storekeeper@amani-prep.demo.shulehub.ke",
-      password: "Demo@12345",
-      tenantSlug: "amani-prep",
-    });
-
-    expect(session.homePath).toBe("/inventory/dashboard");
-    expect(session.redirectTo).toBe("/inventory/dashboard");
-    expect(session.role).toBe("storekeeper");
-    expect(session.tenantSlug).toBe("amani-prep");
-    expect(session.user.display_name).toBe("Storekeeper Amani Prep");
-    expect(session.user.permissions).toEqual([
-      "inventory.view",
-      "inventory.issue",
-      "inventory.receive",
-      "inventory.adjust",
-      "inventory.transfer",
-      "inventory.reports",
-    ]);
-  });
-
-  it("keeps seeded school staff accounts scoped to their tenant code", async () => {
-    const client = createServerAuthClient(buildRequest("shule-hub-erp.vercel.app"));
+  it("requires an explicit tenant workspace for school sign-in", async () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.invalid";
+    const client = createServerAuthClient(buildRequest("localhost:3000"));
 
     await expect(
       client.login({
         audience: "school",
-        identifier: "admissions@amani-prep.demo.shulehub.ke",
-        password: "Demo@12345",
-        tenantSlug: "baraka-academy",
+        identifier: "admin@example.invalid",
+        password: "ManagedByPasswordVault!42",
       }),
-    ).rejects.toThrow("Use one of the listed staff review accounts");
+    ).rejects.toThrow("School workspace is required.");
   });
 
-  it("routes portal logins to the viewer-specific portal compatibility home", async () => {
+  it("routes school staff to the backend tenant context and role home", async () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.invalid";
+    const fetchMock = jest.mocked(global.fetch).mockResolvedValue(
+      jsonResponse({
+        tokens: {
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+        },
+        user: {
+          user_id: "user-school-admin",
+          tenant_id: "school-alpha",
+          role: "admin",
+          audience: "school",
+          email: "admin@example.invalid",
+          display_name: "School Admin",
+          permissions: ["students:read"],
+          session_id: "session-school-admin",
+        },
+      }),
+    );
+    const client = createServerAuthClient(buildRequest("shule-hub-erp.vercel.app"));
+
+    const session = await client.login({
+      audience: "school",
+      identifier: "admin@example.invalid",
+      password: "ManagedByPasswordVault!42",
+      tenantSlug: "school-alpha",
+    });
+
+    expect(session.homePath).toBe("/school/admin");
+    expect(session.redirectTo).toBe("/school/admin");
+    expect(session.tenantSlug).toBe("school-alpha");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.invalid/auth/login",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "x-auth-audience": "school",
+          "x-tenant-id": "school-alpha",
+        }),
+      }),
+    );
+  });
+
+  it("routes portal sign-in through the backend and keeps viewer-specific destinations", async () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.invalid";
+    jest.mocked(global.fetch).mockResolvedValue(
+      jsonResponse({
+        tokens: {
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+        },
+        user: {
+          user_id: "user-student",
+          tenant_id: "school-alpha",
+          role: "student",
+          audience: "portal",
+          email: "student@example.invalid",
+          display_name: "Student",
+          permissions: ["portal:read"],
+          session_id: "session-student",
+        },
+      }),
+    );
     const client = createServerAuthClient(buildRequest("shule-hub-erp.vercel.app"));
 
     const session = await client.login({
       audience: "portal",
-      identifier: portalDemoCredentials.student.identifier,
-      password: portalDemoCredentials.student.password,
+      identifier: "student@example.invalid",
+      password: "ManagedByPasswordVault!42",
+      tenantSlug: "school-alpha",
     });
 
     expect(session.homePath).toBe("/portal/student");

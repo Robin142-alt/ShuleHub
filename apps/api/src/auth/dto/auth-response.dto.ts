@@ -15,6 +15,8 @@ export class AuthenticatedUserDto {
   audience!: 'superadmin' | 'school' | 'portal';
   email!: string;
   display_name!: string;
+  email_verified!: boolean;
+  email_verified_at!: string | null;
   permissions!: string[];
   session_id!: string;
 }

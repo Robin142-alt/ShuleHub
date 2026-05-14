@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { SchoolPages } from "@/components/school/school-pages";
+import { isProductionReadyModule } from "@/lib/features/module-readiness";
 import { readSchoolRequestContext } from "@/lib/routing/experience-context";
 import { isSchoolSection, type SchoolSection } from "@/lib/routing/experience-routes";
 
@@ -12,7 +13,7 @@ export default async function InternalSchoolSectionPage({
   const context = await readSchoolRequestContext();
   const { section } = await params;
 
-  if (!isSchoolSection(section)) {
+  if (!isSchoolSection(section) || !isProductionReadyModule(section)) {
     notFound();
   }
 

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { SchoolPages } from "@/components/school/school-pages";
 import type { SchoolExperienceRole } from "@/lib/experiences/types";
+import { isProductionReadyModule } from "@/lib/features/module-readiness";
 import { readPublicSchoolSession } from "@/lib/routing/public-experience-session";
 import { isSchoolSection } from "@/lib/routing/experience-routes";
 
@@ -24,7 +25,7 @@ export default async function SchoolSectionPage({
     notFound();
   }
 
-  if (!isSchoolSection(section)) {
+  if (!isSchoolSection(section) || !isProductionReadyModule(section)) {
     notFound();
   }
 

@@ -6,6 +6,7 @@ import type {
   SupportStatus,
   SupportTicket,
 } from "@/lib/support/support-data";
+import { getCsrfToken } from "@/lib/auth/csrf-client";
 
 export type LiveSupportTicketRecord = {
   id: string;
@@ -87,6 +88,23 @@ export type LiveSystemStatusPayload = {
     update_summary?: string | null;
     updated_at?: string | null;
   }>;
+  active_incidents?: Array<{
+    id: string;
+    title: string;
+    impact: string;
+    status: string;
+    update_summary?: string | null;
+    updated_at?: string | null;
+  }>;
+  historical_incidents?: Array<{
+    id: string;
+    title: string;
+    impact: string;
+    status: string;
+    update_summary?: string | null;
+    updated_at?: string | null;
+  }>;
+  generated_at?: string;
 };
 
 export type LiveSupportAnalyticsPayload = {
@@ -97,11 +115,56 @@ export type LiveSupportAnalyticsPayload = {
   ticket_heatmap?: Array<{ day: string; total: number }>;
 };
 
+export type LiveSupportNotificationRecord = {
+  id: string;
+  tenant_id: string;
+  ticket_id?: string | null;
+  recipient_user_id?: string | null;
+  recipient_type: "school" | "support";
+  channel: "in_app" | "email" | "sms";
+  title: string;
+  body: string;
+  delivery_status: string;
+  delivery_attempts?: number | string | null;
+  last_delivery_error?: string | null;
+  next_delivery_attempt_at?: string | null;
+  delivered_at?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at: string;
+  ticket_number?: string | null;
+  ticket_subject?: string | null;
+  school_name?: string | null;
+};
+
 export type SupportAnalyticsView = {
   metrics: Array<{ id: string; label: string; value: string; helper: string }>;
   recurringIssues: string[];
   heatmap: Array<{ day: string; tickets: number }>;
 };
+
+export type SupportNotificationDeliveryView = {
+  id: string;
+  ticketNumber: string;
+  schoolName: string;
+  title: string;
+  channel: string;
+  attempts: number;
+  error: string;
+  createdAt: string;
+};
+
+type ApiEnvelope<T> = {
+  data: T;
+  meta?: Record<string, unknown>;
+};
+
+function isEnvelope<T>(value: unknown): value is ApiEnvelope<T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "data" in value
+  );
+}
 
 export function mapLiveSupportTicket(record: LiveSupportTicketRecord): SupportTicket {
   const context = normalizeContext(record.context);
@@ -212,6 +275,21 @@ export function mapLiveSupportAnalytics(payload: LiveSupportAnalyticsPayload): S
       day: formatHeatmapDay(point.day),
       tickets: Number(point.total ?? 0),
     })),
+  };
+}
+
+export function mapLiveSupportNotificationDeadLetter(
+  record: LiveSupportNotificationRecord,
+): SupportNotificationDeliveryView {
+  return {
+    id: record.id,
+    ticketNumber: record.ticket_number ?? stringValue(record.metadata?.ticket_number, "Unlinked notification"),
+    schoolName: record.school_name ?? record.tenant_id,
+    title: record.title,
+    channel: record.channel,
+    attempts: Number(record.delivery_attempts ?? 0),
+    error: record.last_delivery_error ?? "Delivery failed without a provider error.",
+    createdAt: formatSupportTimestamp(record.created_at),
   };
 }
 
@@ -448,12 +526,29 @@ export async function fetchSystemStatusLive(tenantSlug?: string | null) {
   return mapLiveSystemStatus(payload);
 }
 
+export async function fetchPublicSystemStatusLive() {
+  const payload = await requestPublicSupport<LiveSystemStatusPayload>(
+    "/public/system-status",
+  );
+
+  return mapLiveSystemStatus(payload);
+}
+
 export async function fetchSupportAnalyticsLive() {
   const payload = await requestSupportProxy<LiveSupportAnalyticsPayload>(
     "/admin/analytics?audience=superadmin",
   );
 
   return mapLiveSupportAnalytics(payload);
+}
+
+export async function fetchSupportNotificationDeadLettersLive() {
+  const records = await requestSupportProxy<LiveSupportNotificationRecord[]>(
+    "/admin/notifications/dead-letter",
+    { audience: "superadmin" },
+  );
+
+  return records.map(mapLiveSupportNotificationDeadLetter);
 }
 
 async function requestSupportProxy<T>(
@@ -471,20 +566,28 @@ async function requestSupportProxy<T>(
   if (options?.tenantSlug) params.set("tenantSlug", options.tenantSlug);
   if (options?.audience) params.set("audience", options.audience);
 
+  const method = options?.method ?? "GET";
+  const csrfHeaders: Record<string, string> =
+    method === "GET" ? {} : { "x-shulehub-csrf": await getCsrfToken() };
   const separator = path.includes("?") ? "&" : "?";
   const query = params.toString();
   const response = await fetch(`/api/support${path}${query ? `${separator}${query}` : ""}`, {
-    method: options?.method ?? "GET",
+    method,
     credentials: "same-origin",
     headers: options?.formData
-      ? undefined
+      ? csrfHeaders
       : {
           Accept: "application/json",
+          ...csrfHeaders,
           ...(options?.body ? { "Content-Type": "application/json" } : {}),
         },
     body: options?.formData ?? (options?.body ? JSON.stringify(options.body) : undefined),
   });
-  const payload = (await response.json().catch(() => null)) as T | { message?: string } | null;
+  const payload = (await response.json().catch(() => null)) as
+    | T
+    | ApiEnvelope<T>
+    | { message?: string }
+    | null;
 
   if (!response.ok) {
     const message =
@@ -495,7 +598,33 @@ async function requestSupportProxy<T>(
     throw new Error(message);
   }
 
-  return payload as T;
+  return isEnvelope<T>(payload) ? payload.data : payload as T;
+}
+
+async function requestPublicSupport<T>(path: string): Promise<T> {
+  const response = await fetch(`/api/support${path}`, {
+    method: "GET",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | T
+    | ApiEnvelope<T>
+    | { message?: string }
+    | null;
+
+  if (!response.ok) {
+    const message =
+      payload && typeof payload === "object" && "message" in payload && payload.message
+        ? payload.message
+        : "System status is not available right now.";
+
+    throw new Error(message);
+  }
+
+  return isEnvelope<T>(payload) ? payload.data : payload as T;
 }
 
 function mapLiveMessage(record: LiveSupportMessageRecord): SupportMessage {

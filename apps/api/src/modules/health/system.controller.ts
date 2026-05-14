@@ -2,7 +2,6 @@ import { Controller, Get, Header } from '@nestjs/common';
 
 import { Public } from '../../auth/decorators/public.decorator';
 import { SkipResponseEnvelope } from '../../common/decorators/skip-response-envelope.decorator';
-import { renderErpPortal } from './erp-portal.template';
 import { renderSystemDashboard } from './system-dashboard.template';
 
 @Controller()
@@ -12,7 +11,7 @@ export class SystemController {
   @SkipResponseEnvelope()
   @Header('content-type', 'text/html; charset=utf-8')
   getRoot(): string {
-    return renderErpPortal();
+    return renderSystemDashboard();
   }
 
   @Public()
@@ -20,7 +19,7 @@ export class SystemController {
   @SkipResponseEnvelope()
   @Header('content-type', 'text/html; charset=utf-8')
   getDashboard(): string {
-    return renderErpPortal();
+    return renderSystemDashboard();
   }
 
   @Public()
@@ -28,7 +27,7 @@ export class SystemController {
   @SkipResponseEnvelope()
   @Header('content-type', 'text/html; charset=utf-8')
   getApp(): string {
-    return renderErpPortal();
+    return renderSystemDashboard();
   }
 
   @Public()

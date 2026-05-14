@@ -10,12 +10,17 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 
 import { Permissions } from '../../auth/decorators/permissions.decorator';
+import { StreamingUploadInterceptor } from '../../common/uploads/streaming-upload.interceptor';
+import {
+  ReportExportQueueService,
+  type QueueReportExportRequest,
+} from '../../common/reports/report-export-queue';
 import { CreateApplicationDto, UpdateApplicationDto } from './dto/create-application.dto';
 import { ListAdmissionsQueryDto } from './dto/list-admissions-query.dto';
 import {
+  AdvanceAcademicLifecycleDto,
   CreateAllocationDto,
   CreateTransferRecordDto,
   RegisterApplicationDto,
@@ -25,11 +30,12 @@ import {
 import { AdmissionsService } from './admissions.service';
 import type { UploadedBinaryFile } from './storage/local-document-storage.service';
 
-const { memoryStorage } = require('multer');
-
 @Controller('admissions')
 export class AdmissionsController {
-  constructor(private readonly admissionsService: AdmissionsService) {}
+  constructor(
+    private readonly admissionsService: AdmissionsService,
+    private readonly reportExportQueueService: ReportExportQueueService,
+  ) {}
 
   @Get('summary')
   @Permissions('admissions:read')
@@ -60,7 +66,7 @@ export class AdmissionsController {
 
   @Post('applications/:applicationId/documents')
   @Permissions('documents:write')
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  @UseInterceptors(StreamingUploadInterceptor('file'))
   uploadApplicationDocument(
     @Param('applicationId', new ParseUUIDPipe()) applicationId: string,
     @Body() dto: UploadApplicationDocumentDto,
@@ -88,6 +94,15 @@ export class AdmissionsController {
   @Permissions('admissions:read')
   getStudentProfile(@Param('studentId', new ParseUUIDPipe()) studentId: string) {
     return this.admissionsService.getStudentProfile(studentId);
+  }
+
+  @Post('students/:studentId/academic-lifecycle')
+  @Permissions('admissions:write', 'students:write')
+  advanceStudentAcademicLifecycle(
+    @Param('studentId', new ParseUUIDPipe()) studentId: string,
+    @Body() dto: AdvanceAcademicLifecycleDto,
+  ) {
+    return this.admissionsService.advanceStudentAcademicLifecycle(studentId, dto);
   }
 
   @Get('parents')
@@ -136,6 +151,27 @@ export class AdmissionsController {
   @Permissions('transfers:write')
   createTransfer(@Body() dto: CreateTransferRecordDto) {
     return this.admissionsService.createTransfer(dto);
+  }
+
+  @Post('reports/:reportId/export-jobs')
+  @Permissions('admissions:read')
+  queueReportExport(
+    @Param('reportId') reportId: string,
+    @Body() body: QueueReportExportRequest = {},
+  ) {
+    return this.reportExportQueueService.enqueueCurrentRequestReportExport({
+      module: 'admissions',
+      report_id: reportId,
+      format: body.format ?? 'csv',
+      filters: body.filters,
+      estimated_rows: body.estimated_rows,
+    });
+  }
+
+  @Get('reports/:reportId/export')
+  @Permissions('admissions:read')
+  exportReport(@Param('reportId') reportId: string) {
+    return this.admissionsService.exportReportCsv(reportId);
   }
 
   @Get('reports')

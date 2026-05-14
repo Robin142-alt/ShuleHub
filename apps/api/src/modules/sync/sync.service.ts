@@ -14,10 +14,8 @@ import {
   SYNC_DEFAULT_PULL_LIMIT,
   SYNC_SUPPORTED_ENTITIES,
 } from './sync.constants';
-import { AttendanceSyncConflictResolverService } from './conflict-resolvers/attendance-sync-conflict-resolver.service';
 import { FinanceSyncConflictResolverService } from './conflict-resolvers/finance-sync-conflict-resolver.service';
 import { SyncEntity, SyncOperationLog, SyncPushOperationInput } from './sync.types';
-import { AttendanceRecordsRepository } from './repositories/attendance-records.repository';
 import { SyncCursorsRepository } from './repositories/sync-cursors.repository';
 import { SyncDevicesRepository } from './repositories/sync-devices.repository';
 import { SyncOperationLogsRepository } from './repositories/sync-operation-logs.repository';
@@ -31,9 +29,7 @@ export class SyncService {
     private readonly syncDevicesRepository: SyncDevicesRepository,
     private readonly syncCursorsRepository: SyncCursorsRepository,
     private readonly syncOperationLogsRepository: SyncOperationLogsRepository,
-    private readonly attendanceRecordsRepository: AttendanceRecordsRepository,
     private readonly syncOperationLogService: SyncOperationLogService,
-    private readonly attendanceResolver: AttendanceSyncConflictResolverService,
     private readonly financeResolver: FinanceSyncConflictResolverService,
     @Optional() private readonly sloMetrics?: SloMetricsService,
   ) {}
@@ -85,6 +81,7 @@ export class SyncService {
         const results = [];
 
         for (const operation of dto.operations) {
+          this.syncOperationLogService.ensureSupportedEntity(operation.entity);
           const existingOperation = await this.syncOperationLogsRepository.findByOpId(
             tenantId,
             operation.op_id,
@@ -98,14 +95,8 @@ export class SyncService {
               client_version: operation.version,
               server_version: existingOperation.version,
               reason: 'Operation has already been applied',
-              conflict_policy:
-                operation.entity === 'attendance'
-                  ? ('last-write-wins' as const)
-                  : ('server-authoritative' as const),
-              server_state:
-                operation.entity === 'attendance'
-                  ? await this.buildAttendanceServerState(tenantId, existingOperation)
-                  : null,
+              conflict_policy: 'server-authoritative' as const,
+              server_state: null,
             });
             continue;
           }
@@ -116,17 +107,6 @@ export class SyncService {
             payload: operation.payload as unknown as SyncPushOperationInput['payload'],
             version: operation.version,
           };
-
-          if (operation.entity === 'attendance') {
-            results.push(
-              await this.attendanceResolver.applyOperation(
-                tenantId,
-                dto.device_id,
-                operationInput as SyncPushOperationInput<'attendance'>,
-              ),
-            );
-            continue;
-          }
 
           results.push(
             await this.financeResolver.applyOperation(
@@ -293,67 +273,6 @@ export class SyncService {
     }
 
     return cursorMap;
-  }
-
-  private async buildAttendanceServerState(
-    tenantId: string,
-    operation: SyncOperationLog,
-  ): Promise<Record<string, unknown> | null> {
-    if (operation.entity !== 'attendance') {
-      return null;
-    }
-
-    const payload = operation.payload as {
-      record_id?: string;
-      student_id?: string;
-      attendance_date?: string;
-    };
-
-    if (!payload.record_id) {
-      return null;
-    }
-
-    const record = await this.attendanceRecordsRepository.lockById(tenantId, payload.record_id);
-
-    if (!record && payload.student_id && payload.attendance_date) {
-      const recordByNaturalKey = await this.attendanceRecordsRepository.lockByStudentAndDate(
-        tenantId,
-        payload.student_id,
-        payload.attendance_date,
-      );
-
-      if (recordByNaturalKey) {
-        return {
-          record_id: recordByNaturalKey.id,
-          student_id: recordByNaturalKey.student_id,
-          attendance_date: recordByNaturalKey.attendance_date,
-          status: recordByNaturalKey.status,
-          last_modified_at: recordByNaturalKey.last_modified_at.toISOString(),
-          notes: recordByNaturalKey.notes,
-          metadata: recordByNaturalKey.metadata,
-          source_device_id: recordByNaturalKey.source_device_id,
-          last_operation_id: recordByNaturalKey.last_operation_id,
-          sync_version: recordByNaturalKey.sync_version,
-        };
-      }
-    }
-
-    if (!record) {
-      return null;
-    }
-
-    return {
-      record_id: record.id,
-      student_id: record.student_id,
-      attendance_date: record.attendance_date,
-      status: record.status,
-      last_modified_at: record.last_modified_at.toISOString(),
-      notes: record.notes,
-      metadata: record.metadata,
-      source_device_id: record.source_device_id,
-      last_operation_id: record.last_operation_id,
-      sync_version: record.sync_version,
-    };
   }
 
   private maxVersion(left: string, right: string): string {

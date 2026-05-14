@@ -36,6 +36,12 @@ import { SecurityModule } from './modules/security/security.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { AdmissionsModule } from './modules/admissions/admissions.module';
 import { SupportModule } from './modules/support/support.module';
+import { PlatformModule } from './modules/platform/platform.module';
+import { AcademicsModule } from './modules/academics/academics.module';
+import { ExamsModule } from './modules/exams/exams.module';
+import { HrModule } from './modules/hr/hr.module';
+import { LibraryModule } from './modules/library/library.module';
+import { TimetableModule } from './modules/timetable/timetable.module';
 
 @Module({
   imports: [
@@ -60,6 +66,12 @@ import { SupportModule } from './modules/support/support.module';
     InventoryModule,
     AdmissionsModule,
     SupportModule,
+    PlatformModule,
+    AcademicsModule,
+    ExamsModule,
+    HrModule,
+    LibraryModule,
+    TimetableModule,
     FinanceModule,
     SyncModule,
     StudentsModule,

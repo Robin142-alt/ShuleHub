@@ -87,7 +87,6 @@ export const supportSidebarItems: ExperienceNavItem[] = [
     href: toSchoolPath("support-my-tickets"),
     icon: Inbox,
     group: "Support Center",
-    badge: "3",
   },
   {
     id: "support-knowledge-base",
@@ -112,7 +111,6 @@ export const adminSupportSidebarItems: ExperienceNavItem[] = [
     href: toSuperadminPath("support"),
     icon: LifeBuoy,
     group: "Support",
-    badge: "12",
   },
   {
     id: "support-open",
@@ -120,7 +118,6 @@ export const adminSupportSidebarItems: ExperienceNavItem[] = [
     href: toSuperadminPath("support-open"),
     icon: Inbox,
     group: "Support",
-    badge: "5",
   },
   {
     id: "support-in-progress",
@@ -135,7 +132,6 @@ export const adminSupportSidebarItems: ExperienceNavItem[] = [
     href: toSuperadminPath("support-escalated"),
     icon: Clock3,
     group: "Support",
-    badge: "2",
   },
   {
     id: "support-resolved",
@@ -163,7 +159,6 @@ export const adminSupportSidebarItems: ExperienceNavItem[] = [
 export const supportCategories = [
   "Finance",
   "MPESA",
-  "Attendance",
   "Exams",
   "Timetable",
   "Inventory",
@@ -179,7 +174,6 @@ export const supportCategories = [
 export const supportModules = [
   "Finance",
   "MPESA",
-  "Attendance",
   "Exams",
   "Timetable",
   "Inventory",
@@ -212,177 +206,32 @@ export const knowledgeBaseArticles = [
     category: "Performance",
     title: "Dashboard feels slow after term opening",
     summary:
-      "Term opening creates high SMS, payment, and attendance traffic. Confirm system status first.",
+      "Term opening creates high SMS, payment, and reporting traffic. Confirm system status first.",
     tags: ["performance", "queues", "dashboard"],
   },
 ];
 
 export const systemStatusComponents = [
-  { id: "api", name: "API status", status: "Operational", uptime: "99.98%", latency: "182ms" },
-  { id: "payments", name: "Payment systems", status: "Operational", uptime: "99.96%", latency: "240ms" },
-  { id: "mpesa", name: "MPESA integrations", status: "Degraded", uptime: "99.90%", latency: "410ms" },
-  { id: "queues", name: "Queues", status: "Operational", uptime: "99.95%", latency: "95ms" },
-  { id: "dashboards", name: "Uptime", status: "Operational", uptime: "99.99%", latency: "160ms" },
+  { id: "api", name: "API status", status: "Telemetry pending", uptime: "Connect status API", latency: "N/A" },
+  { id: "payments", name: "Payment systems", status: "Telemetry pending", uptime: "Connect status API", latency: "N/A" },
+  { id: "mpesa", name: "MPESA integrations", status: "Telemetry pending", uptime: "Connect status API", latency: "N/A" },
+  { id: "queues", name: "Queues", status: "Telemetry pending", uptime: "Connect status API", latency: "N/A" },
+  { id: "dashboards", name: "Uptime", status: "Telemetry pending", uptime: "Connect status API", latency: "N/A" },
 ];
 
 export const supportAnalytics = {
   metrics: [
-    { id: "unresolved", label: "Unresolved tickets", value: "42", helper: "Open, in progress, waiting, and escalated" },
-    { id: "breach", label: "SLA breach risk", value: "7", helper: "First response or resolution due inside 30 minutes" },
-    { id: "critical", label: "Critical tickets", value: "2", helper: "Instant escalation and support visibility" },
-    { id: "response", label: "Median first response", value: "18m", helper: "Across the last 7 days" },
+    { id: "unresolved", label: "Unresolved tickets", value: "0", helper: "No live support data loaded" },
+    { id: "breach", label: "SLA breach risk", value: "0", helper: "No overdue live tickets" },
+    { id: "critical", label: "Critical tickets", value: "0", helper: "Instant escalation and support visibility" },
+    { id: "response", label: "Median first response", value: "N/A", helper: "Available after real tickets are created" },
   ],
-  recurringIssues: [
-    "Recurring MPESA callback failures",
-    "Login resets after staff turnover",
-    "Report export timeouts during term opening",
-  ],
-  heatmap: [
-    { day: "Mon", tickets: 18 },
-    { day: "Tue", tickets: 24 },
-    { day: "Wed", tickets: 16 },
-    { day: "Thu", tickets: 31 },
-    { day: "Fri", tickets: 22 },
-  ],
+  recurringIssues: [],
+  heatmap: [],
 };
 
 export function createSupportTickets(): SupportTicket[] {
-  return [
-    {
-      id: "ticket-critical-mpesa",
-      ticketNumber: "SUP-2026-000145",
-      tenantId: "tenant-baraka",
-      tenantSlug: "barakaacademy",
-      schoolName: "Baraka Academy",
-      subject: "MPESA callbacks are failing",
-      category: "MPESA",
-      priority: "Critical",
-      moduleAffected: "MPESA",
-      description:
-        "Parents are paying, callbacks return intermittently, and receipts stay unmatched in the finance workspace.",
-      status: "Escalated",
-      owner: "Mercy Otieno",
-      requester: "Joseph Kamau",
-      updatedAt: "8 min ago",
-      firstResponseDue: "08:15 EAT",
-      resolutionDue: "10:00 EAT",
-      context: {
-        requestId: "req-support-1",
-        browser: "Chrome 124",
-        device: "Android phone",
-        pageUrl: "/school/admin/mpesa",
-        appVersion: "2026.05.08",
-        errorLogs: ["POST /mpesa/callback 500", "receipt QJT8V9H33 unmatched"],
-      },
-      attachments: [
-        {
-          id: "att-callback-log",
-          name: "mpesa-callback.log",
-          type: "text/plain",
-          size: "18 KB",
-          storedPath: "tenant/barakaacademy/support/SUP-2026-000145/mpesa-callback.log",
-        },
-      ],
-      messages: [
-        {
-          id: "msg-school-1",
-          author: "Joseph Kamau",
-          authorType: "school",
-          body: "Parents are paying but several callbacks are not matching learners.",
-          createdAt: "08:00 EAT",
-        },
-        {
-          id: "msg-support-1",
-          author: "Mercy Otieno",
-          authorType: "support",
-          body: "We have isolated the Daraja callback retry issue and are monitoring receipts.",
-          createdAt: "08:08 EAT",
-        },
-      ],
-      internalNotes: [
-        {
-          id: "note-1",
-          author: "Mercy Otieno",
-          body: "Bug confirmed. Deploying fix tonight.",
-          createdAt: "08:11 EAT",
-        },
-      ],
-    },
-    {
-      id: "ticket-login-reset",
-      ticketNumber: "SUP-2026-000146",
-      tenantId: "tenant-amani",
-      tenantSlug: "amaniprep",
-      schoolName: "Amani Prep School",
-      subject: "Principal access reset needed",
-      category: "Login Issues",
-      priority: "High",
-      moduleAffected: "Login",
-      description: "The principal changed phones and cannot finish the password recovery challenge.",
-      status: "In Progress",
-      owner: "Kelvin Maina",
-      requester: "Grace Njeri",
-      updatedAt: "21 min ago",
-      firstResponseDue: "09:30 EAT",
-      resolutionDue: "12:30 EAT",
-      context: {
-        requestId: "req-support-2",
-        browser: "Safari 17",
-        device: "iPhone",
-        pageUrl: "/school/principal/settings",
-        appVersion: "2026.05.08",
-        errorLogs: [],
-      },
-      attachments: [],
-      messages: [
-        {
-          id: "msg-access",
-          author: "Grace Njeri",
-          authorType: "school",
-          body: "We need a safe reset for the principal account.",
-          createdAt: "07:44 EAT",
-        },
-      ],
-      internalNotes: [],
-    },
-    {
-      id: "ticket-timetable-import",
-      ticketNumber: "SUP-2026-000147",
-      tenantId: "tenant-mombasa",
-      tenantSlug: "mombasacbc",
-      schoolName: "Mombasa CBC Centre",
-      subject: "Timetable import help",
-      category: "Timetable",
-      priority: "Medium",
-      moduleAffected: "Timetable",
-      description: "The deputy principal needs help importing next term's timetable.",
-      status: "Waiting for School",
-      owner: "Mercy Otieno",
-      requester: "Daniel Ouma",
-      updatedAt: "53 min ago",
-      firstResponseDue: "11:00 EAT",
-      resolutionDue: "Tomorrow",
-      context: {
-        requestId: "req-support-3",
-        browser: "Edge 124",
-        device: "Windows laptop",
-        pageUrl: "/school/admin/timetable",
-        appVersion: "2026.05.08",
-        errorLogs: [],
-      },
-      attachments: [],
-      messages: [
-        {
-          id: "msg-timetable",
-          author: "Daniel Ouma",
-          authorType: "school",
-          body: "Can support review our timetable template before import?",
-          createdAt: "07:09 EAT",
-        },
-      ],
-      internalNotes: [],
-    },
-  ];
+  return [];
 }
 
 export function priorityTone(priority: SupportPriority) {

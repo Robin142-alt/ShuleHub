@@ -45,6 +45,24 @@ export interface InventoryStockMovementRecord {
   created_at?: Date;
 }
 
+export interface InventoryStockMutationRecord {
+  item: InventoryItemRecord;
+  before_quantity: number;
+  after_quantity: number;
+}
+
+export interface InventoryLocationTransferRecord {
+  source_before_quantity: number;
+  source_after_quantity: number;
+  destination_before_quantity: number;
+  destination_after_quantity: number;
+}
+
+export interface InventoryLocationBalanceMutationRecord {
+  before_quantity: number;
+  after_quantity: number;
+}
+
 export interface InventoryPurchaseOrderRecord {
   id: string;
   tenant_id: string;
@@ -71,6 +89,16 @@ export interface InventoryCategoryRecord {
   description: string | null;
 }
 
+export interface InventoryLocationRecord {
+  id: string;
+  tenant_id: string;
+  code: string;
+  name: string;
+  status: string;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
 export interface InventorySupplierRecord {
   id: string;
   supplier_name: string;
@@ -90,6 +118,64 @@ export interface InventoryTransferRecord {
   status: string;
   requested_by: string;
   lines: Array<Record<string, unknown>>;
+  notes: string | null;
+}
+
+export interface InventoryRequestRecord {
+  id: string;
+  request_number: string;
+  department: string;
+  requested_by: string;
+  status: string;
+  needed_by?: string | null;
+  priority?: string | null;
+  lines: Array<Record<string, unknown>>;
+  notes: string | null;
+}
+
+export interface InventoryReservationRecord {
+  id: string;
+  tenant_id: string;
+  request_id: string;
+  item_id: string;
+  quantity: number;
+  status: string;
+  reserved_by_user_id?: string | null;
+  reserved_at?: Date;
+  fulfilled_at?: Date | null;
+  cancelled_at?: Date | null;
+}
+
+export interface InventoryReservedRequestLineRecord {
+  reservation_id: string;
+  item_id: string;
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+}
+
+export interface InventoryRequestBackorderRecord {
+  id: string;
+  tenant_id: string;
+  request_id: string;
+  item_id: string;
+  requested_quantity: number;
+  reserved_quantity: number;
+  backordered_quantity: number;
+  status: string;
+  resolved_at?: Date | null;
+}
+
+export interface InventoryStockCountSnapshotRecord {
+  id: string;
+  tenant_id: string;
+  snapshot_number: string;
+  location_code: string | null;
+  counted_at: Date | string;
+  counted_by_user_id: string | null;
+  status: string;
+  lines: Array<Record<string, unknown>>;
+  variance_count: number;
   notes: string | null;
 }
 
@@ -534,6 +620,498 @@ export class InventoryRepository {
     return result.rows[0] ? this.mapItem(result.rows[0]) : null;
   }
 
+  async setItemStockFromCount(
+    tenantId: string,
+    itemId: string,
+    countedQuantity: number,
+  ): Promise<InventoryStockMutationRecord | null> {
+    const result = await this.databaseService.query<InventoryRow & {
+      before_quantity: number;
+      after_quantity: number;
+    }>(
+      `
+        WITH locked_item AS (
+          SELECT
+            id,
+            quantity_on_hand AS before_quantity
+          FROM inventory_items
+          WHERE tenant_id = $1
+            AND id = $2::uuid
+          FOR UPDATE
+        ),
+        updated_item AS (
+          UPDATE inventory_items AS item
+          SET quantity_on_hand = $3,
+              updated_at = NOW()
+          FROM locked_item
+          WHERE item.tenant_id = $1
+            AND item.id = locked_item.id
+          RETURNING
+            item.id,
+            item.tenant_id,
+            item.item_name,
+            item.sku,
+            item.category_id,
+            item.unit,
+            item.quantity_on_hand,
+            item.unit_price,
+            item.reorder_level,
+            item.supplier_id,
+            item.storage_location,
+            item.notes,
+            item.status,
+            item.is_archived,
+            item.created_at,
+            item.updated_at,
+            locked_item.before_quantity,
+            item.quantity_on_hand AS after_quantity
+        )
+        SELECT *
+        FROM updated_item
+      `,
+      [tenantId, itemId, countedQuantity],
+    );
+
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      item: this.mapItem(row),
+      before_quantity: Number(row.before_quantity),
+      after_quantity: Number(row.after_quantity),
+    };
+  }
+
+  async adjustItemStockByVariance(
+    tenantId: string,
+    itemId: string,
+    variance: number,
+  ): Promise<InventoryStockMutationRecord | null> {
+    const result = await this.databaseService.query<InventoryRow & {
+      before_quantity: number;
+      after_quantity: number;
+    }>(
+      `
+        WITH locked_item AS (
+          SELECT
+            id,
+            quantity_on_hand AS before_quantity
+          FROM inventory_items
+          WHERE tenant_id = $1
+            AND id = $2::uuid
+            AND quantity_on_hand + $3 >= 0
+          FOR UPDATE
+        ),
+        updated_item AS (
+          UPDATE inventory_items AS item
+          SET quantity_on_hand = item.quantity_on_hand + $3,
+              updated_at = NOW()
+          FROM locked_item
+          WHERE item.tenant_id = $1
+            AND item.id = locked_item.id
+          RETURNING
+            item.id,
+            item.tenant_id,
+            item.item_name,
+            item.sku,
+            item.category_id,
+            item.unit,
+            item.quantity_on_hand,
+            item.unit_price,
+            item.reorder_level,
+            item.supplier_id,
+            item.storage_location,
+            item.notes,
+            item.status,
+            item.is_archived,
+            item.created_at,
+            item.updated_at,
+            locked_item.before_quantity,
+            item.quantity_on_hand AS after_quantity
+        )
+        SELECT *
+        FROM updated_item
+      `,
+      [tenantId, itemId, variance],
+    );
+
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      item: this.mapItem(row),
+      before_quantity: Number(row.before_quantity),
+      after_quantity: Number(row.after_quantity),
+    };
+  }
+
+  async decrementItemStock(
+    tenantId: string,
+    itemId: string,
+    quantity: number,
+  ): Promise<InventoryStockMutationRecord | null> {
+    const result = await this.databaseService.query<InventoryRow & {
+      before_quantity: number;
+      after_quantity: number;
+    }>(
+      `
+        WITH locked_item AS (
+          SELECT
+            id,
+            quantity_on_hand AS before_quantity
+          FROM inventory_items
+          WHERE tenant_id = $1
+            AND id = $2::uuid
+            AND quantity_on_hand >= $3
+          FOR UPDATE
+        ),
+        updated_item AS (
+          UPDATE inventory_items AS item
+          SET quantity_on_hand = item.quantity_on_hand - $3,
+              updated_at = NOW()
+          FROM locked_item
+          WHERE item.tenant_id = $1
+            AND item.id = locked_item.id
+          RETURNING
+            item.id,
+            item.tenant_id,
+            item.item_name,
+            item.sku,
+            item.category_id,
+            item.unit,
+            item.quantity_on_hand,
+            item.unit_price,
+            item.reorder_level,
+            item.supplier_id,
+            item.storage_location,
+            item.notes,
+            item.status,
+            item.is_archived,
+            item.created_at,
+            item.updated_at,
+            locked_item.before_quantity,
+            item.quantity_on_hand AS after_quantity
+        )
+        SELECT *
+        FROM updated_item
+      `,
+      [tenantId, itemId, quantity],
+    );
+
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      item: this.mapItem(row),
+      before_quantity: Number(row.before_quantity),
+      after_quantity: Number(row.after_quantity),
+    };
+  }
+
+  async incrementItemStock(
+    tenantId: string,
+    itemId: string,
+    quantity: number,
+  ): Promise<InventoryStockMutationRecord | null> {
+    const result = await this.databaseService.query<InventoryRow & {
+      before_quantity: number;
+      after_quantity: number;
+    }>(
+      `
+        WITH locked_item AS (
+          SELECT
+            id,
+            quantity_on_hand AS before_quantity
+          FROM inventory_items
+          WHERE tenant_id = $1
+            AND id = $2::uuid
+          FOR UPDATE
+        ),
+        updated_item AS (
+          UPDATE inventory_items AS item
+          SET quantity_on_hand = item.quantity_on_hand + $3,
+              updated_at = NOW()
+          FROM locked_item
+          WHERE item.tenant_id = $1
+            AND item.id = locked_item.id
+          RETURNING
+            item.id,
+            item.tenant_id,
+            item.item_name,
+            item.sku,
+            item.category_id,
+            item.unit,
+            item.quantity_on_hand,
+            item.unit_price,
+            item.reorder_level,
+            item.supplier_id,
+            item.storage_location,
+            item.notes,
+            item.status,
+            item.is_archived,
+            item.created_at,
+            item.updated_at,
+            locked_item.before_quantity,
+            item.quantity_on_hand AS after_quantity
+        )
+        SELECT *
+        FROM updated_item
+      `,
+      [tenantId, itemId, quantity],
+    );
+
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      item: this.mapItem(row),
+      before_quantity: Number(row.before_quantity),
+      after_quantity: Number(row.after_quantity),
+    };
+  }
+
+  async incrementItemStockWithCost(
+    tenantId: string,
+    itemId: string,
+    quantity: number,
+    unitCost: number,
+    supplierId: string | null,
+  ): Promise<InventoryStockMutationRecord | null> {
+    const result = await this.databaseService.query<InventoryRow & {
+      before_quantity: number;
+      after_quantity: number;
+    }>(
+      `
+        WITH locked_item AS (
+          SELECT
+            id,
+            quantity_on_hand AS before_quantity
+          FROM inventory_items
+          WHERE tenant_id = $1
+            AND id = $2::uuid
+          FOR UPDATE
+        ),
+        updated_item AS (
+          UPDATE inventory_items AS item
+          SET quantity_on_hand = item.quantity_on_hand + $3,
+              unit_price = $4,
+              supplier_id = COALESCE($5::uuid, item.supplier_id),
+              updated_at = NOW()
+          FROM locked_item
+          WHERE item.tenant_id = $1
+            AND item.id = locked_item.id
+          RETURNING
+            item.id,
+            item.tenant_id,
+            item.item_name,
+            item.sku,
+            item.category_id,
+            item.unit,
+            item.quantity_on_hand,
+            item.unit_price,
+            item.reorder_level,
+            item.supplier_id,
+            item.storage_location,
+            item.notes,
+            item.status,
+            item.is_archived,
+            item.created_at,
+            item.updated_at,
+            locked_item.before_quantity,
+            item.quantity_on_hand AS after_quantity
+        )
+        SELECT *
+        FROM updated_item
+      `,
+      [tenantId, itemId, quantity, unitCost, supplierId],
+    );
+
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      item: this.mapItem(row),
+      before_quantity: Number(row.before_quantity),
+      after_quantity: Number(row.after_quantity),
+    };
+  }
+
+  async transferItemBalance(
+    tenantId: string,
+    itemId: string,
+    fromLocation: string,
+    toLocation: string,
+    quantity: number,
+  ): Promise<InventoryLocationTransferRecord | null> {
+    const result = await this.databaseService.query<InventoryLocationTransferRecord>(
+      `
+        WITH source_balance AS (
+          SELECT
+            item_id,
+            location_code,
+            quantity_on_hand AS source_before_quantity
+          FROM inventory_item_balances
+          WHERE tenant_id = $1
+            AND item_id = $2::uuid
+            AND location_code = $3
+            AND quantity_on_hand >= $5
+          FOR UPDATE
+        ),
+        decremented_source AS (
+          UPDATE inventory_item_balances AS balance
+          SET quantity_on_hand = balance.quantity_on_hand - $5,
+              updated_at = NOW()
+          FROM source_balance
+          WHERE balance.tenant_id = $1
+            AND balance.item_id = source_balance.item_id
+            AND balance.location_code = source_balance.location_code
+          RETURNING
+            source_balance.source_before_quantity,
+            balance.quantity_on_hand AS source_after_quantity
+        ),
+        destination_existing AS (
+          SELECT quantity_on_hand AS destination_before_quantity
+          FROM inventory_item_balances
+          WHERE tenant_id = $1
+            AND item_id = $2::uuid
+            AND location_code = $4
+          FOR UPDATE
+        ),
+        incremented_destination AS (
+          INSERT INTO inventory_item_balances (
+            tenant_id,
+            item_id,
+            location_code,
+            quantity_on_hand
+          )
+          SELECT
+            $1,
+            $2::uuid,
+            $4,
+            $5
+          FROM decremented_source
+          ON CONFLICT (tenant_id, item_id, location_code)
+          DO UPDATE SET
+            quantity_on_hand = inventory_item_balances.quantity_on_hand + EXCLUDED.quantity_on_hand,
+            updated_at = NOW()
+          RETURNING quantity_on_hand AS destination_after_quantity
+        )
+        SELECT
+          decremented_source.source_before_quantity,
+          decremented_source.source_after_quantity,
+          COALESCE(
+            (SELECT destination_before_quantity FROM destination_existing),
+            0
+          ) AS destination_before_quantity,
+          incremented_destination.destination_after_quantity
+        FROM decremented_source
+        CROSS JOIN incremented_destination
+      `,
+      [tenantId, itemId, fromLocation, toLocation, quantity],
+    );
+
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      source_before_quantity: Number(row.source_before_quantity),
+      source_after_quantity: Number(row.source_after_quantity),
+      destination_before_quantity: Number(row.destination_before_quantity),
+      destination_after_quantity: Number(row.destination_after_quantity),
+    };
+  }
+
+  async incrementItemLocationBalance(
+    tenantId: string,
+    itemId: string,
+    locationCode: string,
+    quantity: number,
+  ): Promise<void> {
+    await this.databaseService.query(
+      `
+        INSERT INTO inventory_item_balances (
+          tenant_id,
+          item_id,
+          location_code,
+          quantity_on_hand
+        )
+        VALUES ($1, $2::uuid, $3, $4)
+        ON CONFLICT (tenant_id, item_id, location_code)
+        DO UPDATE SET
+          quantity_on_hand = inventory_item_balances.quantity_on_hand + EXCLUDED.quantity_on_hand,
+          updated_at = NOW()
+      `,
+      [tenantId, itemId, locationCode, quantity],
+    );
+  }
+
+  async setItemLocationBalanceFromCount(
+    tenantId: string,
+    itemId: string,
+    locationCode: string,
+    countedQuantity: number,
+  ): Promise<InventoryLocationBalanceMutationRecord> {
+    const result = await this.databaseService.query<{
+      before_quantity: number;
+      after_quantity: number;
+    }>(
+      `
+        WITH existing_balance AS (
+          SELECT quantity_on_hand AS before_quantity
+          FROM inventory_item_balances
+          WHERE tenant_id = $1
+            AND item_id = $2::uuid
+            AND location_code = $3
+          FOR UPDATE
+        ),
+        upserted_balance AS (
+          INSERT INTO inventory_item_balances (
+            tenant_id,
+            item_id,
+            location_code,
+            quantity_on_hand
+          )
+          VALUES ($1, $2::uuid, $3, $4)
+          ON CONFLICT (tenant_id, item_id, location_code)
+          DO UPDATE SET
+            quantity_on_hand = EXCLUDED.quantity_on_hand,
+            updated_at = NOW()
+          RETURNING quantity_on_hand AS after_quantity
+        )
+        SELECT
+          COALESCE((SELECT before_quantity FROM existing_balance), 0) AS before_quantity,
+          upserted_balance.after_quantity
+        FROM upserted_balance
+      `,
+      [tenantId, itemId, locationCode, countedQuantity],
+    );
+
+    const row = result.rows[0];
+
+    return {
+      before_quantity: Number(row?.before_quantity ?? 0),
+      after_quantity: Number(row?.after_quantity ?? countedQuantity),
+    };
+  }
+
   async applyStockReceipt(tenantId: string, itemId: string, quantity: number): Promise<void> {
     await this.databaseService.query(
       `
@@ -664,8 +1242,8 @@ export class InventoryRepository {
           tenant_id,
           code,
           name,
-          COALESCE(manager, 'Stores Office') AS manager,
-          COALESCE(storage_zones, 'Main Store') AS storage_zones,
+          manager,
+          storage_zones,
           description
         FROM inventory_categories
         WHERE tenant_id = $1
@@ -681,8 +1259,8 @@ export class InventoryRepository {
     tenant_id: string;
     code: string;
     name: string;
-    manager: string;
-    storage_zones: string;
+    manager: string | null;
+    storage_zones: string | null;
     description: string | null;
   }) {
     const result = await this.databaseService.query<InventoryCategoryRecord>(
@@ -763,11 +1341,148 @@ export class InventoryRepository {
           tenant_id,
           code,
           name,
-          COALESCE(manager, 'Stores Office') AS manager,
-          COALESCE(storage_zones, 'Main Store') AS storage_zones,
+          manager,
+          storage_zones,
           description
       `,
       values,
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async listLocations(tenantId: string) {
+    const result = await this.databaseService.query<InventoryLocationRecord>(
+      `
+        SELECT
+          id,
+          tenant_id,
+          code,
+          name,
+          status,
+          created_at,
+          updated_at
+        FROM inventory_locations
+        WHERE tenant_id = $1
+        ORDER BY name ASC, code ASC
+      `,
+      [tenantId],
+    );
+
+    return result.rows;
+  }
+
+  async createLocation(input: {
+    tenant_id: string;
+    code: string;
+    name: string;
+    status: string;
+  }) {
+    const result = await this.databaseService.query<InventoryLocationRecord>(
+      `
+        INSERT INTO inventory_locations (
+          tenant_id,
+          code,
+          name,
+          status
+        )
+        VALUES ($1, $2, $3, $4)
+        RETURNING
+          id,
+          tenant_id,
+          code,
+          name,
+          status,
+          created_at,
+          updated_at
+      `,
+      [
+        input.tenant_id,
+        input.code,
+        input.name,
+        input.status,
+      ],
+    );
+
+    return result.rows[0];
+  }
+
+  async updateLocation(
+    tenantId: string,
+    locationId: string,
+    input: Partial<{
+      code: string;
+      name: string;
+      status: string;
+    }>,
+  ) {
+    const assignments: string[] = [];
+    const values: unknown[] = [tenantId, locationId];
+    let parameterIndex = 3;
+
+    const setField = (column: string, value: unknown) => {
+      assignments.push(`${column} = $${parameterIndex}`);
+      values.push(value);
+      parameterIndex += 1;
+    };
+
+    if (input.code !== undefined) setField('code', input.code);
+    if (input.name !== undefined) setField('name', input.name);
+    if (input.status !== undefined) setField('status', input.status);
+
+    if (assignments.length === 0) {
+      const locations = await this.listLocations(tenantId);
+      return locations.find((location) => location.id === locationId) ?? null;
+    }
+
+    assignments.push('updated_at = NOW()');
+
+    const result = await this.databaseService.query<InventoryLocationRecord>(
+      `
+        UPDATE inventory_locations
+        SET ${assignments.join(', ')}
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+        RETURNING
+          id,
+          tenant_id,
+          code,
+          name,
+          status,
+          created_at,
+          updated_at
+      `,
+      values,
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async findActiveLocationByCodeOrName(
+    tenantId: string,
+    location: string,
+  ): Promise<InventoryLocationRecord | null> {
+    const normalizedLocation = location.trim();
+    const result = await this.databaseService.query<InventoryLocationRecord>(
+      `
+        SELECT
+          id,
+          tenant_id,
+          code,
+          name,
+          status,
+          created_at,
+          updated_at
+        FROM inventory_locations
+        WHERE tenant_id = $1
+          AND status = 'active'
+          AND (
+            code = $2
+            OR name = $3
+          )
+        LIMIT 1
+      `,
+      [tenantId, normalizedLocation.toUpperCase(), normalizedLocation],
     );
 
     return result.rows[0] ?? null;
@@ -818,7 +1533,7 @@ export class InventoryRepository {
           contact_person,
           email,
           phone,
-          COALESCE(county, metadata->>'county', 'Nairobi') AS county,
+          COALESCE(county, metadata->>'county') AS county,
           last_delivery_at::text,
           status
         FROM inventory_suppliers
@@ -837,7 +1552,7 @@ export class InventoryRepository {
     contact_person: string | null;
     email: string | null;
     phone: string | null;
-    county: string;
+    county: string | null;
     status: string;
   }) {
     const result = await this.databaseService.query<InventorySupplierRecord>(
@@ -928,7 +1643,7 @@ export class InventoryRepository {
           contact_person,
           email,
           phone,
-          COALESCE(county, metadata->>'county', 'Nairobi') AS county,
+          COALESCE(county, metadata->>'county') AS county,
           last_delivery_at::text,
           status
       `,
@@ -1050,6 +1765,40 @@ export class InventoryRepository {
     return result.rows[0] ? this.mapPurchaseOrder(result.rows[0]) : null;
   }
 
+  async findPurchaseOrderByIdForUpdate(
+    tenantId: string,
+    purchaseOrderId: string,
+  ): Promise<InventoryPurchaseOrderRecord | null> {
+    const result = await this.databaseService.query(
+      `
+        SELECT
+          po.id,
+          po.tenant_id,
+          po.po_number,
+          po.supplier_id,
+          supplier.supplier_name,
+          po.status,
+          po.expected_delivery_date::text,
+          po.ordered_at::text,
+          po.received_at::text,
+          po.total_amount,
+          po.lines,
+          po.notes
+        FROM inventory_purchase_orders po
+        LEFT JOIN inventory_suppliers supplier
+          ON supplier.tenant_id = po.tenant_id
+         AND supplier.id = po.supplier_id
+        WHERE po.tenant_id = $1
+          AND po.id = $2::uuid
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [tenantId, purchaseOrderId],
+    );
+
+    return result.rows[0] ? this.mapPurchaseOrder(result.rows[0]) : null;
+  }
+
   async updatePurchaseOrderStatus(
     tenantId: string,
     purchaseOrderId: string,
@@ -1141,19 +1890,292 @@ export class InventoryRepository {
     return result.rows;
   }
 
-  async updateRequestStatus(tenantId: string, requestId: string, status: string, notes?: string | null) {
+  async findRequestByIdForUpdate(
+    tenantId: string,
+    requestId: string,
+  ): Promise<InventoryRequestRecord | null> {
+    const result = await this.databaseService.query<InventoryRequestRecord>(
+      `
+        SELECT
+          id,
+          request_number,
+          department,
+          requested_by,
+          status,
+          needed_by::text,
+          priority,
+          lines,
+          notes
+        FROM inventory_requests
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [tenantId, requestId],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async reserveRequestLine(
+    tenantId: string,
+    requestId: string,
+    itemId: string,
+    quantity: number,
+    actorUserId: string | null,
+  ): Promise<InventoryReservationRecord | null> {
+    const result = await this.databaseService.query<InventoryReservationRecord>(
+      `
+        WITH locked_item AS (
+          SELECT
+            id,
+            quantity_on_hand
+          FROM inventory_items
+          WHERE tenant_id = $1
+            AND id = $3::uuid
+          FOR UPDATE
+        ),
+        available_item AS (
+          SELECT
+            locked_item.id,
+            locked_item.quantity_on_hand
+              - COALESCE((
+                  SELECT SUM(reservation.quantity)::int
+                  FROM inventory_reservations reservation
+                  WHERE reservation.tenant_id = $1
+                    AND reservation.item_id = $3::uuid
+                    AND reservation.status = 'reserved'
+                ), 0) AS available_quantity
+          FROM locked_item
+        ),
+        eligible_item AS (
+          SELECT id
+          FROM available_item
+          WHERE available_quantity >= $4
+        ),
+        upserted_reservation AS (
+          INSERT INTO inventory_reservations (
+            tenant_id,
+            request_id,
+            item_id,
+            quantity,
+            status,
+            reserved_by_user_id
+          )
+          SELECT
+            $1,
+            $2::uuid,
+            $3::uuid,
+            $4,
+            'reserved',
+            $5::uuid
+          FROM eligible_item
+          ON CONFLICT (tenant_id, request_id, item_id, status)
+          DO UPDATE SET
+            quantity = inventory_reservations.quantity + EXCLUDED.quantity,
+            reserved_by_user_id = COALESCE(EXCLUDED.reserved_by_user_id, inventory_reservations.reserved_by_user_id),
+            updated_at = NOW()
+          RETURNING
+            id,
+            tenant_id,
+            request_id,
+            item_id,
+            quantity,
+            status,
+            reserved_by_user_id,
+            reserved_at,
+            fulfilled_at,
+            cancelled_at
+        )
+        SELECT *
+        FROM upserted_reservation
+      `,
+      [tenantId, requestId, itemId, quantity, actorUserId],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async listReservedRequestLinesForUpdate(
+    tenantId: string,
+    requestId: string,
+  ): Promise<InventoryReservedRequestLineRecord[]> {
+    const result = await this.databaseService.query<InventoryReservedRequestLineRecord>(
+      `
+        SELECT
+          reservation.id AS reservation_id,
+          reservation.item_id,
+          item.item_name,
+          reservation.quantity::int AS quantity,
+          item.unit_price
+        FROM inventory_reservations reservation
+        JOIN inventory_items item
+          ON item.tenant_id = reservation.tenant_id
+         AND item.id = reservation.item_id
+        WHERE reservation.tenant_id = $1
+          AND reservation.request_id = $2::uuid
+          AND reservation.status = 'reserved'
+        ORDER BY reservation.created_at ASC, reservation.id ASC
+        FOR UPDATE OF reservation
+      `,
+      [tenantId, requestId],
+    );
+
+    return result.rows.map((row) => ({
+      ...row,
+      quantity: Number(row.quantity),
+      unit_price: Number(row.unit_price),
+    }));
+  }
+
+  async markRequestReservationsFulfilled(tenantId: string, requestId: string): Promise<void> {
+    await this.databaseService.query(
+      `
+        UPDATE inventory_reservations
+        SET status = 'fulfilled',
+            fulfilled_at = NOW(),
+            updated_at = NOW()
+        WHERE tenant_id = $1
+          AND request_id = $2::uuid
+          AND status = 'reserved'
+      `,
+      [tenantId, requestId],
+    );
+  }
+
+  async recordRequestBackorder(
+    tenantId: string,
+    requestId: string,
+    itemId: string,
+    requestedQuantity: number,
+    reservedQuantity: number,
+  ): Promise<InventoryRequestBackorderRecord | null> {
+    const result = await this.databaseService.query<InventoryRequestBackorderRecord>(
+      `
+        INSERT INTO inventory_request_backorders (
+          tenant_id,
+          request_id,
+          item_id,
+          requested_quantity,
+          reserved_quantity,
+          backordered_quantity,
+          status
+        )
+        VALUES (
+          $1,
+          $2::uuid,
+          $3::uuid,
+          $4,
+          $5,
+          GREATEST($4 - $5, 0),
+          'open'
+        )
+        ON CONFLICT (tenant_id, request_id, item_id, status)
+        DO UPDATE SET
+          requested_quantity = EXCLUDED.requested_quantity,
+          reserved_quantity = EXCLUDED.reserved_quantity,
+          backordered_quantity = EXCLUDED.backordered_quantity,
+          updated_at = NOW()
+        RETURNING
+          id,
+          tenant_id,
+          request_id,
+          item_id,
+          requested_quantity,
+          reserved_quantity,
+          backordered_quantity,
+          status,
+          resolved_at
+      `,
+      [tenantId, requestId, itemId, requestedQuantity, reservedQuantity],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async listOpenRequestBackordersForItem(
+    tenantId: string,
+    itemId: string,
+  ): Promise<InventoryRequestBackorderRecord[]> {
+    const result = await this.databaseService.query<InventoryRequestBackorderRecord>(
+      `
+        SELECT
+          id,
+          tenant_id,
+          request_id,
+          item_id,
+          requested_quantity,
+          reserved_quantity,
+          backordered_quantity,
+          status,
+          resolved_at
+        FROM inventory_request_backorders
+        WHERE tenant_id = $1
+          AND item_id = $2::uuid
+          AND status = 'open'
+        ORDER BY created_at ASC, id ASC
+        FOR UPDATE
+      `,
+      [tenantId, itemId],
+    );
+
+    return result.rows;
+  }
+
+  async markRequestBackorderResolved(tenantId: string, backorderId: string): Promise<void> {
+    await this.databaseService.query(
+      `
+        UPDATE inventory_request_backorders
+        SET status = 'resolved',
+            resolved_at = NOW(),
+            updated_at = NOW()
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+          AND status = 'open'
+      `,
+      [tenantId, backorderId],
+    );
+  }
+
+  async countOpenBackordersForRequest(tenantId: string, requestId: string): Promise<number> {
+    const result = await this.databaseService.query<{ open_backorders: string }>(
+      `
+        SELECT COUNT(*)::text AS open_backorders
+        FROM inventory_request_backorders
+        WHERE tenant_id = $1
+          AND request_id = $2::uuid
+          AND status = 'open'
+      `,
+      [tenantId, requestId],
+    );
+
+    return Number(result.rows[0]?.open_backorders ?? '0');
+  }
+
+  async updateRequestStatus(
+    tenantId: string,
+    requestId: string,
+    status: string,
+    notes?: string | null,
+    approvedByUserId?: string | null,
+  ) {
     const result = await this.databaseService.query(
       `
         UPDATE inventory_requests
         SET status = $3,
             notes = COALESCE($4, notes),
+            approved_by_user_id = CASE
+              WHEN $3 IN ('approved', 'backordered') THEN COALESCE($5::uuid, approved_by_user_id)
+              ELSE approved_by_user_id
+            END,
             fulfilled_at = CASE WHEN $3 = 'fulfilled' THEN NOW() ELSE fulfilled_at END,
             updated_at = NOW()
         WHERE tenant_id = $1
           AND id = $2::uuid
         RETURNING id, request_number, status
       `,
-      [tenantId, requestId, status, notes ?? null],
+      [tenantId, requestId, status, notes ?? null, approvedByUserId ?? null],
     );
 
     return result.rows[0] ?? null;
@@ -1332,8 +2354,61 @@ export class InventoryRepository {
     return result.rows;
   }
 
+  async createStockCountSnapshot(input: {
+    tenant_id: string;
+    snapshot_number: string;
+    location_code: string | null;
+    counted_at: string | null;
+    counted_by_user_id: string | null;
+    status: string;
+    lines: Array<Record<string, unknown>>;
+    variance_count: number;
+    notes: string | null;
+  }) {
+    const result = await this.databaseService.query<InventoryStockCountSnapshotRecord>(
+      `
+        INSERT INTO inventory_stock_count_snapshots (
+          tenant_id,
+          snapshot_number,
+          location_code,
+          counted_at,
+          counted_by_user_id,
+          status,
+          lines,
+          variance_count,
+          notes
+        )
+        VALUES ($1, $2, $3, COALESCE($4::timestamptz, NOW()), $5::uuid, $6, $7::jsonb, $8, $9)
+        RETURNING
+          id,
+          tenant_id,
+          snapshot_number,
+          location_code,
+          counted_at,
+          counted_by_user_id,
+          status,
+          lines,
+          variance_count,
+          notes
+      `,
+      [
+        input.tenant_id,
+        input.snapshot_number,
+        input.location_code,
+        input.counted_at,
+        input.counted_by_user_id,
+        input.status,
+        JSON.stringify(input.lines),
+        input.variance_count,
+        input.notes,
+      ],
+    );
+
+    return result.rows[0];
+  }
+
   async buildReports(tenantId: string) {
-    const [valuation, lowStock, movement, supplierPurchases] = await Promise.all([
+    const [valuation, lowStock, movement, supplierPurchases, stockReconciliation] = await Promise.all([
       this.databaseService.query(
         `
           SELECT item_name, sku, quantity_on_hand, unit_price, (quantity_on_hand * unit_price)::text AS total_value
@@ -1381,6 +2456,31 @@ export class InventoryRepository {
         `,
         [tenantId],
       ),
+      this.databaseService.query(
+        `
+          SELECT
+            item.id AS item_id,
+            item.item_name,
+            item.sku,
+            item.quantity_on_hand::int AS item_quantity_on_hand,
+            COALESCE(SUM(balance.quantity_on_hand), 0)::int AS location_quantity_on_hand,
+            (item.quantity_on_hand - COALESCE(SUM(balance.quantity_on_hand), 0))::int AS variance_quantity,
+            CASE
+              WHEN item.quantity_on_hand = COALESCE(SUM(balance.quantity_on_hand), 0) THEN 'matched'
+              ELSE 'variance'
+            END AS status
+          FROM inventory_items item
+          LEFT JOIN inventory_item_balances balance
+            ON balance.tenant_id = item.tenant_id
+           AND balance.item_id = item.id
+          WHERE item.tenant_id = $1
+            AND item.is_archived = FALSE
+          GROUP BY item.id, item.item_name, item.sku, item.quantity_on_hand
+          ORDER BY ABS(item.quantity_on_hand - COALESCE(SUM(balance.quantity_on_hand), 0)) DESC,
+                   item.item_name ASC
+        `,
+        [tenantId],
+      ),
     ]);
 
     return {
@@ -1393,6 +2493,12 @@ export class InventoryRepository {
       supplier_purchases: supplierPurchases.rows.map((row) => ({
         ...row,
         total_spend: Number((row as { total_spend: string }).total_spend),
+      })),
+      stock_reconciliation: stockReconciliation.rows.map((row) => ({
+        ...row,
+        item_quantity_on_hand: Number(row.item_quantity_on_hand ?? 0),
+        location_quantity_on_hand: Number(row.location_quantity_on_hand ?? 0),
+        variance_quantity: Number(row.variance_quantity ?? 0),
       })),
     };
   }

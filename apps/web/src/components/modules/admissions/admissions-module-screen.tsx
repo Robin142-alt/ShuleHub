@@ -22,6 +22,7 @@ import { Modal } from "@/components/ui/modal";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Tabs } from "@/components/ui/tabs";
 import { useLiveTenantSession } from "@/hooks/use-live-tenant-session";
+import { downloadCsvFile, downloadTextFile } from "@/lib/dashboard/export";
 import type { DashboardRole, DashboardSnapshot } from "@/lib/dashboard/types";
 import { formatCurrency } from "@/lib/dashboard/format";
 import {
@@ -42,26 +43,32 @@ import {
   type AdmissionApplication,
   type AdmissionsDataset,
   type AdmissionsDocument,
+  type AdmissionsReportCard,
   type AdmissionsSectionId,
   type AdmissionsStudentProfile,
   type AdmissionsTransfer,
   type ApplicationStatus,
   type ClassAllocation,
   type ParentDirectoryEntry,
+  type StudentAcademicLine,
   type StudentDirectoryEntry,
 } from "@/lib/modules/admissions-data";
 import {
+  advanceAdmissionsStudentAcademicLifecycleLive,
   buildAdmissionDocumentUploads,
+  buildAdmissionRegistrationSummary,
   createAdmissionApplicationLive,
   createAdmissionsAllocationLive,
   createAdmissionsTransferLive,
   fetchAdmissionsDatasetLive,
+  fetchAdmissionsReportExportLive,
   fetchAdmissionsStudentProfileLive,
   mapAdmissionsStudentProfileFromLive,
   registerAdmissionApplicationLive,
   updateAdmissionApplicationLive,
   updateAdmissionDocumentVerificationLive,
   uploadAdmissionDocumentLive,
+  type AdmissionRegistrationSummary,
 } from "@/lib/modules/admissions-live";
 
 const admissionsSectionIds: AdmissionsSectionId[] = [
@@ -231,8 +238,16 @@ function createEmptyAdmissionsDataset(): AdmissionsDataset {
   };
 }
 
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function todayCompactDate() {
+  return todayIsoDate().replaceAll("-", "");
+}
+
 function buildNextApplicationNumber(currentLength: number) {
-  return `APP-20260504-${String(currentLength + 119).padStart(3, "0")}`;
+  return `APP-${todayCompactDate()}-${String(currentLength + 1).padStart(3, "0")}`;
 }
 
 function buildAdmissionNumber(className: string, currentLength: number) {
@@ -241,6 +256,16 @@ function buildAdmissionNumber(className: string, currentLength: number) {
     .slice(0, 3)
     .toUpperCase();
   return `ADM-${classCode || "SCH"}-${String(currentLength + 49).padStart(3, "0")}`;
+}
+
+function buildNextClassName(className: string) {
+  const gradeMatch = className.match(/^Grade\s+(\d+)$/i);
+
+  if (gradeMatch) {
+    return `Grade ${Number(gradeMatch[1]) + 1}`;
+  }
+
+  return className;
 }
 
 export function AdmissionsModuleScreen({
@@ -262,6 +287,7 @@ export function AdmissionsModuleScreen({
 
   const queryClient = useQueryClient();
   const liveSession = useLiveTenantSession(snapshot.tenant.id);
+  const transportEnabled = snapshot.tenant.transportEnabled === true;
   const [localDataset, setLocalDataset] = useState<AdmissionsDataset>(() => createAdmissionsDataset());
   const [applicationSearch, setApplicationSearch] = useState("");
   const [applicationStatusFilter, setApplicationStatusFilter] = useState("all");
@@ -298,6 +324,9 @@ export function AdmissionsModuleScreen({
   const [isSavingRegistration, setIsSavingRegistration] = useState(false);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [moduleError, setModuleError] = useState<string | null>(null);
+  const [registrationSummary, setRegistrationSummary] = useState<AdmissionRegistrationSummary | null>(null);
+  const [academicLifecycleMessage, setAcademicLifecycleMessage] = useState<string | null>(null);
+  const [isSavingAcademicLifecycle, setIsSavingAcademicLifecycle] = useState(false);
 
   const liveAdmissionsQuery = useQuery({
     queryKey: ["admissions-module", liveSession.session?.tenantId],
@@ -391,9 +420,45 @@ export function AdmissionsModuleScreen({
       ?? null);
   const isSelectedStudentProfileSyncing =
     isLiveMode && Boolean(selectedStudentKey) && selectedStudentProfileQuery.isFetching;
-  const reports = buildAdmissionsReports(dataset);
-  const sections = buildAdmissionsModuleSections(dataset);
+  const reports = buildAdmissionsReports(dataset, { transportEnabled });
+  const sections = buildAdmissionsModuleSections(dataset, { transportEnabled });
   const trend = buildAdmissionsTrend();
+
+  async function exportAdmissionsReport(report: AdmissionsReportCard) {
+    setModuleError(null);
+
+    if (isLiveMode && liveSession.session && report.serverExportId) {
+      setActiveActionId(`${report.id}-export`);
+
+      try {
+        const artifact = await fetchAdmissionsReportExportLive(
+          liveSession.session,
+          report.serverExportId,
+        );
+        downloadTextFile({
+          filename: artifact.filename,
+          content: artifact.csv,
+          mimeType: artifact.content_type,
+        });
+      } catch (error) {
+        setModuleError(
+          error instanceof Error
+            ? error.message
+            : "Unable to export the admissions report.",
+        );
+      } finally {
+        setActiveActionId(null);
+      }
+
+      return;
+    }
+
+    downloadCsvFile({
+      filename: report.filename,
+      headers: report.headers,
+      rows: report.rows,
+    });
+  }
 
   async function refreshLiveAdmissionsData() {
     await queryClient.invalidateQueries({
@@ -460,6 +525,7 @@ export function AdmissionsModuleScreen({
   async function registerApplication(application: AdmissionApplication) {
     setActiveActionId(`${application.id}-register`);
     setModuleError(null);
+    setRegistrationSummary(null);
 
     try {
       const admissionNumber =
@@ -476,7 +542,20 @@ export function AdmissionsModuleScreen({
             class_name: application.classApplying,
             stream_name: "Pending",
           },
-        ) as { student?: { id?: string } };
+        );
+
+        setRegistrationSummary(
+          buildAdmissionRegistrationSummary({
+            fallback: {
+              applicantName: application.applicantName,
+              admissionNumber,
+              className: application.classApplying,
+              streamName: "Pending",
+              parentEmail: application.parentEmail,
+            },
+            response,
+          }),
+        );
 
         await refreshLiveAdmissionsData();
 
@@ -496,7 +575,7 @@ export function AdmissionsModuleScreen({
           parentName: application.parentName,
           parentPhone: application.parentPhone,
           status: "pending_allocation",
-          registrationDate: "2026-05-04",
+          registrationDate: todayIsoDate(),
         };
 
         const parent: ParentDirectoryEntry = {
@@ -528,58 +607,27 @@ export function AdmissionsModuleScreen({
           previousSchool: application.previousSchool,
           kcpeResults: application.kcpeResults,
           cbcLevel: application.cbcLevel,
-          registrationDate: "2026-05-04",
+          registrationDate: todayIsoDate(),
           applicationStatus: "registered",
-          feesBalance: 28500,
+          feesBalance: 0,
           lastPayment: "No payment posted yet",
-          billingPlan: "Admission fee and opening tuition balance",
-          allergies: application.allergies || "None",
-          conditions: application.conditions || "None",
+          billingPlan: "No billing plan configured yet",
+          portalAccessStatus: application.parentEmail ? "invited" : "not_invited",
+          portalAccessDetail: application.parentEmail
+            ? `Parent invitation prepared for ${application.parentEmail}`
+            : "No parent portal invitation recorded.",
+          allergies: application.allergies || "Not recorded",
+          conditions: application.conditions || "Not recorded",
           emergencyContact: application.emergencyContact,
-          academics: [
-            {
-              id: `acad-${Date.now()}`,
-              subject: "Entry baseline",
-              value: "Pending",
-              note: "Subject teachers will post readiness notes after placement.",
-            },
-          ],
-          attendance: [
-            {
-              id: `att-${Date.now()}`,
-              date: "2026-05-04",
-              status: "Pending start",
-              note: "Registration complete, waiting for final allocation.",
-            },
-          ],
-          discipline: [
-            {
-              id: `disc-${Date.now()}`,
-              date: "2026-05-04",
-              entry: "No record",
-              status: "Clear",
-            },
-          ],
-          fees: [
-            {
-              id: `fee-${Date.now()}`,
-              item: "Admission fee",
-              amount: 12000,
-              status: "pending",
-            },
-            {
-              id: `fee-${Date.now() + 1}`,
-              item: "Tuition deposit",
-              amount: 16500,
-              status: "pending",
-            },
-          ],
+          academics: [],
+          discipline: [],
+          fees: [],
           documents: [
             {
               id: `doc-${Date.now()}`,
               documentType: "Birth certificate",
               fileName: "Pending verification",
-              uploadedOn: "2026-05-04",
+              uploadedOn: todayIsoDate(),
               verificationStatus: "pending",
             },
           ],
@@ -606,13 +654,42 @@ export function AdmissionsModuleScreen({
               streamName: "Pending",
               dormitoryName: "Pending",
               transportRoute: "Pending",
-              effectiveFrom: "2026-05-04",
+              effectiveFrom: todayIsoDate(),
               status: "pending",
             },
             ...current.allocations,
           ],
           studentProfiles: [profile, ...current.studentProfiles],
         }));
+        setRegistrationSummary(
+          buildAdmissionRegistrationSummary({
+            fallback: {
+              applicantName: application.applicantName,
+              admissionNumber,
+              className: application.classApplying,
+              streamName: "Pending",
+              parentEmail: application.parentEmail,
+            },
+            response: {
+              student: {
+                id: newStudentId,
+                admission_number: admissionNumber,
+                full_name: application.applicantName,
+              },
+              allocation: {
+                class_name: application.classApplying,
+                stream_name: "Pending",
+              },
+              guardian_link: application.parentEmail
+                ? {
+                    email: application.parentEmail,
+                    status: "invited",
+                  }
+                : null,
+              application_status: "registered",
+            },
+          }),
+        );
         openStudentProfile(newStudentId);
       }
     } catch (error) {
@@ -757,7 +834,7 @@ export function AdmissionsModuleScreen({
           learnerName: application.applicantName,
           documentType,
           fileName,
-          uploadedOn: "2026-05-04",
+          uploadedOn: todayIsoDate(),
           verificationStatus: "pending",
           ownerType: application.status === "registered" ? "student" : "application",
           applicationId: application.id,
@@ -814,7 +891,9 @@ export function AdmissionsModuleScreen({
     if (!allocationForm.className.trim()) errors.className = "Class is required.";
     if (!allocationForm.streamName.trim()) errors.streamName = "Stream is required.";
     if (!allocationForm.dormitoryName.trim()) errors.dormitoryName = "Dormitory is required.";
-    if (!allocationForm.transportRoute.trim()) errors.transportRoute = "Transport route is required.";
+    if (transportEnabled && !allocationForm.transportRoute.trim()) {
+      errors.transportRoute = "Transport route is required.";
+    }
 
     setAllocationErrors(errors);
     return Object.keys(errors).length === 0;
@@ -836,12 +915,13 @@ export function AdmissionsModuleScreen({
     setModuleError(null);
 
     try {
+      const transportRoute = transportEnabled ? allocationForm.transportRoute.trim() : "";
       if (isLiveMode && liveSession.session) {
         await createAdmissionsAllocationLive(liveSession.session, student.id, {
           class_name: allocationForm.className.trim(),
           stream_name: allocationForm.streamName.trim(),
           dormitory_name: allocationForm.dormitoryName.trim(),
-          transport_route: allocationForm.transportRoute.trim(),
+          ...(transportEnabled ? { transport_route: transportRoute } : {}),
         });
         await refreshLiveAdmissionsData();
       } else {
@@ -866,7 +946,7 @@ export function AdmissionsModuleScreen({
                       className: allocationForm.className.trim(),
                       streamName: allocationForm.streamName.trim(),
                       dormitoryName: allocationForm.dormitoryName.trim(),
-                      transportRoute: allocationForm.transportRoute.trim(),
+                      transportRoute,
                       status: "assigned",
                     }
                   : entry,
@@ -880,8 +960,8 @@ export function AdmissionsModuleScreen({
                   className: allocationForm.className.trim(),
                   streamName: allocationForm.streamName.trim(),
                   dormitoryName: allocationForm.dormitoryName.trim(),
-                  transportRoute: allocationForm.transportRoute.trim(),
-                  effectiveFrom: "2026-05-04",
+                  transportRoute,
+                  effectiveFrom: todayIsoDate(),
                   status: "assigned",
                 },
                 ...current.allocations,
@@ -893,7 +973,7 @@ export function AdmissionsModuleScreen({
                   className: allocationForm.className.trim(),
                   streamName: allocationForm.streamName.trim(),
                   dormitoryName: allocationForm.dormitoryName.trim(),
-                  transportRoute: allocationForm.transportRoute.trim(),
+                  transportRoute,
                 }
               : profile,
           ),
@@ -959,7 +1039,7 @@ export function AdmissionsModuleScreen({
               direction: transferForm.direction,
               schoolName: transferForm.schoolName.trim(),
               reason: transferForm.reason.trim(),
-              requestedOn: "2026-05-04",
+              requestedOn: todayIsoDate(),
               status: "pending",
             },
             ...current.transfers,
@@ -1014,6 +1094,7 @@ export function AdmissionsModuleScreen({
 
     setIsSavingRegistration(true);
     setModuleError(null);
+    setRegistrationSummary(null);
 
     try {
       const admissionNumber = buildAdmissionNumber(registrationForm.className, dataset.students.length);
@@ -1065,8 +1146,20 @@ export function AdmissionsModuleScreen({
             class_name: registrationForm.className.trim(),
             stream_name: "Pending",
           },
-        ) as { student?: { id?: string } };
+        );
 
+        setRegistrationSummary(
+          buildAdmissionRegistrationSummary({
+            fallback: {
+              applicantName: registrationForm.fullName.trim(),
+              admissionNumber,
+              className: registrationForm.className.trim(),
+              streamName: "Pending",
+              parentEmail: registrationForm.parentEmail.trim(),
+            },
+            response,
+          }),
+        );
         await refreshLiveAdmissionsData();
         setRegistrationForm(createEmptyRegistrationForm());
         updateSection("student-directory", { student: response.student?.id ?? null });
@@ -1085,13 +1178,13 @@ export function AdmissionsModuleScreen({
           parentName: registrationForm.parentName.trim(),
           parentPhone: registrationForm.parentPhone.trim(),
           status: "registered",
-          dateApplied: "2026-05-04",
+          dateApplied: todayIsoDate(),
           gender: registrationForm.gender.trim(),
           dateOfBirth: registrationForm.dateOfBirth,
           birthCertificateNumber: registrationForm.birthCertificateNumber.trim(),
           nationality: registrationForm.nationality.trim(),
           previousSchool: registrationForm.previousSchool.trim() || "Not provided",
-          kcpeResults: registrationForm.kcpeResults.trim() || "N/A",
+          kcpeResults: registrationForm.kcpeResults.trim() || "Not recorded",
           cbcLevel: registrationForm.cbcLevel.trim() || "Not recorded",
           parentEmail: registrationForm.parentEmail.trim(),
           occupation: registrationForm.occupation.trim(),
@@ -1111,7 +1204,7 @@ export function AdmissionsModuleScreen({
           parentName: registrationForm.parentName.trim(),
           parentPhone: registrationForm.parentPhone.trim(),
           status: "pending_allocation",
-          registrationDate: "2026-05-04",
+          registrationDate: todayIsoDate(),
         };
 
         const parent: ParentDirectoryEntry = {
@@ -1130,7 +1223,7 @@ export function AdmissionsModuleScreen({
             learnerName: registrationForm.fullName.trim(),
             documentType: "Birth certificate",
             fileName: registrationForm.birthCertificateFile,
-            uploadedOn: "2026-05-04",
+            uploadedOn: todayIsoDate(),
             verificationStatus: "pending",
             ownerType: "student",
           },
@@ -1139,7 +1232,7 @@ export function AdmissionsModuleScreen({
             learnerName: registrationForm.fullName.trim(),
             documentType: "Passport photo",
             fileName: registrationForm.passportPhotoFile,
-            uploadedOn: "2026-05-04",
+            uploadedOn: todayIsoDate(),
             verificationStatus: "pending",
             ownerType: "student",
           },
@@ -1148,7 +1241,7 @@ export function AdmissionsModuleScreen({
             learnerName: registrationForm.fullName.trim(),
             documentType: "Previous report forms",
             fileName: registrationForm.reportFormsFile || "Not uploaded",
-            uploadedOn: registrationForm.reportFormsFile ? "2026-05-04" : "-",
+            uploadedOn: registrationForm.reportFormsFile ? todayIsoDate() : "-",
             verificationStatus: registrationForm.reportFormsFile ? "pending" : "missing",
             ownerType: "student",
           },
@@ -1171,54 +1264,23 @@ export function AdmissionsModuleScreen({
           occupation: registrationForm.occupation.trim() || "Not provided",
           relationship: registrationForm.relationship.trim(),
           previousSchool: registrationForm.previousSchool.trim() || "Not provided",
-          kcpeResults: registrationForm.kcpeResults.trim() || "N/A",
+          kcpeResults: registrationForm.kcpeResults.trim() || "Not recorded",
           cbcLevel: registrationForm.cbcLevel.trim() || "Not recorded",
-          registrationDate: "2026-05-04",
+          registrationDate: todayIsoDate(),
           applicationStatus: "registered",
-          feesBalance: 32000,
+          feesBalance: 0,
           lastPayment: "No payment posted yet",
-          billingPlan: "Admission fee and opening term package",
-          allergies: registrationForm.allergies.trim() || "None",
-          conditions: registrationForm.conditions.trim() || "None",
+          billingPlan: "No billing plan configured yet",
+          portalAccessStatus: registrationForm.parentEmail.trim() ? "invited" : "not_invited",
+          portalAccessDetail: registrationForm.parentEmail.trim()
+            ? `Parent invitation prepared for ${registrationForm.parentEmail.trim()}`
+            : "No parent portal invitation recorded.",
+          allergies: registrationForm.allergies.trim() || "Not recorded",
+          conditions: registrationForm.conditions.trim() || "Not recorded",
           emergencyContact: registrationForm.emergencyContact.trim(),
-          academics: [
-            {
-              id: `acad-${Date.now()}`,
-              subject: "Entry baseline",
-              value: "Pending",
-              note: "Teachers will add readiness notes after placement.",
-            },
-          ],
-          attendance: [
-            {
-              id: `att-${Date.now()}`,
-              date: "2026-05-04",
-              status: "Pending start",
-              note: "Awaiting stream and final route allocation.",
-            },
-          ],
-          discipline: [
-            {
-              id: `disc-${Date.now()}`,
-              date: "2026-05-04",
-              entry: "No record",
-              status: "Clear",
-            },
-          ],
-          fees: [
-            {
-              id: `fee-${Date.now()}`,
-              item: "Admission fee",
-              amount: 12000,
-              status: "pending",
-            },
-            {
-              id: `fee-${Date.now() + 1}`,
-              item: "Opening tuition balance",
-              amount: 20000,
-              status: "pending",
-            },
-          ],
+          academics: [],
+          discipline: [],
+          fees: [],
           documents: documents.map((document) => ({
             id: document.id,
             documentType: document.documentType,
@@ -1244,13 +1306,42 @@ export function AdmissionsModuleScreen({
               streamName: "Pending",
               dormitoryName: "Pending",
               transportRoute: "Pending",
-              effectiveFrom: "2026-05-04",
+              effectiveFrom: todayIsoDate(),
               status: "pending",
             },
             ...current.allocations,
           ],
           studentProfiles: [profile, ...current.studentProfiles],
         }));
+        setRegistrationSummary(
+          buildAdmissionRegistrationSummary({
+            fallback: {
+              applicantName: registrationForm.fullName.trim(),
+              admissionNumber,
+              className: registrationForm.className.trim(),
+              streamName: "Pending",
+              parentEmail: registrationForm.parentEmail.trim(),
+            },
+            response: {
+              student: {
+                id: studentId,
+                admission_number: admissionNumber,
+                full_name: registrationForm.fullName.trim(),
+              },
+              allocation: {
+                class_name: registrationForm.className.trim(),
+                stream_name: "Pending",
+              },
+              guardian_link: registrationForm.parentEmail.trim()
+                ? {
+                    email: registrationForm.parentEmail.trim(),
+                    status: "invited",
+                  }
+                : null,
+              application_status: "registered",
+            },
+          }),
+        );
         setRegistrationForm(createEmptyRegistrationForm());
         updateSection("student-directory", { student: studentId });
       }
@@ -1258,6 +1349,121 @@ export function AdmissionsModuleScreen({
       setModuleError(error instanceof Error ? error.message : "Unable to complete the registration workflow.");
     } finally {
       setIsSavingRegistration(false);
+    }
+  }
+
+  async function advanceSelectedStudentAcademicLifecycle(action: "promotion" | "graduation") {
+    if (!selectedStudentProfile) {
+      return;
+    }
+
+    const targetClassName =
+      action === "promotion"
+        ? buildNextClassName(selectedStudentProfile.className)
+        : selectedStudentProfile.className;
+    const targetStreamName = selectedStudentProfile.streamName || "Pending";
+    const lifecycleLabel = action === "promotion" ? "Promotion" : "Graduation";
+    const nextMessage =
+      action === "promotion"
+        ? `${lifecycleLabel} recorded for ${selectedStudentProfile.fullName} to ${targetClassName} ${targetStreamName}.`
+        : `${lifecycleLabel} recorded for ${selectedStudentProfile.fullName}.`;
+
+    setIsSavingAcademicLifecycle(true);
+    setModuleError(null);
+    setAcademicLifecycleMessage(null);
+
+    try {
+      if (isLiveMode && liveSession.session) {
+        const response = await advanceAdmissionsStudentAcademicLifecycleLive(
+          liveSession.session,
+          selectedStudentProfile.id,
+          {
+            action,
+            class_name: action === "promotion" ? targetClassName : undefined,
+            stream_name: action === "promotion" ? targetStreamName : undefined,
+            reason: `${lifecycleLabel} recorded from the admissions profile.`,
+          },
+        );
+        const liveClassName =
+          response.academic_enrollment?.class_name
+          ?? response.allocation?.class_name
+          ?? targetClassName;
+        const liveStreamName =
+          response.academic_enrollment?.stream_name
+          ?? response.allocation?.stream_name
+          ?? targetStreamName;
+
+        await refreshLiveAdmissionsData();
+        setAcademicLifecycleMessage(
+          action === "promotion"
+            ? `${lifecycleLabel} recorded for ${selectedStudentProfile.fullName} to ${liveClassName} ${liveStreamName}.`
+            : `${lifecycleLabel} recorded for ${selectedStudentProfile.fullName}.`,
+        );
+      } else {
+        await new Promise((resolve) => window.setTimeout(resolve, 300));
+        const lifecycleLine: StudentAcademicLine = {
+          id: `academic-lifecycle-${action}-${Date.now()}`,
+          subject: "Latest lifecycle",
+          value: lifecycleLabel,
+          note:
+            action === "promotion"
+              ? `${targetClassName} ${targetStreamName}`
+              : "Learner marked as graduated.",
+        };
+
+        setLocalDataset((current) => ({
+          ...current,
+          students: current.students.map((student) =>
+            student.id === selectedStudentProfile.id
+              ? {
+                  ...student,
+                  className: action === "promotion" ? targetClassName : student.className,
+                  streamName: action === "promotion" ? targetStreamName : student.streamName,
+                }
+              : student,
+          ),
+          allocations:
+            action === "promotion"
+              ? [
+                  {
+                    id: `alloc-lifecycle-${Date.now()}`,
+                    studentId: selectedStudentProfile.id,
+                    studentName: selectedStudentProfile.fullName,
+                    admissionNumber: selectedStudentProfile.admissionNumber,
+                    className: targetClassName,
+                    streamName: targetStreamName,
+                    dormitoryName: selectedStudentProfile.dormitoryName,
+                    transportRoute: selectedStudentProfile.transportRoute,
+                    effectiveFrom: todayIsoDate(),
+                    status: "assigned",
+                  },
+                  ...current.allocations,
+                ]
+              : current.allocations,
+          studentProfiles: current.studentProfiles.map((profile) =>
+            profile.id === selectedStudentProfile.id
+              ? {
+                  ...profile,
+                  className: action === "promotion" ? targetClassName : profile.className,
+                  streamName: action === "promotion" ? targetStreamName : profile.streamName,
+                  academics: [
+                    lifecycleLine,
+                    ...profile.academics.filter((line) => line.subject !== "Latest lifecycle"),
+                  ],
+                }
+              : profile,
+          ),
+        }));
+        setAcademicLifecycleMessage(nextMessage);
+      }
+    } catch (error) {
+      setModuleError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update the learner academic lifecycle.",
+      );
+    } finally {
+      setIsSavingAcademicLifecycle(false);
     }
   }
 
@@ -1425,7 +1631,15 @@ export function AdmissionsModuleScreen({
     { id: "class", header: "Class", render: (allocation) => allocation.className },
     { id: "stream", header: "Stream", render: (allocation) => allocation.streamName },
     { id: "dorm", header: "Dormitory", render: (allocation) => allocation.dormitoryName },
-    { id: "route", header: "Transport Route", render: (allocation) => allocation.transportRoute },
+    ...(transportEnabled
+      ? [
+          {
+            id: "route",
+            header: "Transport Route",
+            render: (allocation: ClassAllocation) => allocation.transportRoute,
+          },
+        ]
+      : []),
     {
       id: "status",
       header: "Status",
@@ -1531,6 +1745,80 @@ export function AdmissionsModuleScreen({
           <Card className="border-danger/40 bg-danger/5 p-4">
             <p className="text-sm font-semibold text-danger">Admissions action failed</p>
             <p className="mt-1 text-sm text-muted">{moduleError}</p>
+          </Card>
+        ) : null}
+
+        {academicLifecycleMessage ? (
+          <Card className="border-success/30 bg-success/5 p-4">
+            <p className="text-sm font-semibold text-success">Academic lifecycle updated</p>
+            <p className="mt-1 text-sm text-muted">{academicLifecycleMessage}</p>
+          </Card>
+        ) : null}
+
+        {registrationSummary ? (
+          <Card className="border-accent/30 bg-accent/5 p-5">
+            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+                  Registration completed
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-foreground">
+                  {registrationSummary.studentName}
+                </h2>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <StatusPill label={registrationSummary.admissionNumber} tone="ok" />
+                  <StatusPill
+                    label={registrationSummary.applicationStatus.replace(/_/g, " ")}
+                    tone="ok"
+                  />
+                </div>
+              </div>
+
+              <div className="grid min-w-0 flex-1 gap-4 md:grid-cols-3">
+                {[
+                  ["Academic handoff", registrationSummary.academicSummary],
+                  ["Parent portal", registrationSummary.portalSummary],
+                  ["Fee handoff", registrationSummary.feeSummary],
+                ].map(([label, value]) => (
+                  <div key={label} className="min-w-0 border-l border-accent/30 pl-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+                      {label}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-foreground">
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {registrationSummary.studentId ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => openStudentProfile(registrationSummary.studentId!)}
+                  className="shrink-0"
+                >
+                  <CheckCheck className="h-4 w-4" />
+                  Open profile
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="mt-5 border-t border-accent/20 pt-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+                Onboarding checklist
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {registrationSummary.onboardingChecklist.map((item) => (
+                  <div key={item.id} className="min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                      <StatusPill label={item.value} tone={item.tone} />
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-muted">{item.detail}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </Card>
         ) : null}
 
@@ -1665,7 +1953,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, fullName: event.target.value }))
                     }
-                    placeholder="Brenda Atieno"
+                    placeholder="Learner full name"
                   />
                 </FieldWrapper>
                 <FieldWrapper label="Date of birth" error={registrationErrors.dateOfBirth}>
@@ -1705,7 +1993,7 @@ export function AdmissionsModuleScreen({
                         birthCertificateNumber: event.target.value,
                       }))
                     }
-                    placeholder="BC-448211"
+                    placeholder="Birth certificate number"
                   />
                 </FieldWrapper>
                 <FieldWrapper label="Nationality">
@@ -1732,7 +2020,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, previousSchool: event.target.value }))
                     }
-                    placeholder="Lakeview Junior School"
+                    placeholder="Previous school name"
                   />
                 </FieldWrapper>
                 <FieldWrapper label="KCPE results">
@@ -1742,7 +2030,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, kcpeResults: event.target.value }))
                     }
-                    placeholder="368 marks"
+                    placeholder="Score or assessment summary"
                   />
                 </FieldWrapper>
                 <FieldWrapper label="CBC level">
@@ -1752,7 +2040,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, cbcLevel: event.target.value }))
                     }
-                    placeholder="Grade 6 complete"
+                    placeholder="Previous academic level"
                   />
                 </FieldWrapper>
                 <FieldWrapper label="Class" error={registrationErrors.className}>
@@ -1788,7 +2076,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, parentName: event.target.value }))
                     }
-                    placeholder="Janet Atieno"
+                    placeholder="Parent or guardian full name"
                   />
                 </FieldWrapper>
                 <FieldWrapper label="Phone" error={registrationErrors.parentPhone}>
@@ -1798,7 +2086,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, parentPhone: event.target.value }))
                     }
-                    placeholder="+254 712 300 401"
+                    placeholder="Parent phone number"
                   />
                 </FieldWrapper>
                 <FieldWrapper label="Email">
@@ -1808,7 +2096,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, parentEmail: event.target.value }))
                     }
-                    placeholder="janet.atieno@gmail.com"
+                    placeholder="Parent email address"
                   />
                 </FieldWrapper>
                 <FieldWrapper label="Occupation">
@@ -1818,7 +2106,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, occupation: event.target.value }))
                     }
-                    placeholder="Clinical officer"
+                    placeholder="Occupation or workplace"
                   />
                 </FieldWrapper>
                 <FieldWrapper label="Relationship" error={registrationErrors.relationship}>
@@ -1828,7 +2116,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, relationship: event.target.value }))
                     }
-                    placeholder="Mother"
+                    placeholder="Relationship to learner"
                   />
                 </FieldWrapper>
               </div>
@@ -1846,7 +2134,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, allergies: event.target.value }))
                     }
-                    placeholder="Peanuts"
+                    placeholder="Known allergies, if any"
                   />
                 </FieldWrapper>
                 <FieldWrapper label="Conditions">
@@ -1856,7 +2144,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, conditions: event.target.value }))
                     }
-                    placeholder="Asthma"
+                    placeholder="Medical conditions, if any"
                   />
                 </FieldWrapper>
                 <FieldWrapper label="Emergency contact" error={registrationErrors.emergencyContact}>
@@ -1866,7 +2154,7 @@ export function AdmissionsModuleScreen({
                     onChange={(event) =>
                       setRegistrationForm((current) => ({ ...current, emergencyContact: event.target.value }))
                     }
-                    placeholder="+254 722 911 404"
+                    placeholder="Emergency phone number"
                   />
                 </FieldWrapper>
               </div>
@@ -1993,6 +2281,22 @@ export function AdmissionsModuleScreen({
                       ) : null}
                       <StatusPill label={buildFeesSummary(selectedStudentProfile.feesBalance)} tone="warning" />
                       <StatusPill label={selectedStudentProfile.applicationStatus} tone={getApplicationTone(selectedStudentProfile.applicationStatus)} />
+                      <Button
+                        variant="secondary"
+                        onClick={() => advanceSelectedStudentAcademicLifecycle("promotion")}
+                        disabled={isSavingAcademicLifecycle}
+                      >
+                        <GraduationCap className="h-4 w-4" />
+                        Promote learner
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => advanceSelectedStudentAcademicLifecycle("graduation")}
+                        disabled={isSavingAcademicLifecycle}
+                      >
+                        <CheckCheck className="h-4 w-4" />
+                        Graduate learner
+                      </Button>
                     </div>
                   </div>
                 </Card>
@@ -2013,7 +2317,9 @@ export function AdmissionsModuleScreen({
                                 ["Nationality", selectedStudentProfile.nationality],
                                 ["Class", `${selectedStudentProfile.className} ${selectedStudentProfile.streamName}`],
                                 ["Dormitory", selectedStudentProfile.dormitoryName],
-                                ["Transport", selectedStudentProfile.transportRoute],
+                                ...(transportEnabled
+                                  ? [["Transport", selectedStudentProfile.transportRoute] as [string, string]]
+                                  : []),
                                 ["Previous school", selectedStudentProfile.previousSchool],
                               ].map(([label, value]) => (
                                 <div
@@ -2042,6 +2348,20 @@ export function AdmissionsModuleScreen({
                                 id: "guardian-email",
                                 title: selectedStudentProfile.parentEmail || "Email not yet recorded",
                                 detail: `Emergency contact ${selectedStudentProfile.emergencyContact}`,
+                              },
+                              {
+                                id: "guardian-portal",
+                                title:
+                                  selectedStudentProfile.portalAccessStatus === "active"
+                                    ? "Parent portal active"
+                                    : selectedStudentProfile.portalAccessStatus === "invited"
+                                      ? "Parent portal invited"
+                                      : "Parent portal not active",
+                                detail: selectedStudentProfile.portalAccessDetail,
+                                tone:
+                                  selectedStudentProfile.portalAccessStatus === "active"
+                                    ? "ok"
+                                    : "warning",
                               },
                             ]}
                           />
@@ -2118,27 +2438,6 @@ export function AdmissionsModuleScreen({
                           totalRows={selectedStudentProfile.academics.length}
                           page={1}
                           pageSize={selectedStudentProfile.academics.length || 1}
-                          onPageChange={() => undefined}
-                        />
-                      ),
-                    },
-                    {
-                      id: "attendance",
-                      label: "Attendance",
-                      panel: (
-                        <OpsTable
-                          title="Attendance onboarding trail"
-                          subtitle="The earliest attendance signals after registration and reporting."
-                          rows={selectedStudentProfile.attendance}
-                          columns={[
-                            { id: "date", header: "Date", render: (row) => row.date },
-                            { id: "status", header: "Status", render: (row) => row.status },
-                            { id: "note", header: "Note", render: (row) => row.note },
-                          ]}
-                          getRowId={(row) => row.id}
-                          totalRows={selectedStudentProfile.attendance.length}
-                          page={1}
-                          pageSize={selectedStudentProfile.attendance.length || 1}
                           onPageChange={() => undefined}
                         />
                       ),
@@ -2307,7 +2606,11 @@ export function AdmissionsModuleScreen({
           <div className="space-y-6">
             <OpsTable
               title="Class allocation"
-              subtitle="Assign class, stream, dormitory, and transport route once registration is complete."
+              subtitle={
+                transportEnabled
+                  ? "Assign class, stream, dormitory, and transport route once registration is complete."
+                  : "Assign class, stream, and dormitory once registration is complete."
+              }
               rows={dataset.allocations}
               columns={allocationColumns}
               getRowId={(row) => row.id}
@@ -2361,6 +2664,17 @@ export function AdmissionsModuleScreen({
                   </p>
                   <h3 className="mt-2 text-lg font-semibold text-foreground">{report.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-muted">{report.description}</p>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <Button
+                      variant="secondary"
+                      onClick={() => void exportAdmissionsReport(report)}
+                      disabled={activeActionId === `${report.id}-export`}
+                    >
+                      {activeActionId === `${report.id}-export`
+                        ? "Exporting..."
+                        : `Export ${report.filename.replace(".csv", "")}`}
+                    </Button>
+                  </div>
                   <div className="mt-5 rounded-xl border border-border bg-surface-muted px-4 py-4">
                     <p className="text-xs uppercase tracking-[0.18em] text-muted">Preview row</p>
                     <p className="mt-2 text-sm text-foreground">
@@ -2389,7 +2703,9 @@ export function AdmissionsModuleScreen({
                 {
                   id: "report-rule-3",
                   title: "Allocation completion",
-                  detail: "Which admitted learners still need stream, dormitory, or route assignment?",
+                  detail: transportEnabled
+                    ? "Which admitted learners still need stream, dormitory, or route assignment?"
+                    : "Which admitted learners still need stream or dormitory assignment?",
                 },
               ]}
             />
@@ -2549,7 +2865,7 @@ export function AdmissionsModuleScreen({
               onChange={(event) =>
                 setAllocationForm((current) => ({ ...current, className: event.target.value }))
               }
-              placeholder="Grade 7"
+              placeholder="Class name"
             />
           </FieldWrapper>
           <FieldWrapper label="Stream" error={allocationErrors.streamName}>
@@ -2559,7 +2875,7 @@ export function AdmissionsModuleScreen({
               onChange={(event) =>
                 setAllocationForm((current) => ({ ...current, streamName: event.target.value }))
               }
-              placeholder="Hope"
+              placeholder="Stream name"
             />
           </FieldWrapper>
           <FieldWrapper label="Dormitory" error={allocationErrors.dormitoryName}>
@@ -2569,21 +2885,23 @@ export function AdmissionsModuleScreen({
               onChange={(event) =>
                 setAllocationForm((current) => ({ ...current, dormitoryName: event.target.value }))
               }
-              placeholder="Mara House"
+              placeholder="Dormitory or boarding house"
             />
           </FieldWrapper>
-          <div className="md:col-span-2">
-            <FieldWrapper label="Transport route" error={allocationErrors.transportRoute}>
-              <input
-                className={fieldClassName}
-                value={allocationForm.transportRoute}
-                onChange={(event) =>
-                  setAllocationForm((current) => ({ ...current, transportRoute: event.target.value }))
-                }
-                placeholder="Eastern Bypass"
-              />
-            </FieldWrapper>
-          </div>
+          {transportEnabled ? (
+            <div className="md:col-span-2">
+              <FieldWrapper label="Transport route" error={allocationErrors.transportRoute}>
+                <input
+                  className={fieldClassName}
+                  value={allocationForm.transportRoute}
+                  onChange={(event) =>
+                    setAllocationForm((current) => ({ ...current, transportRoute: event.target.value }))
+                  }
+                  placeholder="Transport route name"
+                />
+              </FieldWrapper>
+            </div>
+          ) : null}
         </div>
       </Modal>
 
@@ -2611,7 +2929,7 @@ export function AdmissionsModuleScreen({
               onChange={(event) =>
                 setTransferForm((current) => ({ ...current, learnerName: event.target.value }))
               }
-              placeholder="Mercy Chebet"
+              placeholder="Learner name"
             />
           </FieldWrapper>
           <FieldWrapper label="Admission number" error={transferErrors.admissionNumber}>
@@ -2621,7 +2939,7 @@ export function AdmissionsModuleScreen({
               onChange={(event) =>
                 setTransferForm((current) => ({ ...current, admissionNumber: event.target.value }))
               }
-              placeholder="ADM-G8-046"
+              placeholder="Admission number"
             />
           </FieldWrapper>
           <FieldWrapper label="Direction">
@@ -2646,7 +2964,7 @@ export function AdmissionsModuleScreen({
               onChange={(event) =>
                 setTransferForm((current) => ({ ...current, schoolName: event.target.value }))
               }
-              placeholder="Kericho Hills School"
+              placeholder="School name"
             />
           </FieldWrapper>
           <div className="md:col-span-2">
@@ -2657,7 +2975,7 @@ export function AdmissionsModuleScreen({
                 onChange={(event) =>
                   setTransferForm((current) => ({ ...current, reason: event.target.value }))
                 }
-                placeholder="Parent relocation to Nairobi"
+                placeholder="Reason for transfer"
               />
             </FieldWrapper>
           </div>

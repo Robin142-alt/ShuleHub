@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { AcademicsWidget } from "@/components/dashboard/academics-widget";
-import { AttendanceWidget } from "@/components/dashboard/attendance-widget";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
@@ -124,7 +123,6 @@ export function DashboardLayout({
                 widgetOrder={widgetOrder}
                 onAction={(action) => actionMutation.mutate(action)}
                 FinanceWidgetComponent={FinanceWidget}
-                AttendanceWidgetComponent={AttendanceWidget}
                 AcademicsWidgetComponent={AcademicsWidget}
               />
             ) : loading ? (

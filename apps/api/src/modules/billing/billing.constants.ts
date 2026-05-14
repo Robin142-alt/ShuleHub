@@ -28,7 +28,11 @@ export const BILLING_ALLOWED_BILLING_PATH_PREFIXES = [
   '/billing',
   '/health',
   '/auth',
+  '/observability',
+  '/platform',
+  '/support',
 ];
+export const BILLING_ALLOWED_SYSTEM_EXACT_PATHS = ['/', '/dashboard', '/app', '/ops'];
 export const BILLING_ALLOWED_READ_ONLY_METHODS = ['GET', 'HEAD', 'OPTIONS'] as const;
 export const BILLING_RENEWAL_INVOICE_METADATA_KEY = 'renewal_window';
 export const BILLING_NOTIFICATION_CHANNELS = ['admin', 'sms', 'email'] as const;
@@ -45,11 +49,10 @@ export const BILLING_PLAN_CATALOG = {
   trial: {
     code: 'trial',
     name: 'Trial',
-    features: ['students', 'attendance', 'billing.mpesa'],
+    features: ['students', 'billing.mpesa'],
     limits: {
       'students.max_active': 250,
       'usage.events.monthly': 10000,
-      'attendance.upserts.monthly': 50000,
     },
     period_days: 14,
     default_status: 'trialing',
@@ -57,11 +60,10 @@ export const BILLING_PLAN_CATALOG = {
   starter: {
     code: 'starter',
     name: 'Starter',
-    features: ['students', 'attendance', 'billing.mpesa'],
+    features: ['students', 'billing.mpesa'],
     limits: {
       'students.max_active': 1000,
       'usage.events.monthly': 50000,
-      'attendance.upserts.monthly': 250000,
     },
     period_days: 30,
     default_status: 'active',
@@ -69,11 +71,10 @@ export const BILLING_PLAN_CATALOG = {
   growth: {
     code: 'growth',
     name: 'Growth',
-    features: ['students', 'attendance', 'billing.mpesa'],
+    features: ['students', 'billing.mpesa'],
     limits: {
       'students.max_active': 5000,
       'usage.events.monthly': 250000,
-      'attendance.upserts.monthly': 1000000,
     },
     period_days: 30,
     default_status: 'active',

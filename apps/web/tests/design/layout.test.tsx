@@ -41,7 +41,7 @@ describe("STEP 1: Layout tests", () => {
     renderDashboardScreen({ role: "admin" });
 
     expect(screen.getByTestId("dashboard-view")).toMatchSnapshot();
-    expect(screen.getByTestId("alerts-panel")).toMatchSnapshot();
+    expect(screen.queryByTestId("alerts-panel")).not.toBeInTheDocument();
     expect(screen.getByTestId("kpi-strip")).toMatchSnapshot();
   });
 
@@ -53,7 +53,7 @@ describe("STEP 1: Layout tests", () => {
     const secondRender = renderWithProviders(
       createElement(SchoolPages, { role: "bursar" }),
     );
-    expect(screen.getByText(/nairobi county school erp/i)).toBeVisible();
+    expect(screen.getByText(/school workspace school erp/i)).toBeVisible();
 
     secondRender.unmount();
     renderWithProviders(createElement(PortalPages, { viewer: "parent" }));

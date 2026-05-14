@@ -20,20 +20,20 @@ describe("experience actions", () => {
 
     const searchInput = screen.getByLabelText("Workspace search");
     await user.click(searchInput);
-    await user.type(searchInput, "reports");
+    await user.type(searchInput, "fees");
 
     const searchPanel = await screen.findByTestId("workspace-search-panel");
-    const reportsResult = within(searchPanel).getByRole("button", {
-      name: /reports/i,
+    const financeResult = within(searchPanel).getByRole("button", {
+      name: /fees/i,
     });
-    await user.click(reportsResult);
+    await user.click(financeResult);
 
-    expect(routerPushMock).toHaveBeenCalledWith("/reports");
+    expect(routerPushMock).toHaveBeenCalledWith("/finance");
 
     await user.click(screen.getByRole("button", { name: "Notifications" }));
     const notificationsPanel = await screen.findByTestId("workspace-notifications-panel");
     expect(
-      within(notificationsPanel).getByText(/renewal due in 5 days/i),
+      within(notificationsPanel).getByText(/no notifications are open/i),
     ).toBeVisible();
   });
 
@@ -70,18 +70,12 @@ describe("experience actions", () => {
     ).toBeVisible();
   });
 
-  it("opens a tenant control workflow from the superadmin schools surface", async () => {
-    const user = userEvent.setup();
+  it("keeps the superadmin schools surface empty until real schools are onboarded", () => {
     renderWithProviders(createElement(SuperadminPages, { section: "schools" }));
 
-    await user.click(screen.getAllByRole("button", { name: /open tenant/i })[0]!);
-
-    const dialog = await screen.findByRole("dialog", { name: /tenant control/i });
-    expect(within(dialog).getByText(/amani prep school/i)).toBeVisible();
-
-    await user.click(within(dialog).getByRole("button", { name: /suspend/i }));
-
-    expect(screen.getAllByText("Suspended").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: /tenant control/i })).toBeVisible();
+    expect(screen.getByRole("heading", { name: /nothing to show yet/i })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /open tenant/i })).not.toBeInTheDocument();
   });
 
   it("shares a portal fee statement through a real copy flow", async () => {
@@ -133,7 +127,7 @@ describe("experience actions", () => {
     expect(screen.getAllByText("Matched").length).toBeGreaterThan(0);
   });
 
-  it("reconciles an mpesa receipt into a matched learner record", async () => {
+  it("blocks manual MPESA reconciliation when the receipt is not in live tenant data", async () => {
     const user = userEvent.setup();
     renderWithProviders(
       createElement(SchoolPages, {
@@ -156,7 +150,8 @@ describe("experience actions", () => {
 
     await user.click(within(dialog).getByRole("button", { name: /save match/i }));
 
-    expect(await screen.findByText(/qjt8v9h33 matched to mercy atieno/i)).toBeVisible();
-    expect(screen.getAllByText("Matched").length).toBeGreaterThan(0);
+    expect(
+      await within(dialog).findByText(/receipt code was not found in the current mpesa queue/i),
+    ).toBeVisible();
   });
 });

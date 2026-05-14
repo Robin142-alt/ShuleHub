@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
+import { validateCsrfRequest } from "@/lib/auth/csrf";
 import { isExperienceAudience } from "@/lib/auth/experience-audience";
 import { createServerAuthClient } from "@/lib/auth/server-auth-client";
 import { setExperienceSessionCookies } from "@/lib/auth/server-session";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    if (!validateCsrfRequest(request)) {
+      return NextResponse.json(
+        { message: "Security check expired. Refresh the page and try again." },
+        { status: 403 },
+      );
+    }
+
     const body = (await request.json()) as {
       audience?: string;
       identifier?: string;

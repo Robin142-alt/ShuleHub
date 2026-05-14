@@ -2,150 +2,170 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { Smartphone } from "lucide-react";
 
 import { AuthCard } from "@/components/auth/auth-card";
-import { AuthDemoCredentials } from "@/components/auth/auth-demo-credentials";
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthMessage } from "@/components/auth/auth-message";
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
+import { MobileTrustRow, SecurityBadge } from "@/components/auth/auth-security";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
-import {
-  portalDemoCredentials,
-} from "@/lib/auth/demo-credentials";
 import { useExperienceSession } from "@/lib/auth/use-experience-session";
 
-function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
+const portalSchema = z.object({
+  identifier: z.string().trim().email("Enter a valid portal email address."),
+  secret: z.string().min(4, "Enter your portal password."),
+});
 
-export function PortalLoginView() {
+type PortalForm = z.infer<typeof portalSchema>;
+
+type PortalMode = "family" | "parent" | "student";
+
+const portalCopy: Record<
+  PortalMode,
+  {
+    badge: string;
+    title: string;
+    description: string;
+    identifierLabel: string;
+    secretLabel: string;
+    submitLabel: string;
+    message: string;
+  }
+> = {
+  family: {
+    badge: "Family portal",
+    title: "Access your school portal",
+    description:
+      "Check fees, exam results, notices, and downloads from a friendly mobile-first workspace.",
+    identifierLabel: "Portal email address",
+    secretLabel: "Password",
+    submitLabel: "Open portal",
+    message:
+      "Parents only see linked learners, and students only see their own records and school messages.",
+  },
+  parent: {
+    badge: "Parent access",
+    title: "Follow progress and payments",
+    description:
+      "A secure parent login for fee balances, M-PESA guidance, announcements, and learner progress.",
+    identifierLabel: "Parent email address",
+    secretLabel: "Password",
+    submitLabel: "Continue as parent",
+    message:
+      "Payment context and learner records stay private to the verified family profile.",
+  },
+  student: {
+    badge: "Student access",
+    title: "Open your learning portal",
+    description:
+      "A focused student login for assignments, results, timetable, notices, and academic downloads.",
+    identifierLabel: "Student email address",
+    secretLabel: "Password",
+    submitLabel: "Continue as student",
+    message:
+      "Students only see their own timetable, assignments, performance records, and notices.",
+  },
+};
+
+export function PortalLoginView({ mode = "family" }: { mode?: PortalMode }) {
   const router = useRouter();
-  const [identifier, setIdentifier] = useState("");
-  const [secret, setSecret] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [generalError, setGeneralError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const authSession = useExperienceSession("portal");
+  const copy = portalCopy[mode];
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<PortalForm>({
+    resolver: zodResolver(portalSchema),
+    defaultValues: {
+      identifier: "",
+      secret: "",
+    },
+  });
 
-  const submit = async () => {
-    const nextErrors: Record<string, string> = {};
-    const trimmedIdentifier = identifier.trim();
-
-    if (!trimmedIdentifier || trimmedIdentifier.length < 4) {
-      nextErrors.identifier = "Use your admission number or your family phone number.";
-    }
-
-    if (secret.trim().length < 4) {
-      nextErrors.secret = "Enter your password or 4-digit PIN.";
-    }
-
-    setFieldErrors(nextErrors);
-    setGeneralError(null);
-
-    if (Object.keys(nextErrors).length > 0) {
-      return;
-    }
-
-    setBusy(true);
-    await wait(220);
-
+  const submit = handleSubmit(async (values) => {
     try {
       const result = await authSession.login({
-        identifier: trimmedIdentifier,
-        password: secret,
+        identifier: values.identifier.trim(),
+        password: values.secret,
       });
       void router.push(result.redirectTo ?? "/dashboard");
-    } catch (loginError) {
-      setGeneralError(
-        loginError instanceof Error
-          ? loginError.message
-          : "Unable to sign in right now.",
-      );
-    } finally {
-      setBusy(false);
+    } catch {
+      // useExperienceSession exposes the safe message.
     }
-  };
+  });
 
   return (
     <AuthCard>
-      <div className="space-y-6">
-        <div className="space-y-3">
-          <span className="inline-flex rounded-full border border-border bg-surface-muted px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-            Family access
-          </span>
+      <form className="space-y-6" onSubmit={submit}>
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <SecurityBadge label={copy.badge} tone="success" />
+            <SecurityBadge label="Private records" />
+            <SecurityBadge label="M-PESA ready" />
+          </div>
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">
-              Access your school portal
+            <h2 className="text-3xl font-bold leading-tight text-slate-950">
+              {copy.title}
             </h2>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              Check balances, attendance, exams, and school messages with a simple secure login.
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              {copy.description}
             </p>
           </div>
         </div>
 
+        <MobileTrustRow />
+
         <AuthMessage
           tone="info"
           title="Private by design"
-          description="Parents only see linked learners, and students only see their own records, reports, and school messages."
+          description={copy.message}
         />
 
         <div className="space-y-4">
           <AuthField
-            label="Admission number or phone"
-            placeholder="SH-24011 or 0712 345 678"
-            value={identifier}
-            onChange={(event) => setIdentifier(event.target.value)}
-            error={fieldErrors.identifier}
-            hint="Parents can use the phone number linked to the school account."
+            label={copy.identifierLabel}
+            autoComplete="email"
+            {...register("identifier")}
+            error={errors.identifier?.message}
           />
           <AuthPasswordField
-            label="Password or PIN"
-            placeholder="Enter your password or PIN"
-            value={secret}
-            onChange={(event) => setSecret(event.target.value)}
-            error={fieldErrors.secret}
+            label={copy.secretLabel}
+            autoComplete="current-password"
+            {...register("secret")}
+            error={errors.secret?.message}
           />
         </div>
 
-        <AuthDemoCredentials
-          title="Review portal access"
-          subtitle="Parents and students can both use these review credentials to inspect the portal safely."
-          credentials={[
-            {
-              id: "parent",
-              label: "Parent account",
-              identifier: portalDemoCredentials.parent.identifier,
-              password: portalDemoCredentials.parent.password,
-            },
-            {
-              id: "student",
-              label: "Student account",
-              identifier: portalDemoCredentials.student.identifier,
-              password: portalDemoCredentials.student.password,
-            },
-          ]}
-        />
-
-        {generalError ? (
+        {authSession.error ? (
           <AuthMessage
             tone="error"
             title="Portal sign-in failed"
-            description={generalError}
+            description={authSession.error}
           />
         ) : null}
 
-        <AuthSubmitButton busy={busy} onClick={submit}>
-          Open portal
+        <AuthSubmitButton busy={isSubmitting || authSession.isSubmitting} type="submit">
+          {copy.submitLabel}
         </AuthSubmitButton>
 
         <div className="flex items-center justify-between gap-3 text-sm">
-          <Link href="/forgot-password" className="font-medium text-foreground underline-offset-4 hover:underline">
-            Forgot password or PIN?
+          <Link
+            href="/portal/forgot-password"
+            className="font-bold text-slate-700 underline-offset-4 hover:text-emerald-700 hover:underline"
+          >
+            Forgot password?
           </Link>
-          <span className="text-muted">Friendly support for families and learners.</span>
+          <span className="inline-flex items-center gap-2 text-slate-500">
+            <Smartphone className="h-4 w-4" />
+            Mobile optimized
+          </span>
         </div>
-      </div>
+      </form>
     </AuthCard>
   );
 }

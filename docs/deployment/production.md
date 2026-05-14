@@ -145,6 +145,19 @@ API readiness:
 curl http://localhost:3000/health/ready
 ```
 
+## Release validation
+
+Before promoting a release, run the local verification suite and the read-safe scale probes:
+
+```bash
+npm test
+npm run release:readiness
+npm run fixture:pilot-school
+npm run load:high-volume-workflows
+```
+
+`fixture:pilot-school` refuses remote mutation unless `ALLOW_REMOTE_FIXTURE_MUTATION=true`. Keep it pointed at sandbox data unless a release manager explicitly approves a non-production remote target.
+
 ## Queue verification
 
 Enqueue a test payment job:

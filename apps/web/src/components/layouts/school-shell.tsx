@@ -5,7 +5,6 @@ import {
   Bell,
   BookOpen,
   ChevronDown,
-  ClipboardCheck,
   GraduationCap,
   LayoutDashboard,
   LogOut,
@@ -29,7 +28,6 @@ const schoolNavItems = [
   { id: "admissions", label: "Admissions", href: "/admissions", icon: UserPlus },
   { id: "finance", label: "Finance", href: "/finance", icon: Wallet },
   { id: "mpesa", label: "MPESA", href: "/mpesa", icon: Smartphone },
-  { id: "attendance", label: "Attendance", href: "/attendance", icon: ClipboardCheck },
   { id: "academics", label: "Academics", href: "/academics", icon: GraduationCap },
   { id: "exams", label: "Exams", href: "/exams", icon: BookOpen },
   { id: "reports", label: "Reports", href: "/reports", icon: BarChart3 },
@@ -70,8 +68,8 @@ export function SchoolShell({
               <span className="text-sm font-bold text-white">{(schoolName ?? "GF").slice(0, 2).toUpperCase()}</span>
             </div>
             <div className="min-w-0">
-              <p className="truncate text-[14px] font-semibold text-[#1a1d26]">{schoolName ?? "Greenfield Academy"}</p>
-              <p className="text-[11px] text-[#8b8f9a]">{schoolCounty ?? "Nairobi County"}</p>
+              <p className="truncate text-[14px] font-semibold text-[#1a1d26]">{schoolName ?? "School workspace"}</p>
+              <p className="text-[11px] text-[#8b8f9a]">{schoolCounty ?? "Secure tenant access"}</p>
             </div>
           </div>
         </div>
@@ -128,7 +126,7 @@ export function SchoolShell({
           <div className="absolute inset-0 bg-[#1a1d26]/40 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
           <aside className="slide-in-sidebar absolute inset-y-0 left-0 w-[280px] border-r border-[#e8eaed] bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#e8eaed] px-5 py-4">
-              <p className="text-sm font-semibold text-[#1a1d26]">{schoolName ?? "Greenfield Academy"}</p>
+              <p className="text-sm font-semibold text-[#1a1d26]">{schoolName ?? "School workspace"}</p>
               <button type="button" onClick={() => setMobileOpen(false)} className="rounded-lg border border-[#e8eaed] p-2 text-[#8b8f9a]"><X className="h-4 w-4" /></button>
             </div>
             <nav className="px-3 py-3">

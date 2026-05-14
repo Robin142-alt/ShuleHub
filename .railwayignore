@@ -5,3 +5,6 @@ artifacts
 .vercel
 coverage
 mpesa-official.pdf
+apps/web/.npm-cache
+apps/web/.next
+apps/web/node_modules

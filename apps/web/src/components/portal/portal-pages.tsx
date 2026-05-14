@@ -4,7 +4,6 @@ import { useState, type ReactNode } from "react";
 import { SmartphoneCharging } from "lucide-react";
 
 import { ActivityListCard, SimpleListCard } from "@/components/experience/activity-list-card";
-import { ChartCard } from "@/components/experience/chart-card";
 import { MetricGrid } from "@/components/experience/metric-grid";
 import { PortalShell } from "@/components/portal/portal-shell";
 import { Button } from "@/components/ui/button";
@@ -20,8 +19,6 @@ import type { ExperienceNotificationItem } from "@/lib/experiences/types";
 import {
   getPortalWorkspace,
   portalAcademicRows,
-  portalAttendanceRows,
-  portalAttendanceTrend,
   portalFeeHistory,
   portalMessages,
   type PortalViewer,
@@ -90,11 +87,8 @@ function PortalDashboard({ viewer }: { viewer: PortalViewer }) {
         <div className="space-y-6">
           <SimpleListCard
             title="Student overview"
-            subtitle={viewer === "parent" ? "A quick family-facing view of who needs attention today." : "A clean student view without school-office complexity."}
-            items={[
-              { id: "student-1", title: "Aisha Njeri", subtitle: "Grade 7 Hope • Class teacher Ms. Njoroge", value: "Present" },
-              { id: "student-2", title: "Brian Kamau", subtitle: "Grade 4 Light • CAT starts next week", value: viewer === "parent" ? "Balance due" : "Revision" },
-            ]}
+            subtitle={viewer === "parent" ? "Linked learners appear here after school onboarding." : "The learner record appears here after account activation."}
+            items={[]}
           />
           <DataTable
             title="Recent payments"
@@ -113,11 +107,8 @@ function PortalDashboard({ viewer }: { viewer: PortalViewer }) {
         <div className="space-y-6">
           <SimpleListCard
             title="Upcoming exams"
-            subtitle="What the family should prepare for next."
-            items={[
-              { id: "exam-1", title: "Grade 7 Mid-term CAT", subtitle: "Starts Monday at 08:00", value: "5 days" },
-              { id: "exam-2", title: "Science project review", subtitle: "Submission window closes Friday", value: "3 days" },
-            ]}
+            subtitle="Assessment dates appear after the school publishes a timetable."
+            items={[]}
           />
           <ActivityListCard
             title="Messages"
@@ -186,8 +177,7 @@ function PortalFeesPage({ viewer }: { viewer: PortalViewer }) {
             {[
               "Go to M-PESA > Lipa na M-PESA > Pay Bill.",
               "Business number: 174379",
-              "Account number: ADM SH-24011",
-              "Use the learner admission number exactly as shown.",
+              "Use the learner admission number exactly as provided by the school.",
             ].map((item) => (
               <div key={item} className="rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm text-foreground">
                 {item}
@@ -246,47 +236,9 @@ function PortalAcademicsPage() {
       />
       <SimpleListCard
         title="Teacher comments"
-        subtitle="Feedback parents and learners can understand quickly."
-        items={[
-          { id: "comment-1", title: "Mathematics", subtitle: "Aisha is participating confidently and should keep revising word problems." },
-          { id: "comment-2", title: "English", subtitle: "Reading fluency improved this month. Continue daily comprehension practice." },
-        ]}
+        subtitle="Teacher feedback appears after assessments are published."
+        items={[]}
       />
-    </div>
-  );
-}
-
-function PortalAttendancePage() {
-  return (
-    <div className="space-y-6">
-      <PortalPageHeader
-        title="Attendance"
-        description="Daily attendance and simple trend visibility for families."
-        actions={
-          <StatusPill
-            label="This month"
-            tone="ok"
-          />
-        }
-      />
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <ChartCard
-          title="Attendance trend"
-          subtitle="Recent weekly attendance performance."
-          points={portalAttendanceTrend}
-        />
-        <DataTable
-          title="Daily attendance"
-          subtitle="Recent classroom attendance records."
-          columns={[
-            { id: "date", header: "Date", render: (row) => row.date },
-            { id: "state", header: "State", render: (row) => <StatusPill label={row.state} tone={row.state === "Present" ? "ok" : "warning"} /> },
-            { id: "note", header: "Note", render: (row) => row.note },
-          ]}
-          rows={portalAttendanceRows}
-          getRowKey={(row) => row.id}
-        />
-      </div>
     </div>
   );
 }
@@ -314,9 +266,7 @@ function PortalDownloadsPage() {
       content: [
         "ShuleHub portal downloads",
         "",
-        "Current fee statement",
-        "Term report card",
-        "Exam timetable",
+        "No portal documents are available yet.",
       ].join("\n"),
     });
   }
@@ -334,12 +284,8 @@ function PortalDownloadsPage() {
       />
       <SimpleListCard
         title="Available files"
-        subtitle="Common family downloads in one place."
-        items={[
-          { id: "download-1", title: "Current fee statement", subtitle: "Updated after the latest matched M-PESA payment", value: "PDF" },
-          { id: "download-2", title: "Term report card", subtitle: "Teacher comments included", value: "PDF" },
-          { id: "download-3", title: "Exam timetable", subtitle: "Upcoming CAT and assessment schedule", value: "PDF" },
-        ]}
+        subtitle="Family documents appear after the school publishes real files."
+        items={[]}
       />
     </div>
   );
@@ -350,7 +296,7 @@ function PortalNotificationsPage() {
     <div className="space-y-6">
       <PortalPageHeader
         title="Notifications"
-        description="Important fee, attendance, and classroom notices gathered in one list."
+        description="Important fee, academic, and classroom notices gathered in one list."
       />
       <ActivityListCard
         title="Notification feed"
@@ -410,7 +356,6 @@ export function PortalPages({
       {section === "dashboard" ? <PortalDashboard viewer={viewer} /> : null}
       {section === "fees" ? <PortalFeesPage viewer={viewer} /> : null}
       {section === "academics" ? <PortalAcademicsPage /> : null}
-      {section === "attendance" ? <PortalAttendancePage /> : null}
       {section === "messages" ? <PortalMessagesPage /> : null}
       {section === "downloads" ? <PortalDownloadsPage /> : null}
       {section === "notifications" ? <PortalNotificationsPage /> : null}

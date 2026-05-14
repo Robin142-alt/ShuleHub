@@ -2,10 +2,16 @@ import { headers } from "next/headers";
 
 import { AuthShell } from "@/components/auth/auth-shell";
 import { ResetPasswordView } from "@/components/auth/auth-recovery-view";
+import { readResetToken, type ResetSearchParams } from "@/lib/auth/reset-token";
 import { resolveSchoolBranding } from "@/lib/auth/school-branding";
 
-export default async function SchoolResetPasswordPage() {
+export default async function SchoolResetPasswordPage({
+  searchParams,
+}: {
+  searchParams?: ResetSearchParams;
+}) {
   const requestHeaders = await headers();
+  const initialToken = await readResetToken(searchParams);
   const host =
     requestHeaders.get("x-forwarded-host") ??
     requestHeaders.get("host");
@@ -35,6 +41,9 @@ export default async function SchoolResetPasswordPage() {
         secretLabel="New password"
         secretPlaceholder="Create a new school password"
         backHref="/school/login"
+        audience="school"
+        tenantSlug={resolution.requestedSlug ?? resolution.branding.slug}
+        initialToken={initialToken}
       />
     </AuthShell>
   );

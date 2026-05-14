@@ -3,7 +3,6 @@
 import {
   Bell,
   BookOpen,
-  CalendarCheck,
   Download,
   LayoutDashboard,
   LogOut,
@@ -20,10 +19,9 @@ const portalNavItems = [
   { id: "dashboard", label: "Dashboard", href: "", icon: LayoutDashboard },
   { id: "fees", label: "Fees", href: "/fees", icon: Wallet },
   { id: "academics", label: "Academics", href: "/academics", icon: BookOpen },
-  { id: "attendance", label: "Attendance", href: "/attendance", icon: CalendarCheck },
-  { id: "messages", label: "Messages", href: "/messages", icon: MessageSquare, badge: "2" },
+  { id: "messages", label: "Messages", href: "/messages", icon: MessageSquare },
   { id: "downloads", label: "Downloads", href: "/downloads", icon: Download },
-  { id: "notifications", label: "Notifications", href: "/notifications", icon: Bell, badge: "3" },
+  { id: "notifications", label: "Notifications", href: "/notifications", icon: Bell },
 ];
 
 export function PortalShell({
@@ -67,8 +65,8 @@ export function PortalShell({
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8b8f9a]">
             {viewer === "parent" ? "Your child" : "Your profile"}
           </p>
-          <p className="mt-2 text-sm font-semibold text-[#1a1d26]">{studentName ?? "Aisha Njeri"}</p>
-          <p className="mt-1 text-[12px] text-[#8b8f9a]">Grade 7 Hope • {schoolName ?? "Greenfield Academy"}</p>
+          <p className="mt-2 text-sm font-semibold text-[#1a1d26]">{studentName ?? "Learner profile pending"}</p>
+          <p className="mt-1 text-[12px] text-[#8b8f9a]">{schoolName ?? "School workspace"}</p>
         </div>
 
         {/* Nav */}
@@ -84,9 +82,6 @@ export function PortalShell({
                     <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-blue-600" : "text-[#9ca0ab]"}`} />
                     <span>{item.label}</span>
                   </span>
-                  {item.badge ? (
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isActive ? "bg-blue-100 text-blue-700" : "bg-[#f0f2f5] text-[#8b8f9a]"}`}>{item.badge}</span>
-                  ) : null}
                 </Link>
               );
             })}
@@ -101,9 +96,9 @@ export function PortalShell({
         </div>
         <div className="border-t border-blue-100/60 px-5 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-sky-500 text-xs font-bold text-white shadow-sm">{(userName ?? "MN").slice(0, 2).toUpperCase()}</div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-sky-500 text-xs font-bold text-white shadow-sm">{(userName ?? "PP").slice(0, 2).toUpperCase()}</div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-[#1a1d26]">{userName ?? "Margaret Njeri"}</p>
+              <p className="truncate text-sm font-medium text-[#1a1d26]">{userName ?? "Portal user"}</p>
               <p className="text-[11px] text-[#8b8f9a]">{viewer === "parent" ? "Parent" : "Student"}</p>
             </div>
           </div>
@@ -120,8 +115,8 @@ export function PortalShell({
               <button type="button" onClick={() => setMobileOpen(false)} className="rounded-xl border border-blue-100 p-2 text-[#8b8f9a]"><X className="h-4 w-4" /></button>
             </div>
             <div className="border-b border-blue-100/60 px-5 py-4">
-              <p className="text-sm font-semibold text-[#1a1d26]">{studentName ?? "Aisha Njeri"}</p>
-              <p className="mt-1 text-[12px] text-[#8b8f9a]">Grade 7 Hope</p>
+              <p className="text-sm font-semibold text-[#1a1d26]">{studentName ?? "Learner profile pending"}</p>
+              <p className="mt-1 text-[12px] text-[#8b8f9a]">{schoolName ?? "School workspace"}</p>
             </div>
             <nav className="px-3 py-3">
               <div className="space-y-1">
@@ -148,12 +143,11 @@ export function PortalShell({
           <div className="mx-auto flex h-[56px] max-w-[960px] items-center justify-between gap-4 px-4 md:px-6">
             <div className="flex items-center gap-3">
               <button type="button" onClick={() => setMobileOpen(true)} className="rounded-xl border border-blue-100 p-2.5 text-[#5a5e6a] lg:hidden"><Menu className="h-4 w-4" /></button>
-              <p className="text-sm font-semibold text-[#1a1d26] lg:hidden">{schoolName ?? "Greenfield Academy"}</p>
+              <p className="text-sm font-semibold text-[#1a1d26] lg:hidden">{schoolName ?? "School workspace"}</p>
             </div>
             <div className="flex items-center gap-2">
               <button type="button" className="relative rounded-xl border border-blue-100 p-2.5 text-[#5a5e6a] transition hover:bg-blue-50">
                 <Bell className="h-4 w-4" />
-                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[9px] font-bold text-white">3</span>
               </button>
             </div>
           </div>

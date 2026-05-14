@@ -3,20 +3,7 @@ import type {
   DashboardRole,
   DashboardSnapshot,
   ModuleWorkspace,
-  SyncState,
 } from "./types";
-
-function statusLabel(status: SyncState) {
-  if (status === "synced") {
-    return "done";
-  }
-
-  if (status === "pending") {
-    return "in-progress";
-  }
-
-  return "blocked";
-}
 
 function moduleHref(role: DashboardRole, moduleName: string) {
   return `/dashboard/${role}/${moduleName}`;
@@ -99,94 +86,13 @@ function buildFinanceWorkspace(
             id: "finance-insight-1",
             title: "Trend signal",
             description: snapshot.finance.trendLabel,
-            value: snapshot.kpis.find((item) => item.id === "collection-rate")?.value ?? "87.4%",
+            value: snapshot.kpis.find((item) => item.id === "collection-rate")?.value ?? "0%",
           },
           {
             id: "finance-insight-2",
             title: "Mix shift",
-            description: "Tuition still drives the largest share of inflow.",
+            description: "Collection mix appears after live receipts are posted.",
             value: `${snapshot.finance.collectionMix[0]?.value ?? 0}%`,
-          },
-        ],
-      },
-    ],
-  };
-}
-
-function buildAttendanceWorkspace(
-  role: DashboardRole,
-  snapshot: DashboardSnapshot,
-  online: boolean,
-): ModuleWorkspace {
-  return {
-    title: "Attendance workspace",
-    description:
-      role === "parent"
-        ? "See attendance posture, lateness, and any sync-sensitive classroom updates tied to your learner."
-        : "Keep roll-call complete, spot unmarked classes, and clear offline sync pressure fast.",
-    badge: online ? "Offline-ready" : "Queueing locally",
-    sections: [
-      {
-        id: "attendance-control",
-        title: "Roll-call control",
-        description: "Attendance capture is the fastest operational loop in the school day, so this view stays compact and action-first.",
-        metrics: [
-          {
-            id: "attendance-rate",
-            label: "Attendance rate",
-            value: snapshot.attendance.attendanceRate,
-            helper: "Current day posture",
-            tone: "ok",
-          },
-          {
-            id: "unmarked-classes",
-            label: "Unmarked classes",
-            value: snapshot.attendance.unmarkedClasses,
-            helper: "Need a teacher action",
-            tone: snapshot.attendance.unmarkedClasses === "0" ? "ok" : "warning",
-          },
-          {
-            id: "absentees",
-            label: "Absentees",
-            value: snapshot.attendance.absentees,
-            helper: "Across tracked classes",
-            tone: "warning",
-          },
-        ],
-        tasks: snapshot.attendance.classStatus.map((entry, index) => ({
-          id: `attendance-task-${index + 1}`,
-          title: entry.className,
-          detail: `Roll-call status ${entry.status} at ${entry.value}.`,
-          status: statusLabel(entry.status),
-        })),
-        actions: [
-          {
-            id: "attendance-action-1",
-            label: role === "parent" ? "View attendance log" : "Mark attendance",
-            href: moduleHref(role, "attendance"),
-            tone: "accent",
-          },
-          {
-            id: "attendance-action-2",
-            label: "Open sync queue",
-            href: moduleHref(role, "attendance"),
-            tone: "neutral",
-          },
-        ],
-        insights: [
-          {
-            id: "attendance-insight-1",
-            title: "Sync state",
-            description: online
-              ? `Last successful sync ${snapshot.sync.lastSyncedAt}.`
-              : `${snapshot.sync.pendingCount} local actions are waiting to upload.`,
-            value: snapshot.sync.label,
-          },
-          {
-            id: "attendance-insight-2",
-            title: "Operational risk",
-            description: "Unmarked classes should be closed before mid-morning escalation.",
-            value: snapshot.attendance.unmarkedClasses,
           },
         ],
       },
@@ -257,14 +163,14 @@ function buildAcademicsWorkspace(
           {
             id: "academics-insight-1",
             title: "Best performing subject",
-            description: "Strongest current signal across the sampled CBC subjects.",
-            value: `${[...snapshot.academics.subjects].sort((a, b) => b.value - a.value)[0]?.subject ?? "Science"}`,
+            description: "Strongest current signal across published CBC subject results.",
+            value: `${[...snapshot.academics.subjects].sort((a, b) => b.value - a.value)[0]?.subject ?? "No subject data"}`,
           },
           {
             id: "academics-insight-2",
             title: "Intervention lane",
             description: "Lowest subject should shape the next coaching or revision plan.",
-            value: `${[...snapshot.academics.subjects].sort((a, b) => a.value - b.value)[0]?.subject ?? "Social Studies"}`,
+            value: `${[...snapshot.academics.subjects].sort((a, b) => a.value - b.value)[0]?.subject ?? "No subject data"}`,
           },
         ],
       },
@@ -280,7 +186,7 @@ function buildStudentsWorkspace(
     title: role === "parent" ? "Learner workspace" : "Students workspace",
     description:
       role === "parent"
-        ? "See learner progress, attendance, and the next family-facing actions from one place."
+        ? "See learner progress, balances, and the next family-facing actions from one place."
         : "Admission flow, guardian verification, and class placement decisions stay in the first operational layer here.",
     badge: role === "parent" ? "Family profile" : "Admissions and classing",
     sections: [
@@ -292,15 +198,8 @@ function buildStudentsWorkspace(
           {
             id: "student-total",
             label: role === "parent" ? "Children linked" : "Total students",
-            value: snapshot.kpis.find((item) => item.id === "students" || item.id === "children")?.value ?? "1,148",
+            value: snapshot.kpis.find((item) => item.id === "students" || item.id === "children")?.value ?? "0",
             helper: role === "parent" ? "Active family links" : "Current active learners",
-            tone: "ok",
-          },
-          {
-            id: "attendance-posture",
-            label: "Attendance posture",
-            value: snapshot.attendance.attendanceRate,
-            helper: "Current student coverage",
             tone: "ok",
           },
           {
@@ -314,10 +213,10 @@ function buildStudentsWorkspace(
         tasks: [
           {
             id: "students-task-1",
-            title: role === "parent" ? "Review learner attendance note" : "Verify new admissions",
+            title: role === "parent" ? "Review learner academic note" : "Verify new admissions",
             detail:
               role === "parent"
-                ? "Open any lateness or absence note before the day closes."
+                ? "Open the latest academic or classroom note before the day closes."
                 : "Front office updates should be classed and guardian-verified today.",
             status: "todo",
           },
@@ -429,7 +328,7 @@ function buildCommunicationWorkspace(
           {
             id: "communication-insight-1",
             title: "Message posture",
-            description: "Fee reminders and attendance notices drive the heaviest daytime bursts.",
+            description: "Fee reminders and classroom notices drive the heaviest daytime bursts.",
             value: `${snapshot.notifications.length} active`,
           },
           {
@@ -466,13 +365,6 @@ function buildStaffWorkspace(
             tone: "ok",
           },
           {
-            id: "attendance-posture",
-            label: "Attendance support",
-            value: snapshot.attendance.unmarkedClasses,
-            helper: "Classes still waiting for a mark",
-            tone: snapshot.attendance.unmarkedClasses === "0" ? "ok" : "warning",
-          },
-          {
             id: "approvals",
             label: "Pending approvals",
             value: `${snapshot.notifications.filter((item) => item.severity !== "ok").length}`,
@@ -490,7 +382,7 @@ function buildStaffWorkspace(
           {
             id: "staff-task-2",
             title: "Confirm class coverage",
-            detail: "Use the attendance and academics modules to close any uncovered sessions.",
+            detail: "Use staff schedules and academics to close any uncovered sessions.",
             status: "in-progress",
           },
         ],
@@ -512,8 +404,8 @@ function buildStaffWorkspace(
           {
             id: "staff-insight-1",
             title: "Operational handoff",
-            description: "Staff issues often begin as attendance gaps or academic delays.",
-            value: snapshot.attendance.unmarkedClasses,
+            description: "Staff issues often begin as timetable gaps or academic delays.",
+            value: `${snapshot.notifications.length}`,
           },
           {
             id: "staff-insight-2",
@@ -539,7 +431,7 @@ function buildReportsWorkspace(
       {
         id: "reports-core",
         title: "Reporting posture",
-        description: "Cross-functional summary blocks keep finance, attendance, and academics aligned on the same school state.",
+        description: "Cross-functional summary blocks keep finance, academics, and operations aligned on the same school state.",
         metrics: [
           {
             id: "alerts",
@@ -696,10 +588,6 @@ export function buildModuleWorkspace(
 ): ModuleWorkspace {
   if (moduleName === "finance") {
     return buildFinanceWorkspace(role, snapshot, online);
-  }
-
-  if (moduleName === "attendance") {
-    return buildAttendanceWorkspace(role, snapshot, online);
   }
 
   if (moduleName === "academics") {

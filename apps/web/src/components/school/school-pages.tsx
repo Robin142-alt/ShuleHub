@@ -8,8 +8,10 @@ import { ActivityListCard, SimpleListCard } from "@/components/experience/activi
 import { MetricGrid } from "@/components/experience/metric-grid";
 import { QuickActionBar } from "@/components/experience/quick-action-bar";
 import { AdmissionsModuleScreen } from "@/components/modules/admissions/admissions-module-screen";
+import { ExamsModuleScreen } from "@/components/modules/exams/exams-module-screen";
 import { InventoryModuleScreen } from "@/components/modules/inventory/inventory-module-screen";
 import { ErpShell } from "@/components/school/erp-shell";
+import { UserManagementPanel } from "@/components/school/user-management-panel";
 import { SupportCenterWorkspace } from "@/components/support/support-center-workspace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -318,22 +320,6 @@ function SchoolDashboardHome({
             }))}
           />
           <SimpleListCard
-            title="Attendance summary"
-            subtitle="Signals for class roll call completion today."
-            items={snapshot.attendance.classStatus.map((entry) => ({
-              id: entry.className,
-              title: entry.className,
-              subtitle: `Attendance completion ${entry.value}`,
-              value: entry.status,
-              tone:
-                entry.status === "synced"
-                  ? "ok"
-                  : entry.status === "pending"
-                    ? "warning"
-                    : "critical",
-            }))}
-          />
-          <SimpleListCard
             title="Alerts"
             subtitle="Items that need attention before routine work."
             items={snapshot.alerts.map((alert) => ({
@@ -355,7 +341,7 @@ function SchoolDashboardHome({
             title: item.title,
             detail: item.detail,
             timeLabel: item.timeLabel,
-            tone: item.category === "payment" ? "ok" : item.category === "attendance" ? "warning" : "ok",
+            tone: item.category === "payment" ? "ok" : "ok",
           }))}
         />
         <Card className="p-5">
@@ -534,7 +520,7 @@ function SchoolStudentsPage({
                 setStudentError(null);
               }}
               className="input-base"
-              placeholder="Mercy Atieno"
+              placeholder="Learner full name"
             />
           </label>
           <label className="space-y-2 text-sm text-foreground">
@@ -547,7 +533,7 @@ function SchoolStudentsPage({
                 setStudentError(null);
               }}
               className="input-base"
-              placeholder="ADM-9001"
+              placeholder="Admission number"
             />
           </label>
           <label className="space-y-2 text-sm text-foreground">
@@ -560,7 +546,7 @@ function SchoolStudentsPage({
                 setStudentError(null);
               }}
               className="input-base"
-              placeholder="Grade 6 Hope"
+              placeholder="Class and stream"
             />
           </label>
           <label className="space-y-2 text-sm text-foreground">
@@ -574,7 +560,7 @@ function SchoolStudentsPage({
               }}
               className="input-base"
               inputMode="tel"
-              placeholder="0722000001"
+              placeholder="Parent phone number"
             />
           </label>
         </div>
@@ -653,7 +639,7 @@ function StudentProfilePage({
                   title="Overview actions"
                   subtitle="Fast follow-up actions for this learner."
                   items={[
-                    { id: "call", title: "Call parent", subtitle: "Discuss attendance or balances", value: "Available" },
+                    { id: "call", title: "Call parent", subtitle: "Discuss balances or classroom updates", value: "Available" },
                     { id: "fee", title: "Open fee statement", subtitle: "Prepare a printable account view", value: "Ready" },
                     { id: "academics", title: "Open report card", subtitle: "See current performance and comments", value: "Current" },
                   ]}
@@ -689,22 +675,6 @@ function StudentProfilePage({
                   getRowKey={(row) => row.id}
                 />
               </div>
-            ),
-          },
-          {
-            id: "attendance",
-            label: "Attendance",
-            panel: (
-              <DataTable
-                title="Attendance record"
-                columns={[
-                  { id: "date", header: "Date", render: (row) => row.date },
-                  { id: "status", header: "Status", render: (row) => <StatusPill label={row.status} tone={row.statusTone} /> },
-                  { id: "note", header: "Note", render: (row) => row.note },
-                ]}
-                rows={profile.attendance}
-                getRowKey={(row) => row.id}
-              />
             ),
           },
           {
@@ -952,7 +922,7 @@ function SchoolFinancePage({
                 setInvoiceError(null);
               }}
               className="input-base"
-              placeholder="Mercy Atieno"
+              placeholder="Learner full name"
             />
           </label>
           <label className="space-y-2 text-sm text-foreground">
@@ -966,7 +936,7 @@ function SchoolFinancePage({
               }}
               className="input-base"
               inputMode="numeric"
-              placeholder="18500"
+              placeholder="Amount in KES"
             />
           </label>
         </div>
@@ -1003,7 +973,7 @@ function SchoolFinancePage({
                 setPaymentError(null);
               }}
               className="input-base"
-              placeholder="Mercy Atieno"
+              placeholder="Learner full name"
             />
           </label>
           <label className="space-y-2 text-sm text-foreground">
@@ -1017,7 +987,7 @@ function SchoolFinancePage({
               }}
               className="input-base"
               inputMode="numeric"
-              placeholder="18500"
+              placeholder="Amount in KES"
             />
           </label>
           <label className="space-y-2 text-sm text-foreground md:col-span-2">
@@ -1030,7 +1000,7 @@ function SchoolFinancePage({
                 setPaymentError(null);
               }}
               className="input-base"
-              placeholder="SMX82KQ4"
+              placeholder="Payment reference"
             />
           </label>
         </div>
@@ -1171,7 +1141,7 @@ function SchoolMpesaPage({
                 setReconcileError(null);
               }}
               className="input-base"
-              placeholder="SMX82KQ4"
+              placeholder="Receipt code"
             />
           </label>
           <label className="space-y-2 text-sm text-foreground">
@@ -1184,53 +1154,12 @@ function SchoolMpesaPage({
                 setReconcileError(null);
               }}
               className="input-base"
-              placeholder="Mercy Atieno"
+              placeholder="Learner full name"
             />
           </label>
         </div>
         </div>
       </Modal>
-    </div>
-  );
-}
-
-function SchoolAttendancePage({
-  role,
-  tenantSlug,
-}: {
-  role: SchoolExperienceRole;
-  tenantSlug?: string | null;
-}) {
-  const { model } = getSchoolWorkspace(role, tenantSlug);
-
-  return (
-    <div className="space-y-6">
-      <SchoolPageHeader
-        eyebrow="Attendance"
-        title="Daily attendance"
-        description="Simple, fast marking with enough summary to spot unmarked classes or absent learners immediately."
-        actions={<StatusPill label={`Marked ${model.attendance.dateLabel}`} tone="ok" />}
-      />
-      <MetricGrid
-        items={model.attendance.summary.map((item) => ({
-          id: item.id,
-          label: item.label,
-          value: item.value,
-          helper: item.helper,
-        }))}
-      />
-      <DataTable
-        title={`Roll call • ${model.attendance.dateLabel}`}
-        subtitle="Toggle present or absent and keep offline-safe work clear."
-        columns={[
-          { id: "student", header: "Student", render: (row) => row.student },
-          { id: "className", header: "Class", render: (row) => row.className },
-          { id: "state", header: "Status", render: (row) => <StatusPill label={row.state} tone={row.state === "present" ? "ok" : "warning"} /> },
-          { id: "synced", header: "Sync", render: (row) => <StatusPill label={row.synced} tone={row.synced} /> },
-        ]}
-        rows={model.attendance.rows}
-        getRowKey={(row) => row.id}
-      />
     </div>
   );
 }
@@ -1351,7 +1280,7 @@ function SchoolReportsPage({
       <SchoolPageHeader
         eyebrow="Reports"
         title="Reports and exports"
-        description="Print fee statements, payment summaries, report cards, and attendance exports without hunting through the system."
+        description="Print fee statements, payment summaries, report cards, and operational exports without hunting through the system."
         actions={
           <>
             <Button variant="secondary" onClick={exportReportCatalog}>
@@ -1602,15 +1531,21 @@ export function SchoolPages({
     ...item,
     href: mapSchoolHref(role, item.href, routeMode),
   }));
+  const subscriptionNotifications: ExperienceNotificationItem[] =
+    workspace.subscription.state === "ACTIVE"
+      ? []
+      : [
+          {
+            id: "subscription-renewal",
+            title: workspace.subscription.statusLabel,
+            detail: workspace.subscription.detail,
+            timeLabel: "billing",
+            tone: workspace.subscription.tone,
+            href: mapSchoolHref(role, workspace.subscription.primaryActionHref, routeMode),
+          },
+        ];
   const notifications: ExperienceNotificationItem[] = [
-    {
-      id: "subscription-renewal",
-      title: workspace.subscription.statusLabel,
-      detail: workspace.subscription.detail,
-      timeLabel: "billing",
-      tone: workspace.subscription.tone,
-      href: mapSchoolHref(role, workspace.subscription.primaryActionHref, routeMode),
-    },
+    ...subscriptionNotifications,
     ...workspace.snapshot.notifications.slice(0, 3).map(
       (item): ExperienceNotificationItem => ({
         id: item.id,
@@ -1649,7 +1584,6 @@ export function SchoolPages({
       {!studentId && section === "students" ? <SchoolStudentsPage role={role} tenantSlug={tenantSlug} routeMode={routeMode} /> : null}
       {!studentId && section === "finance" ? <SchoolFinancePage role={role} tenantSlug={tenantSlug} routeMode={routeMode} /> : null}
       {!studentId && section === "mpesa" ? <SchoolMpesaPage role={role} tenantSlug={tenantSlug} /> : null}
-      {!studentId && section === "attendance" ? <SchoolAttendancePage role={role} tenantSlug={tenantSlug} /> : null}
       {!studentId && section === "academics" ? <SchoolAcademicsPage role={role} tenantSlug={tenantSlug} /> : null}
       {!studentId && section === "reports" ? <SchoolReportsPage role={role} tenantSlug={tenantSlug} /> : null}
       {!studentId && section === "communication" ? <SchoolCommunicationPage role={role} tenantSlug={tenantSlug} /> : null}
@@ -1665,15 +1599,9 @@ export function SchoolPages({
         />
       ) : null}
       {!studentId && section === "exams" ? (
-        <SchoolBasicCardPage
-          eyebrow="Exams"
-          title="Exam operations"
-          description="Timelines, invigilation readiness, and exam-room preparation in a calm operational view."
-          items={[
-            { id: "exam-1", title: "Mid-term CAT", subtitle: "Starts Monday across Grade 4–9", value: "5 days" },
-            { id: "exam-2", title: "Invigilation rota", subtitle: "Teachers allocated and awaiting principal confirmation", value: "Draft" },
-            { id: "exam-3", title: "CBC moderation", subtitle: "Science and Maths papers need moderation", value: "2 queues" },
-          ]}
+        <ExamsModuleScreen
+          role={role}
+          schoolName={workspace.branding.name}
         />
       ) : null}
       {!studentId && section === "timetable" ? (
@@ -1682,9 +1610,9 @@ export function SchoolPages({
           title="Timetable coordination"
           description="Class streams, teacher cover, and room availability without clutter."
           items={[
-            { id: "time-1", title: "Grade 7 Hope", subtitle: "Maths • Mr. Otieno • Room 4", value: "08:00" },
-            { id: "time-2", title: "Grade 5 Joy", subtitle: "English • Ms. Njoroge • Room 2", value: "09:10" },
-            { id: "time-3", title: "Cover needed", subtitle: "Science practical facilitator absent", value: "Action" },
+            { id: "time-1", title: "No timetable periods published", subtitle: "Class streams and rooms appear after the timetable is configured.", value: "0" },
+            { id: "time-2", title: "No teacher cover requests", subtitle: "Cover requests appear only when staff availability changes.", value: "0" },
+            { id: "time-3", title: "No room conflicts", subtitle: "Room availability checks appear after timetable data is imported.", value: "0" },
           ]}
         />
       ) : null}
@@ -1694,9 +1622,9 @@ export function SchoolPages({
           title="Staff operations"
           description="Teachers, office staff, and operational ownership at a glance."
           items={[
-            { id: "staff-1", title: "Teaching staff", subtitle: "27 teachers active this term", value: "27" },
-            { id: "staff-2", title: "Admin coverage", subtitle: "Front office and bursary both staffed today", value: "Ready" },
-            { id: "staff-3", title: "Leave requests", subtitle: "Two pending approvals this week", value: "2" },
+            { id: "staff-1", title: "No staff accounts yet", subtitle: "Staff records appear after school administrators send real invitations.", value: "0" },
+            { id: "staff-2", title: "No coverage schedule", subtitle: "Office coverage appears after staff shifts are configured.", value: "0" },
+            { id: "staff-3", title: "No leave requests", subtitle: "Leave approvals appear after staff begin using the workspace.", value: "0" },
           ]}
         />
       ) : null}
@@ -1713,7 +1641,7 @@ export function SchoolPages({
             title="School settings"
             description="School profile, fee structure, and user management in one trusted admin area."
           />
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid gap-6 lg:grid-cols-2">
             <DataTable
               title="School profile"
               columns={[
@@ -1733,18 +1661,8 @@ export function SchoolPages({
               rows={workspace.model.settings.feeStructure}
               getRowKey={(row) => row.id}
             />
-            <DataTable
-              title="Users"
-              columns={[
-                { id: "name", header: "User", render: (row) => row.name },
-                { id: "role", header: "Role", render: (row) => row.role },
-                { id: "phone", header: "Phone", render: (row) => row.phone },
-                { id: "status", header: "Status", render: (row) => <StatusPill label={row.status} tone={row.statusTone} /> },
-              ]}
-              rows={workspace.model.settings.users}
-              getRowKey={(row) => row.id}
-            />
           </div>
+          <UserManagementPanel />
         </div>
       ) : null}
     </ErpShell>

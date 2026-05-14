@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import {
   ArrowRight,
   BookOpenCheck,
-  ClipboardCheck,
   CircleDollarSign,
   FileSpreadsheet,
   Filter,
@@ -22,7 +21,6 @@ import Link from "next/link";
 import { AcademicsWidget } from "@/components/dashboard/academics-widget";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { AlertsPanel } from "@/components/dashboard/alerts-panel";
-import { AttendanceWidget } from "@/components/dashboard/attendance-widget";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
 import { AdmissionsDashboardHome } from "@/components/modules/admissions/admissions-dashboard-home";
 import { AdmissionsModuleScreen } from "@/components/modules/admissions/admissions-module-screen";
@@ -38,7 +36,6 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Tabs } from "@/components/ui/tabs";
 import {
   buildSchoolErpModel,
-  type AttendanceMarkRow,
   type DashboardDefaulterRow,
   type DashboardMpesaRow,
   type FeeStructureRow,
@@ -62,6 +59,7 @@ import type {
   DashboardSnapshot,
   QuickActionItem,
 } from "@/lib/dashboard/types";
+import { isProductionReadyModule } from "@/lib/features/module-readiness";
 
 function SummaryCards({
   items,
@@ -373,6 +371,7 @@ export function DashboardHome({
   const isStorekeeperRole = role === "storekeeper";
   const isAdmissionsRole = role === "admissions";
   const isParentRole = role === "parent";
+  const academicsReady = isProductionReadyModule("academics");
 
   return (
     <div data-testid="dashboard-view" className="space-y-6">
@@ -409,17 +408,16 @@ export function DashboardHome({
         </section>
       ) : isTeacherRole ? (
         <>
-          <section data-testid="core-widgets" className="grid gap-6 xl:grid-cols-12">
-            <div data-testid="core-widget" className="xl:col-span-7">
-              <AttendanceWidget data={snapshot.attendance} />
-            </div>
-            <div data-testid="core-widget" className="xl:col-span-5">
-              <AcademicsWidget
-                data={snapshot.academics}
-                href="/dashboard/teacher/academics"
-              />
-            </div>
-          </section>
+          {academicsReady ? (
+            <section data-testid="core-widgets" className="grid gap-6 xl:grid-cols-12">
+              <div data-testid="core-widget" className="xl:col-span-12">
+                <AcademicsWidget
+                  data={snapshot.academics}
+                  href="/dashboard/teacher/academics"
+                />
+              </div>
+            </section>
+          ) : null}
 
           <div data-testid="context-section">
             <TeacherClassroomCard snapshot={snapshot} />
@@ -439,9 +437,14 @@ export function DashboardHome({
               <div data-testid="core-widget" className="xl:col-span-7">
               <ParentFamilyCard profile={primaryProfile} />
             </div>
-            <div data-testid="core-widget" className="xl:col-span-5">
-              <AttendanceWidget data={snapshot.attendance} />
-            </div>
+            {academicsReady ? (
+              <div data-testid="core-widget" className="xl:col-span-5">
+                <AcademicsWidget
+                  data={snapshot.academics}
+                  href="/dashboard/parent/academics"
+                />
+              </div>
+            ) : null}
           </section>
 
           <div data-testid="context-section">
@@ -750,24 +753,12 @@ export function StudentProfilePage({
     },
   ];
 
-  const attendanceColumns: DataTableColumn<StudentProfileData["attendance"][number]>[] = [
-    { id: "date", header: "Date", render: (row) => row.date },
-    {
-      id: "status",
-      header: "Status",
-      render: (row) => <StatusPill label={row.status} tone={row.statusTone} />,
-    },
-    { id: "note", header: "Note", render: (row) => row.note },
-  ];
-
   const academicsColumns: DataTableColumn<StudentProfileData["academics"][number]>[] = [
     { id: "subject", header: "Subject", render: (row) => row.subject },
     { id: "teacher", header: "Teacher", render: (row) => row.teacher },
     { id: "average", header: "Average", render: (row) => row.average },
     { id: "grade", header: "CBC band", render: (row) => row.grade },
   ];
-  const presentDays = profile.attendance.filter((item) => item.statusTone === "ok").length;
-  const attendanceRate = `${Math.round((presentDays / Math.max(profile.attendance.length, 1)) * 100)}%`;
   const leadingSubject = [...profile.academics].sort((left, right) => {
     const leftValue = Number.parseInt(left.average, 10);
     const rightValue = Number.parseInt(right.average, 10);
@@ -866,7 +857,7 @@ export function StudentProfilePage({
               <p className="eyebrow">Best action now</p>
               <p className="mt-2 text-sm font-semibold text-foreground">
                 {profile.balanceTone === "ok"
-                  ? "Balance is clear. Share attendance and academic progress instead."
+                  ? "Balance is clear. Share academic progress and notices instead."
                   : "Record or confirm payment, then send a follow-up message to the parent."}
               </p>
             </div>
@@ -1047,56 +1038,6 @@ export function StudentProfilePage({
                   subtitle="Payments come from the ledger-backed posting history."
                   columns={paymentColumns}
                   rows={profile.paymentHistory}
-                  getRowKey={(row) => row.id}
-                />
-              </div>
-            ),
-          },
-          {
-            id: "attendance",
-            label: "Attendance",
-            panel: (
-              <div className="space-y-6">
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <Card className="p-5">
-                    <p className="eyebrow">
-                      Attendance health
-                    </p>
-                    <h3 className="mt-2 section-title">
-                      Current learner rhythm
-                    </h3>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-4">
-                        <p className="eyebrow">Present rate</p>
-                        <p className="mt-2 section-title">{attendanceRate}</p>
-                      </div>
-                      <div className="rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-4">
-                        <p className="eyebrow">Recent absence notes</p>
-                        <p className="mt-2 text-sm text-foreground">
-                          {profile.attendance.filter((item) => item.statusTone !== "ok").length || "No"} flagged sessions
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-
-                  <Card className="p-5">
-                    <p className="eyebrow">
-                      Family follow-up
-                    </p>
-                    <h3 className="mt-2 section-title">
-                      What should happen next?
-                    </h3>
-                    <p className="mt-4 text-[13px] leading-relaxed text-muted">
-                      If absences continue, contact the parent using the school communication flow so finance and class records stay aligned.
-                    </p>
-                  </Card>
-                </div>
-
-                <DataTable
-                  title="Attendance"
-                  subtitle="Simple recent roll-call history for this learner."
-                  columns={attendanceColumns}
-                  rows={profile.attendance}
                   getRowKey={(row) => row.id}
                 />
               </div>
@@ -1585,174 +1526,6 @@ export function MpesaPage({
   );
 }
 
-export function AttendancePage({
-  role,
-  snapshot,
-  online,
-}: {
-  role: DashboardRole;
-  snapshot: DashboardSnapshot;
-  online: boolean;
-}) {
-  const model = useMemo(
-    () => buildSchoolErpModel({ role, tenant: snapshot.tenant, online }),
-    [online, role, snapshot.tenant],
-  );
-  const [rows, setRows] = useState(model.attendance.rows);
-  const [search, setSearch] = useState("");
-  const [classFilter, setClassFilter] = useState("all");
-
-  const toggleState = (id: string, state: "present" | "absent") => {
-    setRows((current) =>
-      current.map((row) =>
-        row.id === id
-          ? {
-              ...row,
-              state,
-              synced: online ? "synced" : "pending",
-            }
-          : row,
-      ),
-    );
-  };
-
-  const columns: DataTableColumn<AttendanceMarkRow>[] = [
-    { id: "student", header: "Student", render: (row) => <span className="font-semibold">{row.student}</span> },
-    { id: "class", header: "Class", render: (row) => row.className },
-    {
-      id: "mark",
-      header: "Present / Absent",
-      render: (row) => (
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant={row.state === "present" ? "primary" : "secondary"}
-            onClick={() => toggleState(row.id, "present")}
-          >
-            Present
-          </Button>
-          <Button
-            size="sm"
-            variant={row.state === "absent" ? "danger" : "secondary"}
-            onClick={() => toggleState(row.id, "absent")}
-          >
-            Absent
-          </Button>
-        </div>
-      ),
-    },
-    {
-      id: "sync",
-      header: "Sync",
-      render: (row) => <StatusPill label={row.synced} tone={row.synced} />,
-    },
-  ];
-  const filteredRows = rows.filter((row) => {
-    const normalizedSearch = search.trim().toLowerCase();
-    const matchesSearch =
-      normalizedSearch.length === 0 || row.student.toLowerCase().includes(normalizedSearch);
-    const matchesClass = classFilter === "all" || row.className === classFilter;
-
-    return matchesSearch && matchesClass;
-  });
-  const pendingCount = rows.filter((row) => row.synced !== "synced").length;
-  const absenteeCount = rows.filter((row) => row.state === "absent").length;
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Attendance"
-        title="Daily attendance"
-        description="Keep attendance capture as simple as a class list with clear toggles and one save action."
-        actions={
-          <Button size="lg">
-            <ClipboardCheck className="h-4 w-4" />
-            {online ? "Save Daily" : "Queue Save"}
-          </Button>
-        }
-        meta={<StatusPill label={model.attendance.dateLabel} tone="ok" />}
-      />
-
-      <SummaryCards items={model.attendance.summary} />
-
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-6">
-          <Card className="p-5">
-            <div className="grid gap-3 lg:grid-cols-[1.3fr_0.8fr]">
-              <label className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3">
-                <Search className="h-4 w-4 text-muted" />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search learner"
-                  className="w-full bg-transparent text-sm outline-none placeholder:text-muted"
-                />
-              </label>
-              <label className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3">
-                <Filter className="h-4 w-4 text-muted" />
-                <select
-                  value={classFilter}
-                  onChange={(event) => setClassFilter(event.target.value)}
-                  className="w-full bg-transparent text-sm outline-none"
-                >
-                  <option value="all">All classes</option>
-                  {Array.from(new Set(rows.map((row) => row.className))).map((className) => (
-                    <option key={className} value={className}>
-                      {className}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </Card>
-
-          <DataTable
-            title="Attendance register"
-            subtitle="Attendance stays offline-safe. Finance remains online-only elsewhere."
-            columns={columns}
-            rows={filteredRows}
-            getRowKey={(row) => row.id}
-          />
-        </div>
-
-        <div className="space-y-6">
-          <Card className="p-5">
-            <p className="eyebrow">
-              Sync status
-            </p>
-            <h3 className="mt-2 section-title">
-              Safe to capture while offline
-            </h3>
-            <div className="mt-4 space-y-3">
-              <div className="rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3">
-                <p className="eyebrow">Current mode</p>
-                <div className="mt-2">
-                  <StatusPill label={online ? "Synced live" : "Offline queue active"} tone={online ? "ok" : "warning"} />
-                </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
-                <div className="rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3">
-                  <p className="eyebrow">Pending sync</p>
-                  <p className="mt-2 section-title">{pendingCount}</p>
-                </div>
-                <div className="rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3">
-                  <p className="eyebrow">Absentees</p>
-                  <p className="mt-2 section-title">{absenteeCount}</p>
-                </div>
-              </div>
-              <div className="rounded-[var(--radius)] border border-border bg-surface-muted px-4 py-3">
-                <p className="text-sm text-foreground">
-                  Pending rows will sync when connectivity returns. Finance actions remain unavailable until the device is online again.
-                </p>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 export function AcademicsPage({
   role,
   snapshot,
@@ -1988,14 +1761,14 @@ export function CommunicationPage({
               <select className="input-base">
                 <option>Defaulters</option>
                 <option>All parents</option>
-                <option>Grade 7 Hope</option>
+                <option>Class group</option>
               </select>
             </label>
             <label className="space-y-2">
               <span className="text-sm font-semibold text-foreground">Message</span>
               <textarea
                 className="min-h-32 input-base"
-                defaultValue="Good afternoon. Please clear the outstanding fee balance before Friday to avoid interruptions."
+                placeholder="Write the school notice to send"
               />
             </label>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2421,7 +2194,7 @@ export function SettingsPage({
                   <div className="mt-6 space-y-4">
                     {[
                       "Finance actions stay online-only to protect ledger truth.",
-                      "Attendance remains safe to queue while offline.",
+                      "Retired modules stay hidden from operational workspaces.",
                       "User management stays tenant-scoped and role-based.",
                     ].map((item) => (
                       <div
@@ -2443,7 +2216,7 @@ export function SettingsPage({
             panel: (
               <DataTable
                 title="Fee structure"
-                subtitle="Tuition, transport, and lunch stay plainly editable and easy to read."
+                subtitle="Tuition, lunch, and other fee items stay plainly editable and easy to read."
                 columns={feeColumns}
                 rows={model.settings.feeStructure}
                 getRowKey={(row) => row.id}
@@ -2498,10 +2271,6 @@ export function ModuleScreen({
 
   if (moduleName === "mpesa") {
     return <MpesaPage role={role} snapshot={snapshot} online={online} />;
-  }
-
-  if (moduleName === "attendance") {
-    return <AttendancePage role={role} snapshot={snapshot} online={online} />;
   }
 
   if (moduleName === "academics") {

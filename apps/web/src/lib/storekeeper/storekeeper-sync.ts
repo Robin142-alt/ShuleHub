@@ -2,6 +2,7 @@ import type {
   StorekeeperIssueInput,
   StorekeeperReceiveInput,
 } from "@/lib/storekeeper/storekeeper-data";
+import { getCsrfToken } from "@/lib/auth/csrf-client";
 
 export interface StorekeeperSyncResult {
   synced: boolean;
@@ -44,20 +45,18 @@ async function postStorekeeperSync(path: string, payload: Record<string, unknown
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      "x-shulehub-csrf": await getCsrfToken(),
     },
     body: JSON.stringify(payload),
   });
 
   const body = (await response.json().catch(() => null)) as StorekeeperSyncResult | null;
 
-  if (!response.ok) {
-    throw new Error(body?.message ?? "Live inventory API sync failed.");
+  if (!response.ok || !body?.synced) {
+    throw new Error(body?.message ?? "Live inventory sync failed.");
   }
 
-  return body ?? {
-    synced: false,
-    message: "Live inventory API did not return a sync response.",
-  };
+  return body;
 }
 
 export function syncStorekeeperStockIssue(input: StorekeeperIssueInput) {

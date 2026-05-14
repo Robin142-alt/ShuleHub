@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRight, ExternalLink, RotateCcw, ShieldBan, UserRoundCog } from "lucide-react";
+import { ArrowRight, ExternalLink, MailCheck, Plus, RotateCcw, ShieldBan, UserRoundCog } from "lucide-react";
 
 import { ActivityListCard, SimpleListCard } from "@/components/experience/activity-list-card";
 import { ChartCard } from "@/components/experience/chart-card";
@@ -34,6 +34,11 @@ import {
   tenantRows,
   auditRows,
 } from "@/lib/experiences/superadmin-data";
+import {
+  createPlatformSchool,
+  fetchPlatformSchools,
+  type PlatformSchool,
+} from "@/lib/platform/school-onboarding-client";
 import { toSuperadminPath } from "@/lib/routing/experience-routes";
 
 type SuperadminRouteMode = "hosted" | "public";
@@ -82,11 +87,108 @@ function SuperadminPageHeader({
   );
 }
 
+const emptySchoolForm = {
+  schoolName: "",
+  tenantId: "",
+  county: "",
+  adminName: "",
+  adminEmail: "",
+};
+
+function mapPlatformSchoolToTenantRow(row: PlatformSchool): (typeof tenantRows)[number] {
+  return {
+    id: row.tenant_id,
+    schoolName: row.school_name,
+    status: row.status === "active" ? "Active" : "Suspended",
+    statusTone: row.status === "active" ? "ok" : "critical",
+    subscription: "Not configured",
+    studentCount: "0",
+    lastActive: row.invitation_sent ? "Invitation sent" : "Awaiting admin",
+    revenue: "KES 0",
+  };
+}
+
 function TenantsTable() {
   const [rows, setRows] = useState(tenantRows);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [schoolForm, setSchoolForm] = useState(emptySchoolForm);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isLoadingSchools, setIsLoadingSchools] = useState(true);
   const selectedTenant = rows.find((row) => row.id === selectedTenantId) ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSchools() {
+      setIsLoadingSchools(true);
+
+      try {
+        const liveRows = await fetchPlatformSchools();
+
+        if (!cancelled) {
+          setRows(liveRows.map(mapPlatformSchoolToTenantRow));
+        }
+      } catch {
+        if (!cancelled) {
+          setRows(tenantRows);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingSchools(false);
+        }
+      }
+    }
+
+    void loadSchools();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function submitSchoolCreate() {
+    if (
+      schoolForm.schoolName.trim().length < 2 ||
+      schoolForm.tenantId.trim().length < 2 ||
+      schoolForm.adminName.trim().length < 2 ||
+      !schoolForm.adminEmail.includes("@")
+    ) {
+      setCreateError("Enter the school name, workspace code, admin name, and admin email.");
+      return;
+    }
+
+    setIsCreating(true);
+    setCreateError(null);
+    setCreateSuccess(null);
+
+    try {
+      const createdSchool = await createPlatformSchool({
+        schoolName: schoolForm.schoolName.trim(),
+        tenantId: schoolForm.tenantId.trim(),
+        county: schoolForm.county.trim() || undefined,
+        adminName: schoolForm.adminName.trim(),
+        adminEmail: schoolForm.adminEmail.trim(),
+      });
+      setRows((currentRows) => [
+        mapPlatformSchoolToTenantRow(createdSchool),
+        ...currentRows.filter((row) => row.id !== createdSchool.tenant_id),
+      ]);
+      setCreateSuccess(`Invitation sent to ${createdSchool.admin_email}.`);
+      setSchoolForm(emptySchoolForm);
+    } catch (error) {
+      setCreateError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create this school right now.",
+      );
+    } finally {
+      setIsCreating(false);
+    }
+  }
 
   function updateTenantStatus(tenantId: string, nextStatus: "Active" | "Suspended") {
     setRows((currentRows) =>
@@ -156,13 +258,124 @@ function TenantsTable() {
 
   return (
     <>
+      <div className="mb-4 flex flex-col gap-3 rounded-[var(--radius-sm)] border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-foreground">School onboarding</p>
+          <p className="mt-1 text-[13px] text-muted">
+            Create a real tenant and email the first school administrator an invite.
+          </p>
+        </div>
+        <Button onClick={() => {
+          setIsCreateOpen(true);
+          setCreateError(null);
+          setCreateSuccess(null);
+        }}>
+          <Plus className="h-4 w-4" />
+          Create school
+        </Button>
+      </div>
       <DataTable
         title="Tenant control"
         subtitle="Every tenant is isolated operationally, but platform support can review billing, access, and activity from one control surface."
         columns={columns}
         rows={rows}
         getRowKey={(row) => row.id}
+        emptyMessage={
+          isLoadingSchools
+            ? "Loading live school records."
+            : "No schools have been onboarded. Create the first school to send a real administrator invitation."
+        }
       />
+      <Modal
+        open={isCreateOpen}
+        title="Create school"
+        description="This creates a real tenant, prepares RBAC roles, and emails the first school administrator."
+        size="lg"
+        onClose={() => {
+          if (!isCreating) {
+            setIsCreateOpen(false);
+          }
+        }}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              disabled={isCreating}
+              onClick={() => setIsCreateOpen(false)}
+            >
+              Close
+            </Button>
+            <Button disabled={isCreating} onClick={submitSchoolCreate}>
+              <MailCheck className="h-4 w-4" />
+              {isCreating ? "Sending invite" : "Create and invite"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          {[
+            {
+              id: "schoolName",
+              label: "School name",
+              placeholder: "Official school name",
+              value: schoolForm.schoolName,
+            },
+            {
+              id: "tenantId",
+              label: "Workspace code",
+              placeholder: "Unique workspace code",
+              value: schoolForm.tenantId,
+            },
+            {
+              id: "county",
+              label: "County",
+              placeholder: "County name",
+              value: schoolForm.county,
+            },
+            {
+              id: "adminName",
+              label: "Administrator name",
+              placeholder: "Principal name",
+              value: schoolForm.adminName,
+            },
+            {
+              id: "adminEmail",
+              label: "Administrator email",
+              placeholder: "Administrator email address",
+              value: schoolForm.adminEmail,
+              type: "email",
+              className: "md:col-span-2",
+            },
+          ].map((field) => (
+            <label key={field.id} className={`space-y-1.5 ${field.className ?? ""}`}>
+              <span className="text-[13px] font-semibold text-foreground">{field.label}</span>
+              <input
+                type={field.type ?? "text"}
+                value={field.value}
+                placeholder={field.placeholder}
+                disabled={isCreating}
+                onChange={(event) =>
+                  setSchoolForm((currentForm) => ({
+                    ...currentForm,
+                    [field.id]: event.target.value,
+                  }))
+                }
+                className="h-10 w-full rounded-[var(--radius-sm)] border border-border bg-surface px-3 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </label>
+          ))}
+        </div>
+        {createError ? (
+          <div className="mt-4 rounded-[var(--radius-sm)] border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+            {createError}
+          </div>
+        ) : null}
+        {createSuccess ? (
+          <div className="mt-4 rounded-[var(--radius-sm)] border border-success/20 bg-success/10 px-4 py-3 text-sm text-foreground">
+            {createSuccess}
+          </div>
+        ) : null}
+      </Modal>
       <Modal
         open={Boolean(selectedTenant)}
         title="Tenant control"
@@ -266,17 +479,13 @@ function RevenuePage() {
       <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
         <ChartCard
           title="Monthly recurring revenue"
-          subtitle="Revenue stabilized after term-opening onboarding and annual plan conversions."
+          subtitle="Revenue data appears after real subscriptions and payment activity are created."
           points={revenuePoints}
         />
         <SimpleListCard
           title="Collections quality"
-          subtitle="Payments and billing behaviors shaping revenue confidence."
-          items={[
-            { id: "quality-1", title: "Successful renewals", subtitle: "Annual and monthly renewals closed this month", value: "94.2%" },
-            { id: "quality-2", title: "Grace accounts", subtitle: "Tenants currently in feature grace window", value: "14", tone: "warning" },
-            { id: "quality-3", title: "Churn risk", subtitle: "Tenants with declining usage and unpaid invoices", value: "8", tone: "critical" },
-          ]}
+          subtitle="Live billing health appears after schools are onboarded."
+          items={[]}
         />
       </div>
     </div>
@@ -487,12 +696,12 @@ function SuperadminOverview({ routeMode }: { routeMode: SuperadminRouteMode }) {
         <div className="space-y-6">
           <ChartCard
             title="Revenue trend"
-            subtitle="Monthly revenue after subscription renewals, SMS bundles, and annual conversions."
+            subtitle="Monthly revenue appears after live subscriptions, invoices, and payment settlements."
             points={revenuePoints}
           />
           <ChartCard
             title="Tenant growth"
-            subtitle="New schools activated across onboarding and assisted migration programs."
+            subtitle="New schools appear here after the platform owner completes real onboarding."
             points={tenantGrowthPoints}
           />
         </div>

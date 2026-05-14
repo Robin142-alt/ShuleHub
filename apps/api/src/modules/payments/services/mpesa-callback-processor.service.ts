@@ -573,6 +573,8 @@ export class MpesaCallbackProcessorService {
       tenantId,
       paymentIntent.id,
       callback.amount_minor,
+      paymentIntent,
+      postedTransaction.transaction_id,
     );
     await this.publishPaymentCompletedEvent(
       paymentIntent,

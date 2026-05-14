@@ -2,24 +2,35 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { ShieldCheck } from "lucide-react";
 
 import { AuthCard } from "@/components/auth/auth-card";
 import { AuthCheckbox } from "@/components/auth/auth-checkbox";
-import { AuthDemoCredentials } from "@/components/auth/auth-demo-credentials";
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthMessage } from "@/components/auth/auth-message";
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
-import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
 import {
-  schoolDemoCredentials,
-} from "@/lib/auth/demo-credentials";
+  MobileTrustRow,
+  SecurityBadge,
+  SessionWarning,
+} from "@/components/auth/auth-security";
+import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
 import type { SchoolBrandingResolution } from "@/lib/auth/school-branding";
 import { useExperienceSession } from "@/lib/auth/use-experience-session";
 
-function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
+const staffLoginSchema = z.object({
+  identifier: z
+    .string()
+    .trim()
+    .email("Enter a valid work email address."),
+  password: z.string().min(8, "Enter your school workspace password."),
+});
+
+type StaffLoginForm = z.infer<typeof staffLoginSchema>;
 
 export function SchoolLoginView({
   resolution,
@@ -27,207 +38,154 @@ export function SchoolLoginView({
   resolution: SchoolBrandingResolution;
 }) {
   const router = useRouter();
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [generalError, setGeneralError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const authSession = useExperienceSession("school", {
     tenantSlug: resolution.requestedSlug ?? resolution.branding.slug,
   });
-
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<StaffLoginForm>({
+    resolver: zodResolver(staffLoginSchema),
+    defaultValues: {
+      identifier: "",
+      password: "",
+    },
+  });
   const isTenantUnavailable = resolution.status === "unknown";
-  const tenantMessage = useMemo(() => {
-    if (resolution.status === "resolved") {
-      return null;
-    }
 
-    if (resolution.status === "unknown") {
-      return {
-        tone: "error" as const,
-        title: "Tenant not found",
-        description:
-          "We could not identify this school workspace from the link you used. Confirm the school address or contact support.",
-      };
-    }
+  const tenantMessage =
+    resolution.status === "unknown"
+      ? {
+          tone: "error" as const,
+          title: "Workspace not recognized",
+          description:
+            "This school workspace could not be verified from the current link. Confirm the school address with your administrator.",
+        }
+      : resolution.status === "default"
+        ? {
+            tone: "warning" as const,
+            title: "Workspace required",
+            description:
+              "Use the school workspace address or invitation link issued by your administrator.",
+          }
+        : {
+            tone: "info" as const,
+            title: "Tenant-isolated access",
+            description:
+              "Your session opens only this school's data, branding, modules, and role permissions.",
+          };
 
-    return {
-      tone: "info" as const,
-      title: "Review school workspace",
-      description:
-        "No tenant subdomain was detected, so this review environment is showing the default school branding profile.",
-    };
-  }, [resolution.status]);
-
-  const submit = async () => {
-    const nextErrors: Record<string, string> = {};
-    const trimmedIdentifier = identifier.trim();
-    const looksLikeEmail = /\S+@\S+\.\S+/.test(trimmedIdentifier);
-    const looksLikePhone = /^[0-9+\-() ]{9,}$/.test(trimmedIdentifier);
-
-    if (!trimmedIdentifier || (!looksLikeEmail && !looksLikePhone)) {
-      nextErrors.identifier = "Use your work email or school phone number.";
-    }
-
-    if (password.trim().length < 8) {
-      nextErrors.password = "Use the password given for your school workspace.";
-    }
-
-    setFieldErrors(nextErrors);
-    setGeneralError(null);
-
-    if (Object.keys(nextErrors).length > 0 || isTenantUnavailable) {
+  const submit = handleSubmit(async (values) => {
+    if (isTenantUnavailable) {
       return;
     }
 
-    setBusy(true);
-    await wait(250);
-
     try {
       const result = await authSession.login({
-        identifier: trimmedIdentifier,
-        password,
+        identifier: values.identifier.trim(),
+        password: values.password,
         tenantSlug: resolution.requestedSlug ?? resolution.branding.slug,
       });
       void router.push(result.redirectTo ?? "/dashboard");
-    } catch (loginError) {
-      setGeneralError(
-        loginError instanceof Error
-          ? loginError.message
-          : "Unable to sign in right now.",
-      );
-    } finally {
-      setBusy(false);
+    } catch {
+      // useExperienceSession exposes the safe message.
     }
-  };
+  });
 
   return (
     <AuthCard>
-      <div className="space-y-6">
-        <div className="space-y-3">
+      <form className="space-y-6" onSubmit={submit}>
+        <div className="space-y-4">
           <div className="flex items-center gap-3">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-accent-soft text-sm font-semibold text-foreground">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-sm font-bold text-emerald-800">
               {resolution.branding.logoMark}
             </span>
             <div>
-              <p className="text-sm font-semibold text-foreground">{resolution.branding.name}</p>
-              <p className="text-sm text-muted">{resolution.branding.county}</p>
+              <p className="text-sm font-bold text-slate-950">{resolution.branding.name}</p>
+              <p className="text-sm text-slate-500">{resolution.branding.county}</p>
             </div>
           </div>
+          <div className="flex flex-wrap gap-2">
+            <SecurityBadge label="School admin" tone="success" />
+            <SecurityBadge label="Tenant protected" />
+            <SecurityBadge label="Email verified" />
+          </div>
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">
-              Welcome back
+            <h2 className="text-3xl font-bold leading-tight text-slate-950">
+              Secure admin access
             </h2>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              Sign in to continue to your school workspace.
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Sign in to manage finance, academics, CBC reporting, and school operations.
             </p>
           </div>
         </div>
 
-        {tenantMessage ? (
-          <AuthMessage
-            tone={tenantMessage.tone}
-            title={tenantMessage.title}
-            description={tenantMessage.description}
-          />
-        ) : (
-          <AuthMessage
-            tone="info"
-            title="Tenant-isolated access"
-            description="Your sign-in only opens your school's workspace, branding, data, and allowed role actions."
-          />
-        )}
+        <MobileTrustRow />
+
+        <AuthMessage
+          tone={tenantMessage.tone}
+          title={tenantMessage.title}
+          description={tenantMessage.description}
+        />
 
         <div className="space-y-4">
           <AuthField
-            label="Email or phone number"
-            placeholder="principal@school.ac.ke or 0712 345 678"
-            autoComplete="username"
-            value={identifier}
-            onChange={(event) => setIdentifier(event.target.value)}
-            error={fieldErrors.identifier}
-            hint="Use the email or phone number your school registered for your account."
+            label="Work email address"
+            autoComplete="email"
+            {...register("identifier")}
+            error={errors.identifier?.message}
           />
           <AuthPasswordField
             label="Password"
             autoComplete="current-password"
-            placeholder="Enter your school password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            error={fieldErrors.password}
+            {...register("password")}
+            error={errors.password?.message}
           />
         </div>
-
-        <AuthDemoCredentials
-          title="Review staff access"
-          subtitle="Choose a school role below to inspect the tenant workspace with controlled credentials."
-          credentials={[
-            {
-              id: "principal",
-              label: "Principal",
-              identifier: schoolDemoCredentials.principal.identifier,
-              password: schoolDemoCredentials.principal.password,
-            },
-            {
-              id: "bursar",
-              label: "Bursar",
-              identifier: schoolDemoCredentials.bursar.identifier,
-              password: schoolDemoCredentials.bursar.password,
-            },
-            {
-              id: "teacher",
-              label: "Teacher",
-              identifier: schoolDemoCredentials.teacher.identifier,
-              password: schoolDemoCredentials.teacher.password,
-            },
-            {
-              id: "Admin",
-              label: "Admin staff",
-              identifier: schoolDemoCredentials.admin.identifier,
-              password: schoolDemoCredentials.admin.password,
-            },
-          ]}
-        />
 
         <div className="flex items-center justify-between gap-3">
           <AuthCheckbox
             checked={rememberMe}
             onChange={(event) => setRememberMe(event.target.checked)}
-            label="Remember me"
+            label="Remember this session"
           />
-          <Link href="/forgot-password" className="text-sm font-medium text-foreground underline-offset-4 hover:underline">
+          <Link
+            href="/school/forgot-password"
+            className="text-sm font-bold text-slate-700 underline-offset-4 hover:text-emerald-700 hover:underline"
+          >
             Forgot password?
           </Link>
         </div>
 
-        {generalError ? (
+        <SessionWarning mode="normal" />
+
+        {authSession.error ? (
           <AuthMessage
             tone="error"
             title="Unable to sign in"
-            description={generalError}
+            description={authSession.error}
           />
         ) : null}
 
-        <AuthSubmitButton busy={busy} onClick={submit} disabled={isTenantUnavailable}>
+        <AuthSubmitButton
+          busy={isSubmitting || authSession.isSubmitting}
+          type="submit"
+          disabled={isTenantUnavailable}
+        >
           Sign in securely
         </AuthSubmitButton>
 
-        <div className="rounded-2xl border border-border bg-surface-muted px-4 py-4">
-          <p className="text-sm font-semibold text-foreground">Need help?</p>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            Contact your school administrator or email{" "}
-            <span className="font-medium text-foreground">
-              {resolution.branding.supportEmail}
-            </span>
-            . School support line:{" "}
-            <span className="font-medium text-foreground">
-              {resolution.branding.supportPhone}
-            </span>
-            .
-          </p>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-600" />
+            <p className="text-sm leading-6 text-slate-600">
+              Need account help? Contact your school administrator or use the official support channel for this workspace.
+            </p>
+          </div>
         </div>
-      </div>
+      </form>
     </AuthCard>
   );
 }

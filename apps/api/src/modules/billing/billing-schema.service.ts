@@ -146,6 +146,42 @@ export class BillingSchemaService implements OnModuleInit {
         CONSTRAINT uq_billing_notifications_tenant_key UNIQUE (tenant_id, notification_key)
       );
 
+      CREATE TABLE IF NOT EXISTS student_fee_payment_allocations (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        invoice_id uuid NOT NULL,
+        student_id uuid NOT NULL,
+        parent_user_id uuid,
+        payment_intent_id uuid NOT NULL,
+        ledger_transaction_id uuid,
+        amount_minor bigint NOT NULL,
+        idempotency_key text NOT NULL,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_student_fee_payment_allocations_tenant_id_id UNIQUE (tenant_id, id),
+        CONSTRAINT uq_student_fee_payment_allocations_idempotent_invoice UNIQUE (tenant_id, idempotency_key, invoice_id),
+        CONSTRAINT ck_student_fee_payment_allocations_amount CHECK (amount_minor > 0)
+      );
+
+      CREATE TABLE IF NOT EXISTS student_fee_credits (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        student_id uuid NOT NULL,
+        parent_user_id uuid,
+        payment_intent_id uuid NOT NULL,
+        ledger_transaction_id uuid,
+        amount_minor bigint NOT NULL,
+        remaining_amount_minor bigint NOT NULL,
+        idempotency_key text NOT NULL,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_student_fee_credits_tenant_id_id UNIQUE (tenant_id, id),
+        CONSTRAINT uq_student_fee_credits_idempotency UNIQUE (tenant_id, idempotency_key),
+        CONSTRAINT ck_student_fee_credits_amount CHECK (amount_minor > 0),
+        CONSTRAINT ck_student_fee_credits_remaining CHECK (remaining_amount_minor >= 0 AND remaining_amount_minor <= amount_minor)
+      );
+
       DO $$
       BEGIN
         ALTER TABLE subscriptions
@@ -212,6 +248,18 @@ export class BillingSchemaService implements OnModuleInit {
             REFERENCES subscriptions (tenant_id, id)
             ON DELETE CASCADE;
         END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'fk_student_fee_payment_allocations_invoice'
+        ) THEN
+          ALTER TABLE student_fee_payment_allocations
+          ADD CONSTRAINT fk_student_fee_payment_allocations_invoice
+            FOREIGN KEY (tenant_id, invoice_id)
+            REFERENCES invoices (tenant_id, id)
+            ON DELETE RESTRICT;
+        END IF;
       END;
       $$;
 
@@ -232,6 +280,12 @@ export class BillingSchemaService implements OnModuleInit {
         ON billing_notifications (tenant_id, subscription_id, scheduled_for DESC);
       CREATE INDEX IF NOT EXISTS ix_billing_notifications_status_channel
         ON billing_notifications (tenant_id, status, channel, scheduled_for DESC);
+      CREATE INDEX IF NOT EXISTS ix_invoices_student_fee_allocation
+        ON invoices (tenant_id, (metadata ->> 'student_id'), status, due_at ASC);
+      CREATE INDEX IF NOT EXISTS ix_student_fee_payment_allocations_student
+        ON student_fee_payment_allocations (tenant_id, student_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS ix_student_fee_credits_student_remaining
+        ON student_fee_credits (tenant_id, student_id, remaining_amount_minor DESC);
 
       ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
       ALTER TABLE subscriptions FORCE ROW LEVEL SECURITY;
@@ -241,6 +295,10 @@ export class BillingSchemaService implements OnModuleInit {
       ALTER TABLE usage_records FORCE ROW LEVEL SECURITY;
       ALTER TABLE billing_notifications ENABLE ROW LEVEL SECURITY;
       ALTER TABLE billing_notifications FORCE ROW LEVEL SECURITY;
+      ALTER TABLE student_fee_payment_allocations ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE student_fee_payment_allocations FORCE ROW LEVEL SECURITY;
+      ALTER TABLE student_fee_credits ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE student_fee_credits FORCE ROW LEVEL SECURITY;
 
       DROP POLICY IF EXISTS subscriptions_rls_policy ON subscriptions;
       CREATE POLICY subscriptions_rls_policy ON subscriptions
@@ -270,6 +328,18 @@ export class BillingSchemaService implements OnModuleInit {
       USING (tenant_id = current_setting('app.tenant_id', true))
       WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
+      DROP POLICY IF EXISTS student_fee_payment_allocations_rls_policy ON student_fee_payment_allocations;
+      CREATE POLICY student_fee_payment_allocations_rls_policy ON student_fee_payment_allocations
+      FOR ALL
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
+      DROP POLICY IF EXISTS student_fee_credits_rls_policy ON student_fee_credits;
+      CREATE POLICY student_fee_credits_rls_policy ON student_fee_credits
+      FOR ALL
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
       DROP TRIGGER IF EXISTS trg_subscriptions_set_updated_at ON subscriptions;
       CREATE TRIGGER trg_subscriptions_set_updated_at
       BEFORE UPDATE ON subscriptions
@@ -292,6 +362,18 @@ export class BillingSchemaService implements OnModuleInit {
       DROP TRIGGER IF EXISTS trg_billing_notifications_set_updated_at ON billing_notifications;
       CREATE TRIGGER trg_billing_notifications_set_updated_at
       BEFORE UPDATE ON billing_notifications
+      FOR EACH ROW
+      EXECUTE FUNCTION set_updated_at();
+
+      DROP TRIGGER IF EXISTS trg_student_fee_allocations_prevent_update ON student_fee_payment_allocations;
+      CREATE TRIGGER trg_student_fee_allocations_prevent_update
+      BEFORE UPDATE OR DELETE ON student_fee_payment_allocations
+      FOR EACH ROW
+      EXECUTE FUNCTION app.prevent_append_only_mutation();
+
+      DROP TRIGGER IF EXISTS trg_student_fee_credits_set_updated_at ON student_fee_credits;
+      CREATE TRIGGER trg_student_fee_credits_set_updated_at
+      BEFORE UPDATE ON student_fee_credits
       FOR EACH ROW
       EXECUTE FUNCTION set_updated_at();
     `);

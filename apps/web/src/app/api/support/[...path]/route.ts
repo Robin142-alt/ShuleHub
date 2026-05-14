@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { validateCsrfRequest } from "@/lib/auth/csrf";
 import { isExperienceAudience } from "@/lib/auth/experience-audience";
 import {
   readAccessCookie,
@@ -15,25 +17,35 @@ type RouteContext = {
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, context: RouteContext) {
+const SUPPORT_UNAVAILABLE_MESSAGE =
+  "Support service is temporarily unavailable. Please try again shortly.";
+
+export async function GET(request: NextRequest, context: RouteContext) {
   return proxySupportRequest(request, context);
 }
 
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: NextRequest, context: RouteContext) {
   return proxySupportRequest(request, context);
 }
 
-export async function PATCH(request: Request, context: RouteContext) {
+export async function PATCH(request: NextRequest, context: RouteContext) {
   return proxySupportRequest(request, context);
 }
 
-async function proxySupportRequest(request: Request, context: RouteContext) {
+async function proxySupportRequest(request: NextRequest, context: RouteContext) {
+  if (request.method !== "GET" && !validateCsrfRequest(request)) {
+    return NextResponse.json(
+      { message: "Security check expired. Refresh the page and try again." },
+      { status: 403 },
+    );
+  }
+
   const cookieStore = await cookies();
   const accessToken = readAccessCookie(cookieStore);
 
   if (!accessToken) {
     return NextResponse.json(
-      { message: "A live backend session is required for support operations." },
+      { message: "A signed-in support session is required for support operations." },
       { status: 401 },
     );
   }
@@ -48,7 +60,7 @@ async function proxySupportRequest(request: Request, context: RouteContext) {
 
   if (!baseUrl) {
     return NextResponse.json(
-      { message: "Support backend is not configured." },
+      { message: SUPPORT_UNAVAILABLE_MESSAGE },
       { status: 503 },
     );
   }

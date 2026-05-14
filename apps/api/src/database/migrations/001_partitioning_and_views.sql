@@ -150,22 +150,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_mv_tenant_payment_summary
 CREATE INDEX IF NOT EXISTS ix_mv_tenant_payment_summary_tenant
   ON mv_tenant_payment_summary (tenant_id, payment_date DESC);
 
--- Attendance summary materialized view
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_tenant_attendance_summary AS
-SELECT
-  ar.tenant_id,
-  ar.attendance_date,
-  ar.status,
-  COUNT(*) AS record_count
-FROM attendance_records ar
-GROUP BY ar.tenant_id, ar.attendance_date, ar.status;
-
-CREATE UNIQUE INDEX IF NOT EXISTS ux_mv_tenant_attendance_summary
-  ON mv_tenant_attendance_summary (tenant_id, attendance_date, status);
-
-CREATE INDEX IF NOT EXISTS ix_mv_tenant_attendance_summary_tenant
-  ON mv_tenant_attendance_summary (tenant_id, attendance_date DESC);
-
 -- Student count by status per tenant
 CREATE MATERIALIZED VIEW IF NOT EXISTS mv_tenant_student_summary AS
 SELECT

@@ -28,12 +28,12 @@ const superadminNav = [
   { id: "schools", label: "Schools", href: "/superadmin/tenants", icon: Building2 },
   { id: "revenue", label: "Revenue", href: "/superadmin/revenue", icon: CircleDollarSign },
   { id: "subscriptions", label: "Subscriptions", href: "/superadmin/subscriptions", icon: CreditCard },
-  { id: "mpesa", label: "MPESA Monitoring", href: "/superadmin/mpesa-monitoring", icon: SmartphoneCharging, badge: "3" },
+  { id: "mpesa", label: "MPESA Monitoring", href: "/superadmin/mpesa-monitoring", icon: SmartphoneCharging },
   { id: "users", label: "Users", href: "/superadmin/users", icon: Users },
-  { id: "support", label: "Support", href: "/superadmin/support", icon: LifeBuoy, badge: "12" },
+  { id: "support", label: "Support", href: "/superadmin/support", icon: LifeBuoy },
   { id: "audit", label: "Audit Logs", href: "/superadmin/audit-logs", icon: ShieldCheck },
   { id: "infra", label: "Infrastructure", href: "/superadmin/infrastructure", icon: ServerCog },
-  { id: "notifications", label: "Notifications", href: "/superadmin/notifications", icon: Bell, badge: "6" },
+  { id: "notifications", label: "Notifications", href: "/superadmin/notifications", icon: Bell },
   { id: "settings", label: "Settings", href: "/superadmin/settings", icon: Waypoints },
 ];
 
@@ -92,13 +92,6 @@ export function SuperAdminShell({
                     <Icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? "text-indigo-400" : "text-white/30 group-hover:text-white/60"}`} />
                     <span>{item.label}</span>
                   </span>
-                  {item.badge ? (
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                      isActive ? "bg-indigo-500/20 text-indigo-300" : "bg-white/[0.06] text-white/40"
-                    }`}>
-                      {item.badge}
-                    </span>
-                  ) : null}
                 </Link>
               );
             })}

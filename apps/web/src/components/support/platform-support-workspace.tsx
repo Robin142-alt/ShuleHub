@@ -32,10 +32,12 @@ import {
   addSupportInternalNoteLive,
   escalateSupportTicketLive,
   fetchSupportAnalyticsLive,
+  fetchSupportNotificationDeadLettersLive,
   fetchSupportTicketDetailLive,
   fetchSupportTicketsLive,
   mergeSupportTicketLive,
   replyToSupportTicketLive,
+  type SupportNotificationDeliveryView,
   updateSupportTicketStatusLive,
 } from "@/lib/support/support-live";
 
@@ -102,6 +104,12 @@ export function PlatformSupportWorkspace({
     enabled: apiConfigured,
     retry: false,
   });
+  const liveDeadLettersQuery = useQuery({
+    queryKey: ["platform-support-notification-dead-letters"],
+    queryFn: fetchSupportNotificationDeadLettersLive,
+    enabled: apiConfigured,
+    retry: false,
+  });
   const liveTicketDetailQuery = useQuery({
     queryKey: detailQueryKey,
     queryFn: () =>
@@ -118,6 +126,7 @@ export function PlatformSupportWorkspace({
     ?? tickets.find((ticket) => ticket.id === selectedTicketId)
     ?? null;
   const analytics = liveAnalyticsQuery.data ?? supportAnalytics;
+  const notificationDeadLetters = liveDeadLettersQuery.data ?? [];
   const filteredTickets = useMemo(() => {
     const mappedStatus = viewStatusMap[defaultView];
 
@@ -375,7 +384,7 @@ export function PlatformSupportWorkspace({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <StatusPill label={isLiveMode ? "In-app live" : "Review fallback"} tone={isLiveMode ? "ok" : "warning"} />
+            <StatusPill label={isLiveMode ? "Support connected" : "Support connection required"} tone={isLiveMode ? "ok" : "warning"} />
             <StatusPill label="Email queued" tone="warning" />
           </div>
         </div>
@@ -432,6 +441,7 @@ export function PlatformSupportWorkspace({
           />
           <div className="space-y-6">
             <RecurringIssuesCard issues={analytics.recurringIssues} />
+            <NotificationDeadLettersCard deadLetters={notificationDeadLetters} />
             <Card className="p-5">
               <AlertTriangle className="h-5 w-5 text-warning" />
               <p className="mt-4 text-lg font-semibold text-foreground">SLA breach risk</p>
@@ -564,7 +574,7 @@ export function PlatformSupportWorkspace({
                   value={mergeTargetId}
                   onChange={(event) => setMergeTargetId(event.target.value)}
                   className="input-base"
-                  placeholder="00000000-0000-0000-0000-000000000000"
+                  placeholder="Paste the duplicate ticket ID"
                 />
               </label>
               <Button className="self-end" variant="secondary" onClick={mergeTicket} disabled={isSavingAction}>
@@ -592,6 +602,43 @@ function RecurringIssuesCard({ issues }: { issues: string[] }) {
             {issue}
           </div>
         ))}
+      </div>
+    </Card>
+  );
+}
+
+function NotificationDeadLettersCard({
+  deadLetters,
+}: {
+  deadLetters: SupportNotificationDeliveryView[];
+}) {
+  return (
+    <Card className="p-5">
+      <AlertTriangle className="h-5 w-5 text-danger" />
+      <div className="mt-4 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-lg font-semibold text-foreground">Notification dead letters</p>
+          <p className="mt-1 text-sm text-muted">{deadLetters.length} failed deliveries</p>
+        </div>
+        <StatusPill label={deadLetters.length > 0 ? "Action needed" : "Clear"} tone={deadLetters.length > 0 ? "critical" : "ok"} />
+      </div>
+      <div className="mt-5 space-y-3">
+        {deadLetters.length > 0 ? (
+          deadLetters.slice(0, 3).map((item) => (
+            <div key={item.id} className="rounded-[var(--radius-sm)] border border-danger/20 bg-danger/10 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground">{item.ticketNumber}</p>
+                <span className="text-xs font-medium uppercase text-muted">{item.channel}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted">{item.schoolName} - {item.attempts} attempts</p>
+              <p className="mt-2 text-sm leading-6 text-foreground">{item.error}</p>
+            </div>
+          ))
+        ) : (
+          <p className="rounded-[var(--radius-sm)] border border-border bg-surface-muted px-4 py-3 text-sm text-muted">
+            No failed notification deliveries.
+          </p>
+        )}
       </div>
     </Card>
   );

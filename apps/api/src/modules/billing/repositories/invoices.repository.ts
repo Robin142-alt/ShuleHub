@@ -43,6 +43,15 @@ interface CreateInvoiceInput {
   metadata: Record<string, unknown>;
 }
 
+export interface StudentFeeInvoiceForAllocation {
+  id: string;
+  tenant_id: string;
+  status: InvoiceEntity['status'];
+  total_amount_minor: string;
+  amount_paid_minor: string;
+  metadata: Record<string, unknown>;
+}
+
 @Injectable()
 export class InvoicesRepository {
   constructor(
@@ -451,6 +460,197 @@ export class InvoicesRepository {
     );
 
     return this.mapRow(result.rows[0]);
+  }
+
+  async findStudentFeePaymentAllocationByIdempotencyKey(
+    tenantId: string,
+    idempotencyKey: string,
+  ): Promise<{ id: string } | null> {
+    const result = await this.databaseService.query<{ id: string }>(
+      `
+        SELECT id
+        FROM student_fee_payment_allocations
+        WHERE tenant_id = $1
+          AND idempotency_key = $2
+        LIMIT 1
+      `,
+      [tenantId, idempotencyKey],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async findStudentFeeInvoicesForAllocation(input: {
+    tenantId: string;
+    studentId: string;
+    explicitInvoiceId?: string | null;
+  }): Promise<StudentFeeInvoiceForAllocation[]> {
+    const result = await this.databaseService.query<StudentFeeInvoiceForAllocation>(
+      `
+        SELECT
+          id,
+          tenant_id,
+          status,
+          total_amount_minor::text,
+          amount_paid_minor::text,
+          metadata
+        FROM invoices
+        WHERE tenant_id = $1
+          AND metadata ->> 'student_id' = $2
+          AND status IN ('open', 'pending_payment')
+          AND amount_paid_minor < total_amount_minor
+          AND ($3::uuid IS NULL OR id = $3::uuid)
+        ORDER BY due_at ASC, issued_at ASC, created_at ASC
+        FOR UPDATE SKIP LOCKED
+      `,
+      [input.tenantId, input.studentId, input.explicitInvoiceId ?? null],
+    );
+
+    return result.rows.map((row) => ({
+      ...row,
+      metadata: row.metadata ?? {},
+    }));
+  }
+
+  async applyStudentFeeInvoicePayment(input: {
+    tenantId: string;
+    invoiceId: string;
+    paymentIntentId: string;
+    amountMinor: string;
+    nextAmountPaidMinor: string;
+    nextStatus: 'pending_payment' | 'paid';
+  }): Promise<InvoiceEntity> {
+    const result = await this.databaseService.query<InvoiceRow>(
+      `
+        UPDATE invoices
+        SET
+          amount_paid_minor = $4::bigint,
+          payment_intent_id = $3::uuid,
+          status = $5,
+          paid_at = CASE WHEN $5 = 'paid' THEN NOW() ELSE paid_at END,
+          updated_at = NOW()
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+        RETURNING
+          id,
+          tenant_id,
+          subscription_id,
+          invoice_number,
+          status,
+          currency_code,
+          description,
+          subtotal_amount_minor::text,
+          tax_amount_minor::text,
+          total_amount_minor::text,
+          amount_paid_minor::text,
+          billing_phone_number,
+          payment_intent_id,
+          issued_at,
+          due_at,
+          paid_at,
+          voided_at,
+          metadata,
+          created_at,
+          updated_at
+      `,
+      [
+        input.tenantId,
+        input.invoiceId,
+        input.paymentIntentId,
+        input.nextAmountPaidMinor,
+        input.nextStatus,
+      ],
+    );
+
+    return this.mapRow(result.rows[0]);
+  }
+
+  async createStudentFeePaymentAllocation(input: {
+    tenantId: string;
+    invoiceId: string;
+    studentId: string;
+    parentUserId?: string | null;
+    paymentIntentId: string;
+    ledgerTransactionId?: string | null;
+    amountMinor: string;
+    idempotencyKey: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ id: string }> {
+    const result = await this.databaseService.query<{ id: string }>(
+      `
+        INSERT INTO student_fee_payment_allocations (
+          tenant_id,
+          invoice_id,
+          student_id,
+          parent_user_id,
+          payment_intent_id,
+          ledger_transaction_id,
+          amount_minor,
+          idempotency_key,
+          metadata
+        )
+        VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6::uuid, $7::bigint, $8, $9::jsonb)
+        ON CONFLICT (tenant_id, idempotency_key, invoice_id)
+        DO NOTHING
+        RETURNING id
+      `,
+      [
+        input.tenantId,
+        input.invoiceId,
+        input.studentId,
+        input.parentUserId ?? null,
+        input.paymentIntentId,
+        input.ledgerTransactionId ?? null,
+        input.amountMinor,
+        input.idempotencyKey,
+        JSON.stringify(input.metadata ?? {}),
+      ],
+    );
+
+    return result.rows[0] ?? { id: '' };
+  }
+
+  async createStudentFeeCredit(input: {
+    tenantId: string;
+    studentId: string;
+    parentUserId?: string | null;
+    paymentIntentId: string;
+    ledgerTransactionId?: string | null;
+    amountMinor: string;
+    idempotencyKey: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ id: string }> {
+    const result = await this.databaseService.query<{ id: string }>(
+      `
+        INSERT INTO student_fee_credits (
+          tenant_id,
+          student_id,
+          parent_user_id,
+          payment_intent_id,
+          ledger_transaction_id,
+          amount_minor,
+          remaining_amount_minor,
+          idempotency_key,
+          metadata
+        )
+        VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6::bigint, $6::bigint, $7, $8::jsonb)
+        ON CONFLICT (tenant_id, idempotency_key)
+        DO NOTHING
+        RETURNING id
+      `,
+      [
+        input.tenantId,
+        input.studentId,
+        input.parentUserId ?? null,
+        input.paymentIntentId,
+        input.ledgerTransactionId ?? null,
+        input.amountMinor,
+        input.idempotencyKey,
+        JSON.stringify(input.metadata ?? {}),
+      ],
+    );
+
+    return result.rows[0] ?? { id: '' };
   }
 
   private mapRow(row: InvoiceRow): InvoiceEntity {

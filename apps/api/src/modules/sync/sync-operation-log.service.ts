@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 
 import { RequestContextService } from '../../common/request-context/request-context.service';
-import { SYNC_SERVER_DEVICE_ID } from './sync.constants';
+import { SYNC_SERVER_DEVICE_ID, SYNC_SUPPORTED_ENTITIES } from './sync.constants';
 import { SyncEntity, SyncOperationLog, SyncPayloadMap } from './sync.types';
 import { SyncOperationLogsRepository } from './repositories/sync-operation-logs.repository';
 
@@ -49,7 +49,7 @@ export class SyncOperationLogService {
   }
 
   ensureSupportedEntity(entity: string): asserts entity is SyncEntity {
-    if (entity !== 'attendance' && entity !== 'finance') {
+    if (!(SYNC_SUPPORTED_ENTITIES as readonly string[]).includes(entity)) {
       throw new BadRequestException(`Unsupported sync entity "${entity}"`);
     }
   }

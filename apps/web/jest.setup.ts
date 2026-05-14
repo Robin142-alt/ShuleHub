@@ -63,6 +63,7 @@ jest.mock("next/navigation", () => ({
     prefetch: routerPrefetchMock,
   }),
   usePathname: () => "/dashboard/admin",
+  useSearchParams: () => new URLSearchParams(window.location.search),
   notFound: jest.fn(),
   redirect: jest.fn(),
 }));

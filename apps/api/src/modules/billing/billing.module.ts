@@ -9,6 +9,7 @@ import { BillingMpesaService } from './billing-mpesa.service';
 import { BillingNotificationService } from './billing-notification.service';
 import { BillingSchemaService } from './billing-schema.service';
 import { BillingService } from './billing.service';
+import { StudentFeePaymentAllocationService } from './student-fee-payment-allocation.service';
 import { BillingLifecycleGuard } from '../../guards/billing-lifecycle.guard';
 import { InvoicesRepository } from './repositories/invoices.repository';
 import { BillingNotificationsRepository } from './repositories/billing-notifications.repository';
@@ -27,6 +28,7 @@ import { BillingFeatureGuard } from '../../guards/billing-feature.guard';
     BillingLifecycleService,
     BillingNotificationService,
     BillingMpesaService,
+    StudentFeePaymentAllocationService,
     UsageMeterService,
     SubscriptionsRepository,
     InvoicesRepository,
@@ -47,6 +49,7 @@ import { BillingFeatureGuard } from '../../guards/billing-feature.guard';
     BillingNotificationService,
     BillingService,
     BillingMpesaService,
+    StudentFeePaymentAllocationService,
     UsageMeterService,
     SubscriptionsRepository,
   ],
