@@ -63,8 +63,8 @@ jobs:
       - name: Provider smoke
         if: github.event.inputs.check == 'all' || github.event.inputs.check == 'providers' || github.event.schedule == '17 */6 * * *'
         env:
-          SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS: "true"
-          SUPPORT_PROVIDER_SMOKE_LIVE: "true"
+          SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS: ${{ secrets.SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS || 'false' }}
+          SUPPORT_PROVIDER_SMOKE_LIVE: ${{ secrets.SUPPORT_PROVIDER_SMOKE_LIVE || 'false' }}
           SUPPORT_NOTIFICATION_EMAILS: ${{ secrets.SUPPORT_NOTIFICATION_EMAILS }}
           SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL: ${{ secrets.SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL }}
           SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL: ${{ secrets.SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL }}
@@ -72,6 +72,7 @@ jobs:
           SUPPORT_NOTIFICATION_SMS_RECIPIENTS: ${{ secrets.SUPPORT_NOTIFICATION_SMS_RECIPIENTS }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_PROVIDER_SMOKE_URL: ${{ secrets.EMAIL_PROVIDER_SMOKE_URL }}
           PUBLIC_APP_URL: ${{ secrets.PROD_WEB_BASE_URL }}
           UPLOAD_MALWARE_SCAN_PROVIDER: "clamav"
           UPLOAD_MALWARE_SCAN_API_URL: ${{ secrets.UPLOAD_MALWARE_SCAN_API_URL }}

@@ -1,6 +1,6 @@
 # Implementation 7 Live Validation
 
-Status as of 2026-05-15: code-level Implementation 7 contracts are implemented locally; live production provider validation is pending real SMS provider credentials, deployed relay/scanner domains, private object-storage credentials, and a controlled pilot tenant.
+Status as of 2026-05-15: live Railway validation is complete for external object storage and required upload malware scanning. SMS relay infrastructure is deployed and healthy, but real SMS delivery is intentionally pending real SMS provider credentials and recipients. Scheduled GitHub Actions cadence is committed, but repository secrets still require an operator because GitHub CLI is not installed in this environment.
 
 ## Validation Log
 
@@ -10,15 +10,15 @@ Status as of 2026-05-15: code-level Implementation 7 contracts are implemented l
 | 2026-05-15 | Codex | SMS relay service tests | Passed | `npm --prefix apps/sms-relay run test` | Current branch |
 | 2026-05-15 | Codex | Malware scanner service tests | Passed | `npm --prefix apps/malware-scanner run test` | Current branch |
 | 2026-05-15 | Operator | Live SMS provider smoke | Pending | Requires deployed SMS relay and provider credentials | Configure Africa's Talking or equivalent |
-| 2026-05-15 | Operator | Live malware scanner smoke | Pending | Requires deployed scanner domain and API token | Deploy scanner service |
-| 2026-05-15 | Operator | Live object storage smoke | Pending | Requires private R2/S3 bucket credentials | Configure bucket and Railway API vars |
-| 2026-05-15 | Operator | Scheduled GitHub Actions monitor | Pending | Requires GitHub secrets and monitor token | Create monitor service account |
+| 2026-05-15 | Codex | Live malware scanner smoke | Passed | Railway scanner health; authenticated clean/EICAR probes | Scanner uses ClamAV daily/bytecode database mode for Railway memory limits |
+| 2026-05-15 | Codex | Live object storage smoke | Passed | Railway API env write/read/delete probe | Railway S3-compatible bucket configured |
+| 2026-05-15 | Operator | Scheduled GitHub Actions monitor | Pending | Requires GitHub secrets and monitor token | GitHub CLI unavailable locally; install secrets through GitHub UI or authenticated CLI |
 | 2026-05-15 | Operator | Real pilot school workflow checklist | Pending | Requires controlled pilot tenant | Execute checklist |
 
 ## Required Before Marking Complete
 
-- Provider smoke has zero failed required checks and no skipped required providers.
-- `GET /health/ready` reports support notifications as configured.
+- Provider smoke has zero failed required checks and no skipped required providers except SMS while real SMS credentials are pending.
+- `GET /health/ready` reports support email configured; SMS remains missing until real provider credentials and recipients are supplied.
 - A critical support ticket generates email and SMS notification attempts.
 - EICAR upload is rejected before persistence.
 - Clean support/admissions uploads persist through external object storage with tenant-scoped keys.

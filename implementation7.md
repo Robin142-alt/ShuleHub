@@ -14,17 +14,18 @@
 
 | Area | Status | Evidence |
 |---|---|---|
-| SMS relay service | Implemented locally | `apps/sms-relay`, Dockerfile, Railway config, Node tests |
-| Malware scanner service | Implemented locally | `apps/malware-scanner`, Dockerfile with ClamAV, Railway config, Node tests |
+| SMS relay service | Deployed to Railway | `sms-relay` service health passes; dry-run mode until real SMS provider credentials are supplied |
+| Malware scanner service | Deployed to Railway | `malware-scanner` service health passes; clean upload probe returns `clean`; EICAR probe returns `infected` |
 | Provider smoke hardening | Implemented locally | Required SMS, live SMS health, live malware health, object-storage write/read/delete smoke |
 | External object-storage delete support | Implemented locally | Signed DELETE support and tenant-prefix tests |
 | Monitoring service accounts | Implemented locally | Hashed monitor tokens, audit logs, read-only request middleware, creation script |
 | Scheduled production operability | Implemented locally | `.github/workflows/production-operability.yml` and runbook |
 | Production pilot validation scaffold | Implemented locally | Playwright E2E scaffold and manual checklist |
 | Release readiness gate | Implemented locally | Implementation 7 artifacts and monitor-account test coverage enforced |
-| Live SMS activation | Pending external provider | Requires deployed SMS relay domain and SMS provider credentials |
-| Live malware scanner activation | Pending deployment | Requires deployed scanner domain and scanner token in Railway API |
-| Live object storage activation | Pending external provider | Requires private R2/S3 bucket endpoint and credentials |
+| Live SMS activation | Relay deployed, provider pending | SMS relay domain exists and health passes; real SMS delivery still requires Africa's Talking or equivalent credentials and real recipients |
+| Live malware scanner activation | Active | Railway API variables configured; `UPLOAD_MALWARE_SCAN_REQUIRED=true`; authenticated clean/EICAR probes passed |
+| Live object storage activation | Active | Railway bucket configured; API object-storage write/read/delete probe passed |
+| Scheduled production operability | Workflow ready, secrets pending | GitHub Actions cadence exists; GitHub CLI is unavailable in this environment, so repository secrets and monitor token must be installed by an operator |
 | Real pilot tenant validation | Pending operator execution | Requires controlled pilot tenant and invited real users |
 
 Focused local verification completed:
