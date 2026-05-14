@@ -56,6 +56,20 @@ Merge-to-main verification on 2026-05-14:
 - Source scan confirmed no remaining hardcoded/demo credential module or seeded login credential references in production source.
 - Railway production source branch was restored to `main`; production deployment verification follows this merge evidence commit.
 
+Post-merge production hardening evidence on 2026-05-14:
+
+- Railway API deployment `b50aacaa-6db7-4013-a1f6-be51d55cf509` for commit `ef0cfa11199585f3def818d2c7774dd8dd78c07a` reached `SUCCESS`.
+- Live API health passed: `/health` returned HTTP 200 with `status=ok`; `/health/ready` returned HTTP 200 with `status=ok`.
+- Readiness dependencies reported Postgres `up`, Redis `up`, BullMQ `configured`, transactional email `configured`, CORS `configured`, and support notifications `partial` because SMS is intentionally unconfigured.
+- Public status passed: `/support/public/system-status` returned HTTP 200 with 5 public components and no active incidents.
+- Provider smoke passed against Railway production environment: 7 checks total, 4 passed, 0 failed, 3 skipped for optional SMS, upload malware scanning, and external object storage.
+- Live query-plan review passed against the production database: 11 active search/read hotspots reviewed; protected student, admissions, inventory, academics, exams, billing, support, HR, and timetable paths used index-backed plans. Library catalog search remains hidden and tenant-scoped; the review currently records the plan shape without failing that hidden path.
+- Local verification after the final patch passed: `npm.cmd run build`, focused query-plan tests (5/5), full API suite (307/307), and release readiness (11/11).
+- Runtime blockers discovered during deployment were fixed on `main`: Nest provider DI metadata, additive `file_objects` retention columns, immutable support search indexes, additive `student_guardians` invitation columns, HR department lower-name expression uniqueness, and deterministic live query-plan review behavior on tiny production tables.
+- Frontend remains available at `https://shule-hub-erp.vercel.app`; API remains available at `https://shulehub-production.up.railway.app`.
+
+Remaining post-hardening risk: SMS escalation delivery, upload malware scanning, and external object storage are still optional/unconfigured provider channels. They are detected cleanly by provider smoke and must be configured before those channels are advertised as production capabilities.
+
 ---
 
 # 1. Baseline From Implementation 5
