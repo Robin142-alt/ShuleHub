@@ -9,6 +9,8 @@ import { S3CompatibleObjectStorageService, type ObjectStorageFetch } from './s3-
 test('file object schema tracks retention policy and expiry for stored uploads', () => {
   assert.match(FILE_OBJECT_STORAGE_SCHEMA_SQL, /retention_policy text NOT NULL DEFAULT 'operational'/);
   assert.match(FILE_OBJECT_STORAGE_SCHEMA_SQL, /retention_expires_at timestamptz/);
+  assert.match(FILE_OBJECT_STORAGE_SCHEMA_SQL, /ADD COLUMN IF NOT EXISTS retention_policy text NOT NULL DEFAULT 'operational'/);
+  assert.match(FILE_OBJECT_STORAGE_SCHEMA_SQL, /ADD COLUMN IF NOT EXISTS retention_expires_at timestamptz/);
   assert.match(FILE_OBJECT_STORAGE_SCHEMA_SQL, /CREATE INDEX IF NOT EXISTS ix_file_objects_retention_expiry/);
 });
 

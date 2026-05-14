@@ -42,6 +42,8 @@ export const FILE_OBJECT_STORAGE_SCHEMA_SQL = `
   ALTER TABLE file_objects ADD COLUMN IF NOT EXISTS object_storage_bucket text;
   ALTER TABLE file_objects ADD COLUMN IF NOT EXISTS object_storage_key text;
   ALTER TABLE file_objects ADD COLUMN IF NOT EXISTS object_storage_etag text;
+  ALTER TABLE file_objects ADD COLUMN IF NOT EXISTS retention_policy text NOT NULL DEFAULT 'operational';
+  ALTER TABLE file_objects ADD COLUMN IF NOT EXISTS retention_expires_at timestamptz;
 
   DO $$
   BEGIN
