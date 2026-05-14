@@ -27,8 +27,7 @@ export class HrSchemaService implements OnModuleInit {
         tenant_id text NOT NULL,
         name text NOT NULL,
         created_at timestamptz NOT NULL DEFAULT NOW(),
-        updated_at timestamptz NOT NULL DEFAULT NOW(),
-        CONSTRAINT uq_staff_departments_tenant_name UNIQUE (tenant_id, lower(name))
+        updated_at timestamptz NOT NULL DEFAULT NOW()
       );
 
       CREATE TABLE IF NOT EXISTS staff_job_titles (
@@ -125,6 +124,9 @@ export class HrSchemaService implements OnModuleInit {
         metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
         created_at timestamptz NOT NULL DEFAULT NOW()
       );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_staff_departments_tenant_lower_name
+        ON staff_departments (tenant_id, lower(name));
 
       ${HR_TABLES.map((table) => `
         ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;

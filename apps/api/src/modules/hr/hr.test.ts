@@ -33,6 +33,8 @@ test('HrSchemaService creates staff management tables with forced RLS', async ()
   assert.match(schemaSql, /CREATE TABLE IF NOT EXISTS staff_profiles/);
   assert.match(schemaSql, /CREATE TABLE IF NOT EXISTS staff_contracts/);
   assert.match(schemaSql, /CREATE TABLE IF NOT EXISTS staff_leave_requests/);
+  assert.match(schemaSql, /CREATE UNIQUE INDEX IF NOT EXISTS ux_staff_departments_tenant_lower_name/);
+  assert.doesNotMatch(schemaSql, /UNIQUE \(tenant_id, lower\(name\)\)/);
   assert.match(schemaSql, /ALTER TABLE staff_profiles FORCE ROW LEVEL SECURITY/);
   assert.doesNotMatch(schemaSql, /payroll/i);
 });
