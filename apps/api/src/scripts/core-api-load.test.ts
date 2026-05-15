@@ -40,6 +40,21 @@ test('core API load workloads are read-only and exclude retired attendance', () 
   assert.equal('x-tenant-id' in health.headers, false);
 });
 
+test('core API load plan prefers scoped monitor tokens over human access tokens', () => {
+  const plan = buildCoreApiLoadPlan({
+    baseUrl: 'http://127.0.0.1:3000',
+    tenantId: 'tenant-a',
+    monitorToken: 'shm_monitor-token',
+    accessToken: 'human-token',
+  });
+
+  const tenantEndpoint = plan.endpoints.find((endpoint) => endpoint.auth === 'tenant');
+
+  assert.ok(tenantEndpoint);
+  assert.equal(tenantEndpoint.headers.authorization, 'Bearer shm_monitor-token');
+  assert.equal(tenantEndpoint.headers['x-tenant-id'], 'tenant-a');
+});
+
 test('core API load workload validation rejects retired attendance probes', () => {
   const errors = validateCoreApiLoadWorkloads([
     ...CORE_API_LOAD_WORKLOADS,

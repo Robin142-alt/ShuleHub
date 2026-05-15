@@ -26,6 +26,7 @@ export interface CoreApiLoadPlan {
 export interface CoreApiLoadPlanOptions {
   baseUrl: string;
   tenantId?: string;
+  monitorToken?: string;
   accessToken?: string;
   allowRemote?: boolean;
 }
@@ -243,11 +244,13 @@ export function buildCoreApiLoadPlan(options: CoreApiLoadPlanOptions): CoreApiLo
     };
 
     if (workload.auth === 'tenant') {
-      if (!options.tenantId || !options.accessToken) {
-        throw new Error(`Workload ${workload.id} requires tenantId and accessToken.`);
+      const bearerToken = options.monitorToken ?? options.accessToken;
+
+      if (!options.tenantId || !bearerToken) {
+        throw new Error(`Workload ${workload.id} requires tenantId and monitorToken or accessToken.`);
       }
 
-      headers.authorization = `Bearer ${options.accessToken}`;
+      headers.authorization = `Bearer ${bearerToken}`;
       headers['x-tenant-id'] = options.tenantId;
     }
 
@@ -427,6 +430,7 @@ async function main(): Promise<void> {
   const result = await runCoreApiLoadProbe({
     baseUrl,
     tenantId: process.env.CORE_API_LOAD_TENANT_ID,
+    monitorToken: process.env.CORE_API_LOAD_MONITOR_TOKEN,
     accessToken: process.env.CORE_API_LOAD_ACCESS_TOKEN,
     allowRemote: parseEnvBoolean(process.env.CORE_API_LOAD_ALLOW_REMOTE),
     iterations: parseEnvInteger(process.env.CORE_API_LOAD_ITERATIONS, 1),

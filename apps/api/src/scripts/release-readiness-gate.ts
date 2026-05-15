@@ -50,6 +50,11 @@ export interface ReleaseReadinessGateOptions {
   packageJsonSource?: string;
   incidentRunbookSource?: string;
   disasterRecoveryRunbookSource?: string;
+  providerCredentialSmokeTestSource?: string;
+  productionOperabilityWorkflowSource?: string;
+  productionMonitoringRunbookSource?: string;
+  pilotWorkflowChecklistSource?: string;
+  implementation7LiveValidationSource?: string;
   uploadControllerSources?: Record<string, string>;
   syntheticJourneys?: readonly SyntheticJourney[];
   auditCoverageRequirements?: readonly AuditCoverageRequirement[];
@@ -105,6 +110,11 @@ const REQUIRED_NPM_SCRIPTS = [
   'monitor:synthetic',
   'smoke:providers',
   'release:readiness',
+  'monitor:create-service-account',
+  'build:sms-relay',
+  'test:sms-relay',
+  'build:malware-scanner',
+  'test:malware-scanner',
   'test:backup-integrity',
   'test:disaster-recovery',
   'dr:backup-restore',
@@ -114,6 +124,7 @@ const REQUIRED_DEFAULT_TEST_ARTIFACTS = [
   'mfa.service.test.js',
   'trusted-device.service.test.js',
   'magic-link.service.test.js',
+  'monitoring-service-account.service.test.js',
   'audit-coverage-review.test.js',
   'dashboard-summary.repository.test.js',
   'report-excel-artifact.test.js',
@@ -190,6 +201,22 @@ const REQUIRED_BACKUP_RESTORE_RUNBOOK_SECTIONS = [
   { label: 'fixture:pilot-school', pattern: /fixture:pilot-school/i },
   { label: 'load:high-volume-workflows', pattern: /load:high-volume-workflows/i },
 ];
+const REQUIRED_IMPLEMENTATION7_PROVIDER_SMOKE_TEST_PATTERNS = [
+  { label: 'required SMS smoke flag', pattern: /SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS/ },
+  { label: 'live SMS provider check', pattern: /live-support-sms-provider/ },
+  { label: 'live malware scanner health check', pattern: /live-upload-malware-scan-provider/ },
+  { label: 'malware scanner health URL', pattern: /UPLOAD_MALWARE_SCAN_HEALTH_URL/ },
+  { label: 'live object storage smoke check', pattern: /live-upload-object-storage/ },
+  { label: 'object storage delete verification', pattern: /delete_checked|DELETE/i },
+];
+const REQUIRED_OPERABILITY_WORKFLOW_PATTERNS = [
+  { label: 'synthetic monitor', pattern: /monitor:synthetic/ },
+  { label: 'core API load', pattern: /load:core-api/ },
+  { label: 'provider smoke', pattern: /smoke:providers/ },
+  { label: 'query-plan review', pattern: /perf:query-plan-review/ },
+  { label: 'release readiness', pattern: /release:readiness/ },
+  { label: 'monitor token secret', pattern: /PROD_MONITOR_ACCESS_TOKEN/ },
+];
 
 export function runReleaseReadinessGate(
   options: ReleaseReadinessGateOptions = {},
@@ -207,6 +234,21 @@ export function runReleaseReadinessGate(
   const disasterRecoveryRunbookSource =
     options.disasterRecoveryRunbookSource
     ?? readWorkspaceFile(workspaceRoot, 'docs/runbooks/backup-restore-drill.md');
+  const providerCredentialSmokeTestSource =
+    options.providerCredentialSmokeTestSource
+    ?? readWorkspaceFile(workspaceRoot, 'apps/api/src/scripts/provider-credential-smoke.test.ts');
+  const productionOperabilityWorkflowSource =
+    options.productionOperabilityWorkflowSource
+    ?? readWorkspaceFile(workspaceRoot, '.github/workflows/production-operability.yml');
+  const productionMonitoringRunbookSource =
+    options.productionMonitoringRunbookSource
+    ?? readWorkspaceFile(workspaceRoot, 'docs/runbooks/production-monitoring.md');
+  const pilotWorkflowChecklistSource =
+    options.pilotWorkflowChecklistSource
+    ?? readWorkspaceFile(workspaceRoot, 'docs/validation/pilot-real-workflow-checklist.md');
+  const implementation7LiveValidationSource =
+    options.implementation7LiveValidationSource
+    ?? readWorkspaceFile(workspaceRoot, 'docs/validation/implementation7-live-validation.md');
   const uploadControllerSources = options.uploadControllerSources ?? {
     'apps/api/src/modules/support/support.controller.ts': readWorkspaceFile(
       workspaceRoot,
@@ -232,12 +274,78 @@ export function runReleaseReadinessGate(
     checkReleaseScripts(packageJsonSource),
     checkIncidentResponseRunbook(incidentRunbookSource),
     checkBackupRestoreRunbook(disasterRecoveryRunbookSource),
+    checkImplementation7OperabilityArtifacts({
+      packageJsonSource,
+      providerCredentialSmokeTestSource,
+      productionOperabilityWorkflowSource,
+      productionMonitoringRunbookSource,
+      pilotWorkflowChecklistSource,
+      implementation7LiveValidationSource,
+    }),
   ];
 
   return {
     ok: checks.every((check) => check.status === 'pass'),
     checks,
   };
+}
+
+function checkImplementation7OperabilityArtifacts(input: {
+  packageJsonSource: string;
+  providerCredentialSmokeTestSource: string;
+  productionOperabilityWorkflowSource: string;
+  productionMonitoringRunbookSource: string;
+  pilotWorkflowChecklistSource: string;
+  implementation7LiveValidationSource: string;
+}): ReleaseReadinessGateCheck {
+  const packageJson = JSON.parse(input.packageJsonSource) as {
+    scripts?: Record<string, string>;
+  };
+  const scripts = packageJson.scripts ?? {};
+  const defaultTestScript = scripts.test ?? '';
+  const details: string[] = [];
+
+  for (const required of REQUIRED_IMPLEMENTATION7_PROVIDER_SMOKE_TEST_PATTERNS) {
+    if (!required.pattern.test(input.providerCredentialSmokeTestSource)) {
+      details.push(`Provider smoke tests must cover ${required.label}.`);
+    }
+  }
+
+  for (const required of REQUIRED_OPERABILITY_WORKFLOW_PATTERNS) {
+    if (!required.pattern.test(input.productionOperabilityWorkflowSource)) {
+      details.push(`Production operability workflow must include ${required.label}.`);
+    }
+  }
+
+  if (!defaultTestScript.includes('monitoring-service-account.service.test.js')) {
+    details.push('Default npm test script must include monitoring-service-account.service.test.js.');
+  }
+
+  if (!scripts['monitor:create-service-account']) {
+    details.push('Missing monitor:create-service-account script.');
+  }
+
+  if (!scripts['test:sms-relay'] || !scripts['test:malware-scanner']) {
+    details.push('SMS relay and malware scanner service tests must be exposed as npm scripts.');
+  }
+
+  if (!/rotate monitor token|Rotation/i.test(input.productionMonitoringRunbookSource)) {
+    details.push('Production monitoring runbook must document monitor token rotation.');
+  }
+
+  if (!/Platform owner creates school/i.test(input.pilotWorkflowChecklistSource)) {
+    details.push('Pilot workflow checklist must include platform-owner school creation.');
+  }
+
+  if (!/Live SMS provider smoke|Live object storage smoke|Real pilot school workflow checklist/i.test(input.implementation7LiveValidationSource)) {
+    details.push('Implementation 7 live validation document must track live provider and pilot workflow status.');
+  }
+
+  return buildCheck(
+    'implementation7-operability-artifacts',
+    details,
+    'Implementation 7 provider, monitoring, workflow, and validation artifacts are present and covered by release gates.',
+  );
 }
 
 function checkStreamingUploadIngestion(

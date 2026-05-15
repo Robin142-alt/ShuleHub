@@ -37,6 +37,7 @@ export interface SyntheticJourneyPlanOptions {
   apiBaseUrl: string;
   webBaseUrl: string;
   tenantId?: string;
+  monitorToken?: string;
   accessToken?: string;
   allowRemote?: boolean;
   journeys?: readonly SyntheticJourney[];
@@ -408,11 +409,13 @@ function buildHeaders(
   };
 
   if (step.auth === 'tenant') {
-    if (!options.tenantId || !options.accessToken) {
-      throw new Error(`Synthetic journey step ${step.id} requires tenantId and accessToken.`);
+    const bearerToken = options.monitorToken ?? options.accessToken;
+
+    if (!options.tenantId || !bearerToken) {
+      throw new Error(`Synthetic journey step ${step.id} requires tenantId and monitorToken or accessToken.`);
     }
 
-    headers.authorization = `Bearer ${options.accessToken}`;
+    headers.authorization = `Bearer ${bearerToken}`;
     headers['x-tenant-id'] = options.tenantId;
   }
 
@@ -528,6 +531,7 @@ async function main(): Promise<void> {
     apiBaseUrl,
     webBaseUrl,
     tenantId: process.env.SYNTHETIC_TENANT_ID,
+    monitorToken: process.env.SYNTHETIC_MONITOR_TOKEN,
     accessToken: process.env.SYNTHETIC_ACCESS_TOKEN,
     allowRemote: parseEnvBoolean(process.env.SYNTHETIC_ALLOW_REMOTE),
   });

@@ -1022,6 +1022,29 @@ export class AuthSchemaService implements OnModuleInit {
         CONSTRAINT uq_auth_trusted_devices_user_token UNIQUE (user_id, device_token_hash)
       );
 
+      CREATE TABLE IF NOT EXISTS monitoring_service_accounts (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        name text NOT NULL,
+        token_hash text NOT NULL,
+        permissions text[] NOT NULL DEFAULT ARRAY['monitor:read'],
+        status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
+        expires_at timestamptz NOT NULL,
+        last_used_at timestamptz,
+        created_by uuid,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS monitoring_service_account_audit_logs (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        account_id uuid,
+        action text NOT NULL CHECK (action IN ('created', 'rotated', 'revoked', 'validation_failed')),
+        actor_user_id text,
+        created_at timestamptz NOT NULL DEFAULT NOW()
+      );
+
       CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email ON users (lower(email));
       CREATE UNIQUE INDEX IF NOT EXISTS ux_users_single_platform_owner
         ON users ((user_type))
@@ -1041,6 +1064,14 @@ export class AuthSchemaService implements OnModuleInit {
       CREATE INDEX IF NOT EXISTS ix_auth_trusted_devices_user_active
         ON auth_trusted_devices (user_id, expires_at)
         WHERE revoked_at IS NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_monitoring_service_accounts_token_hash
+        ON monitoring_service_accounts (token_hash);
+      CREATE INDEX IF NOT EXISTS ix_monitoring_service_accounts_tenant_status
+        ON monitoring_service_accounts (tenant_id, status);
+      CREATE INDEX IF NOT EXISTS ix_monitoring_service_accounts_expires_at
+        ON monitoring_service_accounts (expires_at);
+      CREATE INDEX IF NOT EXISTS ix_monitoring_service_account_audit_logs_tenant_created
+        ON monitoring_service_account_audit_logs (tenant_id, created_at DESC);
 
       ALTER TABLE users ENABLE ROW LEVEL SECURITY;
       ALTER TABLE users FORCE ROW LEVEL SECURITY;
@@ -1060,6 +1091,10 @@ export class AuthSchemaService implements OnModuleInit {
       ALTER TABLE auth_mfa_challenges FORCE ROW LEVEL SECURITY;
       ALTER TABLE auth_trusted_devices ENABLE ROW LEVEL SECURITY;
       ALTER TABLE auth_trusted_devices FORCE ROW LEVEL SECURITY;
+      ALTER TABLE monitoring_service_accounts ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE monitoring_service_accounts FORCE ROW LEVEL SECURITY;
+      ALTER TABLE monitoring_service_account_audit_logs ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE monitoring_service_account_audit_logs FORCE ROW LEVEL SECURITY;
 
       DROP POLICY IF EXISTS users_rls_policy ON users;
       DROP POLICY IF EXISTS users_select_policy ON users;
@@ -1254,6 +1289,45 @@ export class AuthSchemaService implements OnModuleInit {
         OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/login%'
       );
 
+      DROP POLICY IF EXISTS monitoring_service_accounts_rls_policy ON monitoring_service_accounts;
+      DROP POLICY IF EXISTS monitoring_service_accounts_select_policy ON monitoring_service_accounts;
+      DROP POLICY IF EXISTS monitoring_service_accounts_manage_policy ON monitoring_service_accounts;
+      CREATE POLICY monitoring_service_accounts_select_policy ON monitoring_service_accounts
+      FOR SELECT
+      USING (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR NULLIF(current_setting('app.role', true), '') = 'platform_owner'
+        OR NULLIF(current_setting('app.role', true), '') = 'system'
+      );
+      CREATE POLICY monitoring_service_accounts_manage_policy ON monitoring_service_accounts
+      FOR ALL
+      USING (
+        NULLIF(current_setting('app.role', true), '') = 'platform_owner'
+        OR NULLIF(current_setting('app.role', true), '') = 'system'
+      )
+      WITH CHECK (
+        NULLIF(current_setting('app.role', true), '') = 'platform_owner'
+        OR NULLIF(current_setting('app.role', true), '') = 'system'
+      );
+
+      DROP POLICY IF EXISTS monitoring_service_account_audit_logs_rls_policy ON monitoring_service_account_audit_logs;
+      DROP POLICY IF EXISTS monitoring_service_account_audit_logs_select_policy ON monitoring_service_account_audit_logs;
+      DROP POLICY IF EXISTS monitoring_service_account_audit_logs_insert_policy ON monitoring_service_account_audit_logs;
+      CREATE POLICY monitoring_service_account_audit_logs_select_policy ON monitoring_service_account_audit_logs
+      FOR SELECT
+      USING (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR NULLIF(current_setting('app.role', true), '') = 'platform_owner'
+        OR NULLIF(current_setting('app.role', true), '') = 'system'
+      );
+      CREATE POLICY monitoring_service_account_audit_logs_insert_policy ON monitoring_service_account_audit_logs
+      FOR INSERT
+      WITH CHECK (
+        tenant_id = current_setting('app.tenant_id', true)
+        OR NULLIF(current_setting('app.role', true), '') = 'platform_owner'
+        OR NULLIF(current_setting('app.role', true), '') = 'system'
+      );
+
       DROP TRIGGER IF EXISTS trg_users_set_updated_at ON users;
       CREATE TRIGGER trg_users_set_updated_at
       BEFORE UPDATE ON users
@@ -1305,6 +1379,12 @@ export class AuthSchemaService implements OnModuleInit {
       DROP TRIGGER IF EXISTS trg_auth_trusted_devices_set_updated_at ON auth_trusted_devices;
       CREATE TRIGGER trg_auth_trusted_devices_set_updated_at
       BEFORE UPDATE ON auth_trusted_devices
+      FOR EACH ROW
+      EXECUTE FUNCTION set_updated_at();
+
+      DROP TRIGGER IF EXISTS trg_monitoring_service_accounts_set_updated_at ON monitoring_service_accounts;
+      CREATE TRIGGER trg_monitoring_service_accounts_set_updated_at
+      BEFORE UPDATE ON monitoring_service_accounts
       FOR EACH ROW
       EXECUTE FUNCTION set_updated_at();
     `);

@@ -48,3 +48,58 @@ test('validateEnv allows complete S3-compatible upload object storage config', (
 
   assert.equal(validateEnv(env), env);
 });
+
+test('validateEnv rejects incomplete required support SMS configuration', () => {
+  assert.throws(
+    () =>
+      validateEnv({
+        ...requiredEnvironment,
+        SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS: 'true',
+        SUPPORT_PROVIDER_SMOKE_LIVE: 'true',
+        SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL: 'http://sms.example.test/send',
+      }),
+    /SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL must be an HTTPS URL.*SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN is required.*SUPPORT_NOTIFICATION_SMS_RECIPIENTS is required.*SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL is required/s,
+  );
+});
+
+test('validateEnv allows complete support SMS configuration', () => {
+  const env = {
+    ...requiredEnvironment,
+    SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS: 'true',
+    SUPPORT_PROVIDER_SMOKE_LIVE: 'true',
+    SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL: 'https://sms.example.test/send',
+    SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL: 'https://sms.example.test/health',
+    SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN: 'sms-token',
+    SUPPORT_NOTIFICATION_SMS_RECIPIENTS: '+254700000000',
+  };
+
+  assert.equal(validateEnv(env), env);
+});
+
+test('validateEnv rejects incomplete required malware scan configuration', () => {
+  assert.throws(
+    () =>
+      validateEnv({
+        ...requiredEnvironment,
+        SUPPORT_PROVIDER_SMOKE_LIVE: 'true',
+        UPLOAD_MALWARE_SCAN_REQUIRED: 'true',
+        UPLOAD_MALWARE_SCAN_PROVIDER: 'clamav',
+        UPLOAD_MALWARE_SCAN_API_URL: 'http://scanner.example.test/scan',
+      }),
+    /UPLOAD_MALWARE_SCAN_API_URL must be an HTTPS URL.*UPLOAD_MALWARE_SCAN_API_TOKEN is required.*UPLOAD_MALWARE_SCAN_HEALTH_URL is required/s,
+  );
+});
+
+test('validateEnv allows complete malware scan configuration', () => {
+  const env = {
+    ...requiredEnvironment,
+    SUPPORT_PROVIDER_SMOKE_LIVE: 'true',
+    UPLOAD_MALWARE_SCAN_REQUIRED: 'true',
+    UPLOAD_MALWARE_SCAN_PROVIDER: 'clamav',
+    UPLOAD_MALWARE_SCAN_API_URL: 'https://scanner.example.test/scan',
+    UPLOAD_MALWARE_SCAN_HEALTH_URL: 'https://scanner.example.test/health',
+    UPLOAD_MALWARE_SCAN_API_TOKEN: 'scanner-token',
+  };
+
+  assert.equal(validateEnv(env), env);
+});

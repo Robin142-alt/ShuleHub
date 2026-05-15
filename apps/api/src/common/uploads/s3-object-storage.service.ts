@@ -37,6 +37,9 @@ export type ObjectStorageFetchInit = {
 } | {
   method: 'GET';
   headers: Record<string, string>;
+} | {
+  method: 'DELETE';
+  headers: Record<string, string>;
 };
 
 export interface ObjectStorageFetchResponse {
@@ -185,6 +188,53 @@ export class S3CompatibleObjectStorageService {
     };
   }
 
+  async deleteObject(
+    input: ObjectStorageGetInput,
+    fetchImpl: ObjectStorageFetch = defaultObjectStorageFetch,
+  ): Promise<void> {
+    this.assertTenantScopedStoragePath(input.tenantId, input.storagePath);
+
+    const config = this.resolveConfig();
+    const amzDate = formatAmzDate(input.now);
+    const dateStamp = amzDate.slice(0, 8);
+    const objectKey = input.storagePath.trim();
+    const objectPath = `/${encodePathSegment(config.bucket)}/${encodeObjectKey(objectKey)}`;
+    const url = `${config.endpoint.origin}${objectPath}`;
+    const headers: Record<string, string> = {
+      'x-amz-content-sha256': 'UNSIGNED-PAYLOAD',
+      'x-amz-date': amzDate,
+      'x-amz-meta-tenant-id': input.tenantId.trim(),
+    };
+
+    headers.Authorization = signS3Request({
+      method: 'DELETE',
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+      region: config.region,
+      dateStamp,
+      amzDate,
+      host: config.endpoint.host,
+      canonicalUri: objectPath,
+      headers,
+      payloadHash: 'UNSIGNED-PAYLOAD',
+    });
+
+    let response: ObjectStorageFetchResponse;
+
+    try {
+      response = await fetchImpl(url, {
+        method: 'DELETE',
+        headers,
+      });
+    } catch {
+      throw new ServiceUnavailableException('Object storage delete failed');
+    }
+
+    if (!response.ok) {
+      throw new ServiceUnavailableException('Object storage delete failed');
+    }
+  }
+
   private resolveConfig(): S3CompatibleObjectStorageConfig {
     const provider = (this.readConfig('UPLOAD_OBJECT_STORAGE_PROVIDER') ?? 's3').toLowerCase();
 
@@ -249,7 +299,7 @@ const defaultObjectStorageFetch: ObjectStorageFetch = async (url, init) => {
 };
 
 function signS3Request(input: {
-  method: 'GET' | 'PUT';
+  method: 'DELETE' | 'GET' | 'PUT';
   accessKeyId: string;
   secretAccessKey: string;
   region: string;

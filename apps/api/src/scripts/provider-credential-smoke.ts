@@ -1,3 +1,10 @@
+import { createHash } from 'node:crypto';
+
+import {
+  S3CompatibleObjectStorageService,
+  type ObjectStorageFetch,
+} from '../common/uploads/s3-object-storage.service';
+
 export type ProviderCredentialEnvironment = Record<string, string | undefined>;
 
 export type ProviderCredentialSmokeStatus = 'pass' | 'fail' | 'skip';
@@ -32,6 +39,7 @@ export interface RunProviderCredentialSmokeOptions
   env?: ProviderCredentialEnvironment;
   live?: boolean;
   fetchImpl?: ProviderCredentialSmokeFetch;
+  objectStorageFetchImpl?: ObjectStorageFetch;
 }
 
 export interface ProviderCredentialSmokeFetchResponse {
@@ -43,8 +51,9 @@ export interface ProviderCredentialSmokeFetchResponse {
 export type ProviderCredentialSmokeFetch = (
   url: string,
   init: {
-    method: 'GET';
+    method: 'GET' | 'POST';
     headers: Record<string, string>;
+    body?: string;
   },
 ) => Promise<ProviderCredentialSmokeFetchResponse>;
 
@@ -207,6 +216,12 @@ export async function runProviderCredentialSmoke(
         authorizationToken: getValue(env, 'RESEND_API_KEY'),
         missingMessage: 'EMAIL_PROVIDER_SMOKE_URL is required when live provider smoke checks are enabled.',
         successMessage: 'Live transactional email provider credential probe succeeded.',
+        method: 'POST',
+        body: '{}',
+        extraHeaders: {
+          'Content-Type': 'application/json',
+        },
+        acceptedStatuses: [200, 400, 422],
         fetchImpl: options.fetchImpl,
       }),
     );
@@ -219,8 +234,28 @@ export async function runProviderCredentialSmoke(
           authorizationToken: getValue(env, 'SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN'),
           missingMessage: 'SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL is required when live support SMS smoke checks are enabled.',
           successMessage: 'Live support SMS provider credential probe succeeded.',
+          validateJson: validateSmsRelayReadinessPayload,
           fetchImpl: options.fetchImpl,
         }),
+      );
+    }
+
+    if (requireUploadMalwareScan || isAnyUploadMalwareScanConfigPresent(env)) {
+      checks.push(
+        await runLiveCredentialCheck({
+          id: 'live-upload-malware-scan-provider',
+          smokeUrl: getValue(env, 'UPLOAD_MALWARE_SCAN_HEALTH_URL'),
+          authorizationToken: getValue(env, 'UPLOAD_MALWARE_SCAN_API_TOKEN'),
+          missingMessage: 'UPLOAD_MALWARE_SCAN_HEALTH_URL is required when live upload malware scan smoke checks are enabled.',
+          successMessage: 'Live upload malware scan provider credential probe succeeded.',
+          fetchImpl: options.fetchImpl,
+        }),
+      );
+    }
+
+    if (requireObjectStorage || isAnyUploadObjectStorageConfigPresent(env)) {
+      checks.push(
+        await runLiveObjectStorageCheck(env, options.objectStorageFetchImpl),
       );
     }
   }
@@ -476,6 +511,11 @@ async function runLiveCredentialCheck(input: {
   authorizationToken: string;
   missingMessage: string;
   successMessage: string;
+  method?: 'GET' | 'POST';
+  body?: string;
+  extraHeaders?: Record<string, string>;
+  acceptedStatuses?: number[];
+  validateJson?: (payload: unknown) => string[];
   fetchImpl?: ProviderCredentialSmokeFetch;
 }): Promise<ProviderCredentialSmokeCheck> {
   if (!input.smokeUrl) {
@@ -490,21 +530,57 @@ async function runLiveCredentialCheck(input: {
     });
   }
 
+  const method = input.method ?? 'GET';
+  const acceptedStatuses = input.acceptedStatuses ?? [];
+
   try {
     const response = await (input.fetchImpl ?? fetch)(input.smokeUrl, {
-      method: 'GET',
+      method,
       headers: {
         Authorization: `Bearer ${input.authorizationToken}`,
+        'User-Agent': 'shulehub-provider-smoke',
+        ...(input.extraHeaders ?? {}),
       },
+      body: input.body,
     });
 
-    if (!response.ok) {
+    if (!response.ok && !acceptedStatuses.includes(response.status)) {
       return buildCheck(
         input.id,
         [`Provider smoke health endpoint returned HTTP ${response.status}.`],
         input.successMessage,
         { live: true },
       );
+    }
+
+    if (input.validateJson) {
+      const body = response.text ? await response.text() : '';
+      let payload: unknown;
+
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        return buildCheck(
+          input.id,
+          ['Provider smoke health endpoint did not return a JSON readiness body.'],
+          input.successMessage,
+          { live: true, readiness_body_checked: true },
+        );
+      }
+
+      const readinessErrors = input.validateJson(payload);
+
+      if (readinessErrors.length > 0) {
+        return buildCheck(input.id, readinessErrors, input.successMessage, {
+          live: true,
+          readiness_body_checked: true,
+        });
+      }
+
+      return buildCheck(input.id, [], input.successMessage, {
+        live: true,
+        readiness_body_checked: true,
+      });
     }
 
     return buildCheck(input.id, [], input.successMessage, { live: true });
@@ -514,6 +590,89 @@ async function runLiveCredentialCheck(input: {
       [`Provider smoke health endpoint failed: ${sanitizeError(error)}`],
       input.successMessage,
       { live: true },
+    );
+  }
+}
+
+function validateSmsRelayReadinessPayload(payload: unknown): string[] {
+  if (!isRecord(payload)) {
+    return ['Support SMS health endpoint did not return a readiness object.'];
+  }
+
+  const errors: string[] = [];
+
+  if (payload.status !== 'ok') {
+    errors.push('Support SMS relay readiness status is not ok.');
+  }
+
+  if (payload.dry_run === true) {
+    errors.push('Support SMS relay is in dry-run mode and cannot satisfy live production SMS smoke checks.');
+  }
+
+  if (payload.provider_configured === false) {
+    errors.push('Support SMS relay provider configuration is incomplete.');
+  }
+
+  if (payload.provider_ready !== true) {
+    errors.push('Support SMS relay provider readiness is not confirmed.');
+  }
+
+  return errors;
+}
+
+async function runLiveObjectStorageCheck(
+  env: ProviderCredentialEnvironment,
+  fetchImpl?: ObjectStorageFetch,
+): Promise<ProviderCredentialSmokeCheck> {
+  const provider = getValue(env, 'UPLOAD_OBJECT_STORAGE_PROVIDER') || 's3';
+  const content = Buffer.from(`shule-hub-provider-smoke:${new Date().toISOString()}`);
+  const storagePath = 'tenant/provider-smoke/support/provider-smoke.txt';
+  const storage = new S3CompatibleObjectStorageService({
+    get: (key: string) => getValue(env, key),
+  } as never);
+
+  try {
+    await storage.putObject({
+      tenantId: 'provider-smoke',
+      storagePath,
+      mimeType: 'text/plain',
+      buffer: content,
+    }, fetchImpl);
+
+    const read = await storage.getObject({
+      tenantId: 'provider-smoke',
+      storagePath,
+    }, fetchImpl);
+    const expectedSha256 = createHash('sha256').update(content).digest('hex');
+
+    if (read.sha256 !== expectedSha256 || !read.content.equals(content)) {
+      throw new Error('Object storage smoke checksum mismatch');
+    }
+
+    await storage.deleteObject({
+      tenantId: 'provider-smoke',
+      storagePath,
+    }, fetchImpl);
+
+    return buildCheck('live-upload-object-storage', [], 'Live upload object storage write/read/delete probe succeeded.', {
+      live: true,
+      provider,
+      write_checked: true,
+      read_checked: true,
+      delete_checked: true,
+    });
+  } catch (error) {
+    return buildCheck(
+      'live-upload-object-storage',
+      [`Live upload object storage probe failed: ${sanitizeError(error)}`],
+      'Live upload object storage write/read/delete probe succeeded.',
+      {
+        live: true,
+        provider,
+        write_checked: false,
+        read_checked: false,
+        delete_checked: false,
+      },
     );
   }
 }
@@ -595,6 +754,10 @@ function extractSenderEmail(sender: string): string {
 
 function isValidEmailAddress(value: string): boolean {
   return EMAIL_PATTERN.test(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isHttpsUrl(value: string): boolean {

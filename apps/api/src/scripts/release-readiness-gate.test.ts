@@ -33,6 +33,7 @@ const passingPackageJsonSource = JSON.stringify({
       'dist/apps/api/src/auth/mfa.service.test.js',
       'dist/apps/api/src/auth/trusted-device.service.test.js',
       'dist/apps/api/src/auth/magic-link.service.test.js',
+      'dist/apps/api/src/auth/monitoring-service-account.service.test.js',
       'dist/apps/api/src/scripts/audit-coverage-review.test.js',
       'dist/apps/api/src/common/dashboard/dashboard-summary.repository.test.js',
       'dist/apps/api/src/common/reports/report-excel-artifact.test.js',
@@ -67,6 +68,11 @@ const passingPackageJsonSource = JSON.stringify({
     'monitor:synthetic': 'node apps/api/src/scripts/synthetic-journey-monitor.ts',
     'smoke:providers': 'node apps/api/src/scripts/provider-credential-smoke.ts',
     'release:readiness': 'node dist/apps/api/src/scripts/release-readiness-gate.js',
+    'monitor:create-service-account': 'node apps/api/src/scripts/create-monitoring-service-account.ts',
+    'build:sms-relay': 'npm --prefix apps/sms-relay run build',
+    'test:sms-relay': 'npm --prefix apps/sms-relay run test',
+    'build:malware-scanner': 'npm --prefix apps/malware-scanner run build',
+    'test:malware-scanner': 'npm --prefix apps/malware-scanner run test',
     'test:backup-integrity': 'jest apps/api/test/backup-integrity.integration-spec.ts',
     'test:disaster-recovery': 'jest apps/api/test/disaster-recovery.integration-spec.ts',
     'dr:backup-restore': 'npm run test:backup-integrity && npm run test:disaster-recovery',
@@ -96,6 +102,49 @@ const passingIncidentRunbookSource = `
 
   ## Retired Modules
   Attendance is retired and must not be restored during incidents.
+`;
+
+const passingProviderCredentialSmokeTestSource = `
+  test('live provider smoke covers required providers', () => {
+    process.env.SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS = 'true';
+    assert.equal(result.checks.some((check) => check.id === 'live-support-sms-provider'), true);
+    assert.equal(result.checks.some((check) => check.id === 'live-upload-malware-scan-provider'), true);
+    assert.equal(process.env.UPLOAD_MALWARE_SCAN_HEALTH_URL, 'https://scanner.example.test/health');
+    assert.equal(result.checks.some((check) => check.id === 'live-upload-object-storage'), true);
+    assert.equal(result.checks.some((check) => check.metadata.delete_checked), true);
+  });
+`;
+
+const passingProductionOperabilityWorkflowSource = `
+  name: Production Operability
+  jobs:
+    production-operability:
+      steps:
+        - run: npm run monitor:synthetic
+          env:
+            SYNTHETIC_MONITOR_TOKEN: \${{ secrets.PROD_MONITOR_ACCESS_TOKEN }}
+        - run: npm run load:core-api
+        - run: npm run smoke:providers
+        - run: npm run perf:query-plan-review
+        - run: npm run release:readiness
+`;
+
+const passingProductionMonitoringRunbookSource = `
+  # Production Monitoring Runbook
+  ## Rotation
+  Rotate monitor token every 90 days with monitor:create-service-account.
+`;
+
+const passingPilotWorkflowChecklistSource = `
+  # Pilot Real Workflow Checklist
+  Platform owner creates school.
+`;
+
+const passingImplementation7LiveValidationSource = `
+  # Implementation 7 Live Validation
+  Live SMS provider smoke: Pending.
+  Live object storage smoke: Pending.
+  Real pilot school workflow checklist: Pending.
 `;
 
 const passingDisasterRecoveryRunbookSource = `
@@ -195,6 +244,23 @@ test('runReleaseReadinessGate fails when provider smoke coverage is missing', ()
     /smoke:providers/,
   );
 });
+
+test('runReleaseReadinessGate fails when Implementation 7 operability artifacts are missing', () => {
+  const result = runGate({
+    providerCredentialSmokeTestSource: 'test("missing live checks", () => {})',
+    productionOperabilityWorkflowSource: 'name: Production Operability',
+    productionMonitoringRunbookSource: '# Monitoring',
+    pilotWorkflowChecklistSource: '# Checklist',
+    implementation7LiveValidationSource: '# Live validation',
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(
+    result.checks.find((check) => check.id === 'implementation7-operability-artifacts')?.details.join('\n') ?? '',
+    /live SMS provider check|monitor token secret|monitor token rotation|platform-owner school creation/i,
+  );
+});
+
 
 test('runReleaseReadinessGate fails when report snapshot coverage is missing', () => {
   const result = runGate({
@@ -388,6 +454,11 @@ function runGate(overrides: ReleaseReadinessGateOptions = {}) {
     packageJsonSource: passingPackageJsonSource,
     incidentRunbookSource: passingIncidentRunbookSource,
     disasterRecoveryRunbookSource: passingDisasterRecoveryRunbookSource,
+    providerCredentialSmokeTestSource: passingProviderCredentialSmokeTestSource,
+    productionOperabilityWorkflowSource: passingProductionOperabilityWorkflowSource,
+    productionMonitoringRunbookSource: passingProductionMonitoringRunbookSource,
+    pilotWorkflowChecklistSource: passingPilotWorkflowChecklistSource,
+    implementation7LiveValidationSource: passingImplementation7LiveValidationSource,
     ...overrides,
   });
 }

@@ -1,0 +1,108 @@
+name: Production Operability
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+    - cron: "7 * * * *"
+    - cron: "17 */6 * * *"
+    - cron: "33 2 * * *"
+  workflow_dispatch:
+    inputs:
+      check:
+        description: "Check to run"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - synthetic
+          - core-load
+          - providers
+          - query-plan
+          - readiness
+
+permissions:
+  contents: read
+
+jobs:
+  production-operability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Synthetic monitor
+        if: github.event.inputs.check == 'all' || github.event.inputs.check == 'synthetic' || github.event.schedule == '*/15 * * * *'
+        env:
+          SYNTHETIC_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
+          SYNTHETIC_WEB_BASE_URL: ${{ secrets.PROD_WEB_BASE_URL }}
+          SYNTHETIC_TENANT_ID: ${{ secrets.PROD_MONITOR_TENANT_ID }}
+          SYNTHETIC_MONITOR_TOKEN: ${{ secrets.PROD_MONITOR_ACCESS_TOKEN }}
+          SYNTHETIC_ALLOW_REMOTE: "true"
+        run: npm run monitor:synthetic > production-synthetic.json
+
+      - name: Core API load
+        if: github.event.inputs.check == 'all' || github.event.inputs.check == 'core-load' || github.event.schedule == '7 * * * *'
+        env:
+          CORE_API_LOAD_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
+          CORE_API_LOAD_TENANT_ID: ${{ secrets.PROD_MONITOR_TENANT_ID }}
+          CORE_API_LOAD_MONITOR_TOKEN: ${{ secrets.PROD_MONITOR_ACCESS_TOKEN }}
+          CORE_API_LOAD_ALLOW_REMOTE: "true"
+          CORE_API_LOAD_ITERATIONS: "3"
+        run: npm run load:core-api > production-core-load.json
+
+      - name: Provider smoke
+        if: github.event.inputs.check == 'all' || github.event.inputs.check == 'providers' || github.event.schedule == '17 */6 * * *'
+        env:
+          SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS: ${{ secrets.SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS || 'false' }}
+          SUPPORT_PROVIDER_SMOKE_LIVE: ${{ secrets.SUPPORT_PROVIDER_SMOKE_LIVE || 'false' }}
+          SUPPORT_NOTIFICATION_EMAILS: ${{ secrets.SUPPORT_NOTIFICATION_EMAILS }}
+          SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL: ${{ secrets.SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL }}
+          SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL: ${{ secrets.SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL }}
+          SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN: ${{ secrets.SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN }}
+          SUPPORT_NOTIFICATION_SMS_RECIPIENTS: ${{ secrets.SUPPORT_NOTIFICATION_SMS_RECIPIENTS }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_PROVIDER_SMOKE_URL: ${{ secrets.EMAIL_PROVIDER_SMOKE_URL }}
+          PUBLIC_APP_URL: ${{ secrets.PROD_WEB_BASE_URL }}
+          UPLOAD_MALWARE_SCAN_PROVIDER: "clamav"
+          UPLOAD_MALWARE_SCAN_API_URL: ${{ secrets.UPLOAD_MALWARE_SCAN_API_URL }}
+          UPLOAD_MALWARE_SCAN_HEALTH_URL: ${{ secrets.UPLOAD_MALWARE_SCAN_HEALTH_URL }}
+          UPLOAD_MALWARE_SCAN_API_TOKEN: ${{ secrets.UPLOAD_MALWARE_SCAN_API_TOKEN }}
+          UPLOAD_MALWARE_SCAN_REQUIRED: "true"
+          UPLOAD_OBJECT_STORAGE_ENABLED: "true"
+          UPLOAD_OBJECT_STORAGE_PROVIDER: ${{ secrets.UPLOAD_OBJECT_STORAGE_PROVIDER }}
+          UPLOAD_OBJECT_STORAGE_ENDPOINT: ${{ secrets.UPLOAD_OBJECT_STORAGE_ENDPOINT }}
+          UPLOAD_OBJECT_STORAGE_BUCKET: ${{ secrets.UPLOAD_OBJECT_STORAGE_BUCKET }}
+          UPLOAD_OBJECT_STORAGE_REGION: ${{ secrets.UPLOAD_OBJECT_STORAGE_REGION }}
+          UPLOAD_OBJECT_STORAGE_ACCESS_KEY_ID: ${{ secrets.UPLOAD_OBJECT_STORAGE_ACCESS_KEY_ID }}
+          UPLOAD_OBJECT_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.UPLOAD_OBJECT_STORAGE_SECRET_ACCESS_KEY }}
+        run: npm run smoke:providers > production-provider-smoke.json
+
+      - name: Query plan review
+        if: github.event.inputs.check == 'all' || github.event.inputs.check == 'query-plan' || github.event.schedule == '33 2 * * *'
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: npm run perf:query-plan-review > production-query-plan.json
+
+      - name: Release readiness
+        if: github.event.inputs.check == 'all' || github.event.inputs.check == 'readiness' || github.event.schedule == '33 2 * * *'
+        run: npm run release:readiness > production-release-readiness.json
+
+      - name: Upload sanitized operability artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-operability-${{ github.run_id }}
+          path: production-*.json
+          if-no-files-found: ignore
+          retention-days: 14

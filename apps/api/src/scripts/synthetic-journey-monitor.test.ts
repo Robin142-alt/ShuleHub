@@ -60,8 +60,26 @@ test('synthetic journey plan refuses remote targets without opt-in and requires 
         apiBaseUrl: 'http://127.0.0.1:3100',
         webBaseUrl: 'http://127.0.0.1:3000',
       }),
-    /requires tenantId and accessToken/i,
+    /requires tenantId and monitorToken or accessToken/i,
   );
+});
+
+test('synthetic journey plan prefers scoped monitor tokens over human access tokens', () => {
+  const plan = buildSyntheticJourneyPlan({
+    apiBaseUrl: 'http://127.0.0.1:3100',
+    webBaseUrl: 'http://127.0.0.1:3000',
+    tenantId: 'tenant-1',
+    monitorToken: 'shm_monitor-token',
+    accessToken: 'human-token',
+  });
+
+  const tenantStep = plan.journeys
+    .flatMap((journey) => journey.steps)
+    .find((step) => step.auth === 'tenant');
+
+  assert.ok(tenantStep);
+  assert.equal(tenantStep.headers.authorization, 'Bearer shm_monitor-token');
+  assert.equal(tenantStep.headers['x-tenant-id'], 'tenant-1');
 });
 
 test('runSyntheticJourneyMonitor groups step outcomes by journey', async () => {
