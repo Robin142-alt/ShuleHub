@@ -397,7 +397,7 @@ Set Railway API variables:
 
 ```powershell
 npx.cmd @railway/cli variables set SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL="https://sms-relay-domain/send" --service 62241841-a98c-4058-b0af-bae872ed4929 --environment production
-npx.cmd @railway/cli variables set SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL="https://sms-relay-domain/health" --service 62241841-a98c-4058-b0af-bae872ed4929 --environment production
+npx.cmd @railway/cli variables set SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL="https://sms-relay-domain/ready" --service 62241841-a98c-4058-b0af-bae872ed4929 --environment production
 npx.cmd @railway/cli variables set SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS=true --service 62241841-a98c-4058-b0af-bae872ed4929 --environment production
 npx.cmd @railway/cli variables set SUPPORT_PROVIDER_SMOKE_LIVE=true --service 62241841-a98c-4058-b0af-bae872ed4929 --environment production
 ```
@@ -826,8 +826,8 @@ jobs:
       - name: Provider smoke
         if: github.event.inputs.check == 'all' || github.event.inputs.check == 'providers' || github.event_name == 'schedule'
         env:
-          SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS: "true"
-          SUPPORT_PROVIDER_SMOKE_LIVE: "true"
+          SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS: ${{ secrets.SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS || 'false' }}
+          SUPPORT_PROVIDER_SMOKE_LIVE: ${{ secrets.SUPPORT_PROVIDER_SMOKE_LIVE || 'false' }}
         run: npm run smoke:providers
       - name: Query plan review
         if: github.event.inputs.check == 'all' || github.event.inputs.check == 'query-plan' || github.event_name == 'schedule'
@@ -1068,7 +1068,7 @@ git commit -m "chore: gate implementation 7 production readiness"
 | Web design tests | `npm.cmd --prefix apps/web run test:design` | all tests pass |
 | Web build | `npm.cmd --prefix apps/web run build` | exit 0 |
 | Release gate | `npm.cmd run release:readiness` | all checks pass |
-| Provider smoke | `npm.cmd run smoke:providers` | SMS, malware scan, object storage pass |
+| Provider smoke | `npm.cmd run smoke:providers` | malware scan and object storage pass; SMS passes after real provider credentials and `/ready` are configured |
 | Synthetic monitor | `npm.cmd run monitor:synthetic` | zero failed steps |
 | Core API load | `npm.cmd run load:core-api` | zero failed requests |
 | Query plan | `npm.cmd run perf:query-plan-review` | ok true |
@@ -1083,7 +1083,7 @@ git commit -m "chore: gate implementation 7 production readiness"
 
 Implementation 7 is complete only when:
 
-- SMS support notifications are configured and verified with live provider smoke.
+- SMS support notifications are configured and verified with live provider smoke after real provider credentials are supplied.
 - Malware scanning is mandatory for uploads and rejects EICAR before persistence.
 - External object storage is enabled for new uploads with tenant-scoped keys and checksum verification.
 - Monitoring scripts use scoped monitoring credentials, not human JWTs.

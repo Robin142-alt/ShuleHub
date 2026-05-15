@@ -74,7 +74,16 @@ test('provider credential smoke live checks probe SMS and malware health without
       return {
         ok: true,
         status: 200,
-        text: async () => 'ok',
+        text: async () => (
+          url === configuredEnvironment.SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL
+            ? JSON.stringify({
+              status: 'ok',
+              dry_run: false,
+              provider_configured: true,
+              provider_ready: true,
+            })
+            : 'ok'
+        ),
       };
     },
     objectStorageFetchImpl: async (_url, init) => {
@@ -117,6 +126,55 @@ test('provider credential smoke live checks probe SMS and malware health without
   assert.equal(serialized.includes(configuredEnvironment.UPLOAD_MALWARE_SCAN_API_TOKEN), false);
 });
 
+test('provider credential smoke live SMS check fails when relay is still in dry-run mode', async () => {
+  const result = await runProviderCredentialSmoke({
+    env: configuredEnvironment,
+    requireSms: true,
+    live: true,
+    fetchImpl: async (url) => ({
+      ok: true,
+      status: 200,
+      text: async () => (
+        url === configuredEnvironment.SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL
+          ? JSON.stringify({
+            status: 'ok',
+            dry_run: true,
+            provider_configured: false,
+            provider_ready: false,
+          })
+          : 'ok'
+      ),
+    }),
+    objectStorageFetchImpl: async (_url, init) => {
+      if (init.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => Uint8Array.from(Buffer.from('shule-hub-provider-smoke')).buffer,
+        };
+      }
+
+      return {
+        ok: true,
+        status: init.method === 'DELETE' ? 204 : 200,
+        headers: {
+          get: (name: string) => (name.toLowerCase() === 'etag' ? '"provider-smoke-etag"' : null),
+        },
+      };
+    },
+  });
+
+  const smsCheck = result.checks.find((check) => check.id === 'live-support-sms-provider');
+
+  assert.equal(result.ok, false);
+  assert.equal(smsCheck?.status, 'fail');
+  assert.match(smsCheck?.message ?? '', /dry-run mode/);
+
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes(configuredEnvironment.SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL), false);
+  assert.equal(serialized.includes(configuredEnvironment.SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN), false);
+});
+
 test('provider credential smoke live checks fail when required malware health URL is missing', async () => {
   const result = await runProviderCredentialSmoke({
     env: {
@@ -125,10 +183,19 @@ test('provider credential smoke live checks fail when required malware health UR
     },
     requireSms: true,
     live: true,
-    fetchImpl: async () => ({
+    fetchImpl: async (url) => ({
       ok: true,
       status: 200,
-      text: async () => 'ok',
+      text: async () => (
+        url === configuredEnvironment.SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL
+          ? JSON.stringify({
+            status: 'ok',
+            dry_run: false,
+            provider_configured: true,
+            provider_ready: true,
+          })
+          : 'ok'
+      ),
     }),
   });
 
@@ -147,10 +214,19 @@ test('provider credential smoke live object storage writes reads and deletes ten
     env: configuredEnvironment,
     requireSms: true,
     live: true,
-    fetchImpl: async () => ({
+    fetchImpl: async (url) => ({
       ok: true,
       status: 200,
-      text: async () => 'ok',
+      text: async () => (
+        url === configuredEnvironment.SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL
+          ? JSON.stringify({
+            status: 'ok',
+            dry_run: false,
+            provider_configured: true,
+            provider_ready: true,
+          })
+          : 'ok'
+      ),
     }),
     objectStorageFetchImpl: async (_url, init) => {
       objectRequests.push({

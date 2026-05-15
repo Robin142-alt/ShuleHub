@@ -19,13 +19,13 @@ Required relay variables:
 Required API variables after the relay domain exists:
 
 - `SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL=https://<sms-relay-domain>/send`
-- `SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL=https://<sms-relay-domain>/health`
+- `SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL=https://<sms-relay-domain>/ready`
 - `SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN`
 - `SUPPORT_NOTIFICATION_SMS_RECIPIENTS`
 - `SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS=true`
 - `SUPPORT_PROVIDER_SMOKE_LIVE=true`
 
-The relay redacts phone numbers in logs and returns non-2xx on provider failure so the API retry worker can retry.
+The relay redacts phone numbers in logs and returns non-2xx on provider failure so the API retry worker can retry. `/health` is only a liveness endpoint for Railway deployment health checks. `/ready` is the production provider-readiness endpoint and returns non-2xx while `SMS_DRY_RUN=true`, relay auth is missing, or provider credentials are incomplete. Do not point live SMS smoke checks at `/health`.
 
 ## Upload Malware Scanner
 
@@ -92,3 +92,5 @@ Expected required checks:
 - `live-upload-object-storage` passes.
 
 Provider smoke output must not include tokens, object-storage keys, scanner URLs with credentials, or full recipient phone numbers.
+
+If the relay is deployed before real Africa's Talking credentials are available, keep SMS provider smoke optional by leaving `SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS=false` and `SUPPORT_PROVIDER_SMOKE_LIVE=false`. The relay may stay online in dry-run mode, but `/ready` must remain degraded until real provider delivery is configured.

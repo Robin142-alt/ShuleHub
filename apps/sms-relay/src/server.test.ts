@@ -26,8 +26,80 @@ test('GET /health returns readiness without secrets', async () => {
       status: 'ok',
       provider: 'africastalking',
       dry_run: false,
+      provider_configured: true,
+      relay_auth_configured: true,
+      provider_ready: true,
     });
     assert.equal(JSON.stringify(payload).includes(baseEnv.SMS_PROVIDER_API_KEY), false);
+  } finally {
+    await close();
+  }
+});
+
+test('GET /health reports liveness while dry-run readiness remains false', async () => {
+  const { baseUrl, close } = await startTestServer({
+    env: {
+      ...baseEnv,
+      SMS_DRY_RUN: 'true',
+    },
+  });
+
+  try {
+    const response = await fetch(`${baseUrl}/health`);
+    const payload = await response.json() as Record<string, unknown>;
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.status, 'ok');
+    assert.equal(payload.dry_run, true);
+    assert.equal(payload.provider_ready, false);
+    assert.equal(payload.reason, 'dry_run_enabled');
+    assert.equal(JSON.stringify(payload).includes(baseEnv.SMS_PROVIDER_API_KEY), false);
+  } finally {
+    await close();
+  }
+});
+
+test('GET /ready rejects dry-run mode for production readiness probes', async () => {
+  const { baseUrl, close } = await startTestServer({
+    env: {
+      ...baseEnv,
+      SMS_DRY_RUN: 'true',
+    },
+  });
+
+  try {
+    const response = await fetch(`${baseUrl}/ready`);
+    const payload = await response.json() as Record<string, unknown>;
+
+    assert.equal(response.status, 503);
+    assert.equal(payload.status, 'degraded');
+    assert.equal(payload.provider_ready, false);
+    assert.equal(payload.reason, 'dry_run_enabled');
+  } finally {
+    await close();
+  }
+});
+
+test('GET /ready rejects incomplete provider credentials without exposing values', async () => {
+  const { baseUrl, close } = await startTestServer({
+    env: {
+      SMS_RELAY_AUTH_TOKEN: 'relay-token',
+      SMS_PROVIDER: 'africastalking',
+      SMS_PROVIDER_API_URL: '',
+      SMS_PROVIDER_API_KEY: '',
+      SMS_PROVIDER_USERNAME: '',
+    },
+  });
+
+  try {
+    const response = await fetch(`${baseUrl}/ready`);
+    const payload = await response.json() as Record<string, unknown>;
+
+    assert.equal(response.status, 503);
+    assert.equal(payload.provider_configured, false);
+    assert.equal(payload.provider_ready, false);
+    assert.equal(payload.reason, 'provider_configuration_incomplete');
+    assert.equal(JSON.stringify(payload).includes('provider-key'), false);
   } finally {
     await close();
   }
@@ -140,9 +212,9 @@ function validPayload() {
   };
 }
 
-async function startTestServer(options: { fetchImpl?: RelayFetch } = {}) {
+async function startTestServer(options: { env?: Record<string, string | undefined>; fetchImpl?: RelayFetch } = {}) {
   const server = createSmsRelayServer({
-    env: baseEnv,
+    env: options.env ?? baseEnv,
     fetchImpl: options.fetchImpl ?? (async () => ({ ok: true, status: 200, text: async () => 'ok' })),
     logger: {
       error: () => undefined,

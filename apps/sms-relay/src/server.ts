@@ -34,6 +34,15 @@ export interface SmsRelayOptions {
   logger?: Pick<Console, 'error' | 'log' | 'warn'>;
 }
 
+interface SmsProviderReadiness {
+  provider: string;
+  dryRun: boolean;
+  providerConfigured: boolean;
+  relayAuthConfigured: boolean;
+  providerReady: boolean;
+  reason?: 'dry_run_enabled' | 'provider_configuration_incomplete' | 'relay_auth_missing' | 'unsupported_provider';
+}
+
 const PHONE_PATTERN = /^\+?[0-9][0-9\s().-]{6,24}$/;
 const DEFAULT_PORT = 3000;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -66,10 +75,31 @@ async function handleRequest(input: {
   const url = new URL(request.url ?? '/', 'http://localhost');
 
   if (method === 'GET' && url.pathname === '/health') {
+    const readiness = getSmsProviderReadiness(env);
+
     writeJson(response, 200, {
       status: 'ok',
-      provider: getEnv(env, 'SMS_PROVIDER') || 'africastalking',
-      dry_run: parseBoolean(getEnv(env, 'SMS_DRY_RUN'), false),
+      provider: readiness.provider,
+      dry_run: readiness.dryRun,
+      provider_configured: readiness.providerConfigured,
+      relay_auth_configured: readiness.relayAuthConfigured,
+      provider_ready: readiness.providerReady,
+      reason: readiness.reason,
+    });
+    return;
+  }
+
+  if (method === 'GET' && url.pathname === '/ready') {
+    const readiness = getSmsProviderReadiness(env);
+
+    writeJson(response, readiness.providerReady ? 200 : 503, {
+      status: readiness.providerReady ? 'ok' : 'degraded',
+      provider: readiness.provider,
+      dry_run: readiness.dryRun,
+      provider_configured: readiness.providerConfigured,
+      relay_auth_configured: readiness.relayAuthConfigured,
+      provider_ready: readiness.providerReady,
+      reason: readiness.reason,
     });
     return;
   }
@@ -214,6 +244,69 @@ function readRequiredString(record: Record<string, unknown>, key: string): strin
   }
 
   return value.trim();
+}
+
+function getSmsProviderReadiness(env: SmsRelayEnvironment): SmsProviderReadiness {
+  const provider = (getEnv(env, 'SMS_PROVIDER') || 'africastalking').toLowerCase();
+  const dryRun = parseBoolean(getEnv(env, 'SMS_DRY_RUN'), false);
+  const providerConfigured = Boolean(
+    getEnv(env, 'SMS_PROVIDER_API_URL')
+      && getEnv(env, 'SMS_PROVIDER_API_KEY')
+      && getEnv(env, 'SMS_PROVIDER_USERNAME'),
+  );
+  const relayAuthConfigured = Boolean(getEnv(env, 'SMS_RELAY_AUTH_TOKEN'));
+
+  if (provider !== 'africastalking') {
+    return {
+      provider,
+      dryRun,
+      providerConfigured,
+      relayAuthConfigured,
+      providerReady: false,
+      reason: 'unsupported_provider',
+    };
+  }
+
+  if (dryRun) {
+    return {
+      provider,
+      dryRun,
+      providerConfigured,
+      relayAuthConfigured,
+      providerReady: false,
+      reason: 'dry_run_enabled',
+    };
+  }
+
+  if (!relayAuthConfigured) {
+    return {
+      provider,
+      dryRun,
+      providerConfigured,
+      relayAuthConfigured,
+      providerReady: false,
+      reason: 'relay_auth_missing',
+    };
+  }
+
+  if (!providerConfigured) {
+    return {
+      provider,
+      dryRun,
+      providerConfigured,
+      relayAuthConfigured,
+      providerReady: false,
+      reason: 'provider_configuration_incomplete',
+    };
+  }
+
+  return {
+    provider,
+    dryRun,
+    providerConfigured,
+    relayAuthConfigured,
+    providerReady: true,
+  };
 }
 
 async function readBody(request: IncomingMessage): Promise<string> {

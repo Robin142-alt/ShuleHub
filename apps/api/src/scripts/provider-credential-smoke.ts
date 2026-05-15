@@ -227,6 +227,7 @@ export async function runProviderCredentialSmoke(
           authorizationToken: getValue(env, 'SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN'),
           missingMessage: 'SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL is required when live support SMS smoke checks are enabled.',
           successMessage: 'Live support SMS provider credential probe succeeded.',
+          validateJson: validateSmsRelayReadinessPayload,
           fetchImpl: options.fetchImpl,
         }),
       );
@@ -503,6 +504,7 @@ async function runLiveCredentialCheck(input: {
   authorizationToken: string;
   missingMessage: string;
   successMessage: string;
+  validateJson?: (payload: unknown) => string[];
   fetchImpl?: ProviderCredentialSmokeFetch;
 }): Promise<ProviderCredentialSmokeCheck> {
   if (!input.smokeUrl) {
@@ -522,6 +524,7 @@ async function runLiveCredentialCheck(input: {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${input.authorizationToken}`,
+        'User-Agent': 'shulehub-provider-smoke',
       },
     });
 
@@ -534,6 +537,36 @@ async function runLiveCredentialCheck(input: {
       );
     }
 
+    if (input.validateJson) {
+      const body = response.text ? await response.text() : '';
+      let payload: unknown;
+
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        return buildCheck(
+          input.id,
+          ['Provider smoke health endpoint did not return a JSON readiness body.'],
+          input.successMessage,
+          { live: true, readiness_body_checked: true },
+        );
+      }
+
+      const readinessErrors = input.validateJson(payload);
+
+      if (readinessErrors.length > 0) {
+        return buildCheck(input.id, readinessErrors, input.successMessage, {
+          live: true,
+          readiness_body_checked: true,
+        });
+      }
+
+      return buildCheck(input.id, [], input.successMessage, {
+        live: true,
+        readiness_body_checked: true,
+      });
+    }
+
     return buildCheck(input.id, [], input.successMessage, { live: true });
   } catch (error) {
     return buildCheck(
@@ -543,6 +576,32 @@ async function runLiveCredentialCheck(input: {
       { live: true },
     );
   }
+}
+
+function validateSmsRelayReadinessPayload(payload: unknown): string[] {
+  if (!isRecord(payload)) {
+    return ['Support SMS health endpoint did not return a readiness object.'];
+  }
+
+  const errors: string[] = [];
+
+  if (payload.status !== 'ok') {
+    errors.push('Support SMS relay readiness status is not ok.');
+  }
+
+  if (payload.dry_run === true) {
+    errors.push('Support SMS relay is in dry-run mode and cannot satisfy live production SMS smoke checks.');
+  }
+
+  if (payload.provider_configured === false) {
+    errors.push('Support SMS relay provider configuration is incomplete.');
+  }
+
+  if (payload.provider_ready !== true) {
+    errors.push('Support SMS relay provider readiness is not confirmed.');
+  }
+
+  return errors;
 }
 
 async function runLiveObjectStorageCheck(
@@ -679,6 +738,10 @@ function extractSenderEmail(sender: string): string {
 
 function isValidEmailAddress(value: string): boolean {
   return EMAIL_PATTERN.test(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isHttpsUrl(value: string): boolean {

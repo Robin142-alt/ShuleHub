@@ -82,9 +82,10 @@ async function main(): Promise<void> {
       `,
       [config.tenantId, accountId, config.createdBy ?? 'system'],
     );
-    await client.query('COMMIT');
 
     writeSecret(config, rawToken);
+
+    await client.query('COMMIT');
 
     process.stdout.write(
       JSON.stringify(

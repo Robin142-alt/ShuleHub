@@ -22,12 +22,9 @@ All scheduled runs are defined in [.github/workflows/production-operability.yml]
 - `PROD_MONITOR_ACCESS_TOKEN`
 - `PROD_DATABASE_URL`
 - `SUPPORT_NOTIFICATION_EMAILS`
-- `SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL`
-- `SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL`
-- `SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN`
-- `SUPPORT_NOTIFICATION_SMS_RECIPIENTS`
 - `RESEND_API_KEY`
 - `EMAIL_FROM`
+- `EMAIL_PROVIDER_SMOKE_URL`
 - `UPLOAD_MALWARE_SCAN_API_URL`
 - `UPLOAD_MALWARE_SCAN_HEALTH_URL`
 - `UPLOAD_MALWARE_SCAN_API_TOKEN`
@@ -40,6 +37,17 @@ All scheduled runs are defined in [.github/workflows/production-operability.yml]
 
 `PROD_MONITOR_ACCESS_TOKEN` must be generated through `npm run monitor:create-service-account`; do not use a human JWT.
 
+SMS secrets are required only after a real SMS provider is configured:
+
+- `SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS=true`
+- `SUPPORT_PROVIDER_SMOKE_LIVE=true`
+- `SUPPORT_NOTIFICATION_SMS_WEBHOOK_URL`
+- `SUPPORT_NOTIFICATION_SMS_WEBHOOK_HEALTH_URL=https://<sms-relay-domain>/ready`
+- `SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN`
+- `SUPPORT_NOTIFICATION_SMS_RECIPIENTS`
+
+While the SMS relay is intentionally deployed in dry-run mode, keep `SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS=false` and `SUPPORT_PROVIDER_SMOKE_LIVE=false`. The relay `/health` endpoint is liveness only; live provider smoke must use `/ready` so dry-run cannot pass as production delivery.
+
 ## Creating a Monitor Token
 
 Set the script variables in a secure shell, then run one of the target modes:
@@ -51,7 +59,16 @@ export MONITORING_SERVICE_ACCOUNT_SECRET_TARGET="github"
 npm run monitor:create-service-account
 ```
 
-The script stores only a hash in PostgreSQL and writes the raw token directly into the target secret store. Normal output contains account metadata only.
+The script stores only a hash in PostgreSQL and writes the raw token directly into the target secret store before committing the account row. Normal output contains account metadata only.
+
+`github` target requires an authenticated GitHub CLI (`gh`). If `gh` is unavailable, either add the GitHub Actions secret manually through the repository settings or use the Railway target for Railway-hosted checks:
+
+```bash
+export MONITORING_SERVICE_ACCOUNT_SECRET_TARGET="railway"
+export MONITORING_SERVICE_ACCOUNT_RAILWAY_SERVICE="ShuleHub"
+export MONITORING_SERVICE_ACCOUNT_RAILWAY_ENVIRONMENT="production"
+npm run monitor:create-service-account
+```
 
 ## Manual Dispatch
 
@@ -89,5 +106,6 @@ If a check is noisy, reduce its blast radius without hiding the underlying failu
 
 - Lower `CORE_API_LOAD_ITERATIONS` temporarily during provider incidents.
 - Use workflow dispatch to run only one check while debugging.
-- Keep `SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS=true`, `UPLOAD_MALWARE_SCAN_REQUIRED=true`, and `UPLOAD_OBJECT_STORAGE_ENABLED=true` for production gates.
+- Keep `UPLOAD_MALWARE_SCAN_REQUIRED=true` and `UPLOAD_OBJECT_STORAGE_ENABLED=true` for production gates.
+- Turn on `SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS=true` only when the SMS relay `/ready` endpoint confirms real provider readiness; never use dry-run SMS as a passing production gate.
 - Document any temporary pause in the incident timeline with owner and expiry time.
