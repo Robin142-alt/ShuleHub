@@ -47,6 +47,10 @@ Required API variables after the scanner domain exists:
 
 The scanner rejects over-limit payloads, verifies SHA-256 when supplied, detects EICAR, and uses ClamAV in the deployment container.
 
+## Resend Email Provider Smoke
+
+Set `EMAIL_PROVIDER_SMOKE_URL=https://api.resend.com/emails` for production live smoke checks. The smoke script sends an authenticated `POST` with an intentionally empty JSON body. Resend returns a validation error for the empty payload when the key is accepted, which proves credential validity without sending an email. Do not use account-management endpoints such as `/domains` for this check because production sending-only keys may not have those permissions.
+
 ## External Object Storage
 
 Use a private Cloudflare R2 or S3 bucket dedicated to ShuleHub production uploads.

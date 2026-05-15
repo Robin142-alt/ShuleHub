@@ -69,8 +69,20 @@ test('provider credential smoke live checks probe SMS and malware health without
     live: true,
     fetchImpl: async (url, init) => {
       probedUrls.push(url);
-      assert.equal(init.method, 'GET');
+      assert.equal(init.method, url === configuredEnvironment.EMAIL_PROVIDER_SMOKE_URL ? 'POST' : 'GET');
       assert.equal(init.headers.Authorization.startsWith('Bearer '), true);
+      assert.equal(init.headers['User-Agent'], 'shulehub-provider-smoke');
+
+      if (url === configuredEnvironment.EMAIL_PROVIDER_SMOKE_URL) {
+        assert.equal(init.headers['Content-Type'], 'application/json');
+        assert.equal(init.body, '{}');
+        return {
+          ok: false,
+          status: 422,
+          text: async () => 'missing email payload',
+        };
+      }
+
       return {
         ok: true,
         status: 200,
@@ -124,6 +136,28 @@ test('provider credential smoke live checks probe SMS and malware health without
   assert.equal(serialized.includes(configuredEnvironment.SUPPORT_NOTIFICATION_SMS_WEBHOOK_TOKEN), false);
   assert.equal(serialized.includes(configuredEnvironment.UPLOAD_MALWARE_SCAN_HEALTH_URL), false);
   assert.equal(serialized.includes(configuredEnvironment.UPLOAD_MALWARE_SCAN_API_TOKEN), false);
+});
+
+test('provider credential smoke live email check fails on unauthenticated Resend responses', async () => {
+  const result = await runProviderCredentialSmoke({
+    env: configuredEnvironment,
+    live: true,
+    fetchImpl: async () => ({
+      ok: false,
+      status: 401,
+      text: async () => 'unauthorized',
+    }),
+  });
+
+  const emailCheck = result.checks.find((check) => check.id === 'live-email-provider');
+
+  assert.equal(result.ok, false);
+  assert.equal(emailCheck?.status, 'fail');
+  assert.match(emailCheck?.message ?? '', /HTTP 401/);
+
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes(configuredEnvironment.RESEND_API_KEY), false);
+  assert.equal(serialized.includes(configuredEnvironment.EMAIL_PROVIDER_SMOKE_URL), false);
 });
 
 test('provider credential smoke live SMS check fails when relay is still in dry-run mode', async () => {

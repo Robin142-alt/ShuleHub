@@ -51,8 +51,9 @@ export interface ProviderCredentialSmokeFetchResponse {
 export type ProviderCredentialSmokeFetch = (
   url: string,
   init: {
-    method: 'GET';
+    method: 'GET' | 'POST';
     headers: Record<string, string>;
+    body?: string;
   },
 ) => Promise<ProviderCredentialSmokeFetchResponse>;
 
@@ -215,6 +216,12 @@ export async function runProviderCredentialSmoke(
         authorizationToken: getValue(env, 'RESEND_API_KEY'),
         missingMessage: 'EMAIL_PROVIDER_SMOKE_URL is required when live provider smoke checks are enabled.',
         successMessage: 'Live transactional email provider credential probe succeeded.',
+        method: 'POST',
+        body: '{}',
+        extraHeaders: {
+          'Content-Type': 'application/json',
+        },
+        acceptedStatuses: [200, 400, 422],
         fetchImpl: options.fetchImpl,
       }),
     );
@@ -504,6 +511,10 @@ async function runLiveCredentialCheck(input: {
   authorizationToken: string;
   missingMessage: string;
   successMessage: string;
+  method?: 'GET' | 'POST';
+  body?: string;
+  extraHeaders?: Record<string, string>;
+  acceptedStatuses?: number[];
   validateJson?: (payload: unknown) => string[];
   fetchImpl?: ProviderCredentialSmokeFetch;
 }): Promise<ProviderCredentialSmokeCheck> {
@@ -519,16 +530,21 @@ async function runLiveCredentialCheck(input: {
     });
   }
 
+  const method = input.method ?? 'GET';
+  const acceptedStatuses = input.acceptedStatuses ?? [];
+
   try {
     const response = await (input.fetchImpl ?? fetch)(input.smokeUrl, {
-      method: 'GET',
+      method,
       headers: {
         Authorization: `Bearer ${input.authorizationToken}`,
         'User-Agent': 'shulehub-provider-smoke',
+        ...(input.extraHeaders ?? {}),
       },
+      body: input.body,
     });
 
-    if (!response.ok) {
+    if (!response.ok && !acceptedStatuses.includes(response.status)) {
       return buildCheck(
         input.id,
         [`Provider smoke health endpoint returned HTTP ${response.status}.`],

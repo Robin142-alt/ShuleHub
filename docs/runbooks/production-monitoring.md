@@ -37,6 +37,8 @@ All scheduled runs are defined in [.github/workflows/production-operability.yml]
 
 `PROD_MONITOR_ACCESS_TOKEN` must be generated through `npm run monitor:create-service-account`; do not use a human JWT.
 
+Use `EMAIL_PROVIDER_SMOKE_URL=https://api.resend.com/emails` for Resend. The live email check authenticates against the sending endpoint with an intentionally invalid empty payload so no email is sent; HTTP 400/422 from Resend is treated as an authenticated credential probe.
+
 SMS secrets are required only after a real SMS provider is configured:
 
 - `SUPPORT_PROVIDER_SMOKE_REQUIRE_SMS=true`
@@ -61,7 +63,7 @@ npm run monitor:create-service-account
 
 The script stores only a hash in PostgreSQL and writes the raw token directly into the target secret store before committing the account row. Normal output contains account metadata only.
 
-`github` target requires an authenticated GitHub CLI (`gh`). If `gh` is unavailable, either add the GitHub Actions secret manually through the repository settings or use the Railway target for Railway-hosted checks:
+`github` target requires an authenticated GitHub CLI (`gh`). If `gh` is unavailable or not authenticated, either add the GitHub Actions secret manually through the repository settings or use the Railway target for Railway-hosted checks:
 
 ```bash
 export MONITORING_SERVICE_ACCOUNT_SECRET_TARGET="railway"

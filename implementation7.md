@@ -16,7 +16,7 @@
 |---|---|---|
 | SMS relay service | Deployed to Railway | `sms-relay` service health passes; dry-run mode until real SMS provider credentials are supplied |
 | Malware scanner service | Deployed to Railway | `malware-scanner` service health passes; clean upload probe returns `clean`; EICAR probe returns `infected` |
-| Provider smoke hardening | Implemented locally | Required SMS, live SMS health, live malware health, object-storage write/read/delete smoke |
+| Provider smoke hardening | Implemented locally and configured in Railway | Live Resend credential probe, required SMS controls, live SMS readiness body checks, live malware health, object-storage write/read/delete smoke |
 | External object-storage delete support | Implemented locally | Signed DELETE support and tenant-prefix tests |
 | Monitoring service accounts | Implemented locally | Hashed monitor tokens, audit logs, read-only request middleware, creation script |
 | Scheduled production operability | Implemented locally | `.github/workflows/production-operability.yml` and runbook |
@@ -25,8 +25,8 @@
 | Live SMS activation | Relay deployed, provider pending | SMS relay domain exists and health passes; real SMS delivery still requires Africa's Talking or equivalent credentials and real recipients |
 | Live malware scanner activation | Active | Railway API variables configured; `UPLOAD_MALWARE_SCAN_REQUIRED=true`; authenticated clean/EICAR probes passed |
 | Live object storage activation | Active | Railway bucket configured; API object-storage write/read/delete probe passed |
-| Scheduled production operability | Workflow ready, secrets pending | GitHub Actions cadence exists; GitHub CLI is unavailable in this environment, so repository secrets and monitor token must be installed by an operator |
-| Real pilot tenant validation | Pending operator execution | Requires controlled pilot tenant and invited real users |
+| Scheduled production operability | Workflow ready, secrets pending | GitHub Actions cadence exists; GitHub CLI is installed but not authenticated; production currently has zero tenants, so monitor token creation waits for real tenant onboarding |
+| Real pilot tenant validation | Pending operator execution | Requires controlled pilot tenant and invited real users; do not create fake/demo tenants |
 
 Focused local verification completed:
 
