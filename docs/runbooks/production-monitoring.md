@@ -14,6 +14,8 @@ Implementation 7 uses scheduled, read-safe production probes to catch provider, 
 
 All scheduled runs are defined in [.github/workflows/production-operability.yml](/C:/Users/user/Desktop/PROJECTS/Shule%20hub/.github/workflows/production-operability.yml).
 
+GitHub only allows manual dispatch for workflows that already exist on the repository default branch. Before first dispatch, merge the branch that introduces `production-operability.yml`; until then, run the same commands locally or through Railway with production environment variables.
+
 ## Required GitHub Secrets
 
 - `PROD_API_BASE_URL`
@@ -36,6 +38,7 @@ All scheduled runs are defined in [.github/workflows/production-operability.yml]
 - `UPLOAD_OBJECT_STORAGE_SECRET_ACCESS_KEY`
 
 `PROD_MONITOR_ACCESS_TOKEN` must be generated through `npm run monitor:create-service-account`; do not use a human JWT.
+Create the monitor token only after the first real school tenant exists. Do not create fake tenants solely to satisfy monitoring.
 
 Use `EMAIL_PROVIDER_SMOKE_URL=https://api.resend.com/emails` for Resend. The live email check authenticates against the sending endpoint with an intentionally invalid empty payload so no email is sent; HTTP 400/422 from Resend is treated as an authenticated credential probe.
 

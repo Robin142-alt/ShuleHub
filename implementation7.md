@@ -25,7 +25,7 @@
 | Live SMS activation | Relay deployed, provider pending | SMS relay domain exists and health passes; real SMS delivery still requires Africa's Talking or equivalent credentials and real recipients |
 | Live malware scanner activation | Active | Railway API variables configured; `UPLOAD_MALWARE_SCAN_REQUIRED=true`; authenticated clean/EICAR probes passed |
 | Live object storage activation | Active | Railway bucket configured; API object-storage write/read/delete probe passed |
-| Scheduled production operability | Workflow ready, secrets pending | GitHub Actions cadence exists; GitHub CLI is installed but not authenticated; production currently has zero tenants, so monitor token creation waits for real tenant onboarding |
+| Scheduled production operability | Workflow ready, provider secrets installed | GitHub Actions cadence exists; available provider/query/readiness secrets are installed; dispatch waits for workflow merge to default branch and monitor token creation waits for real tenant onboarding |
 | Real pilot tenant validation | Pending operator execution | Requires controlled pilot tenant and invited real users; do not create fake/demo tenants |
 
 Focused local verification completed:

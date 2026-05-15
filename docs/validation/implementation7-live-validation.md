@@ -1,6 +1,6 @@
 # Implementation 7 Live Validation
 
-Status as of 2026-05-15: live Railway validation is complete for transactional email, external object storage, and required upload malware scanning. SMS relay infrastructure is deployed and healthy, but real SMS delivery is intentionally pending real SMS provider credentials and recipients. Scheduled GitHub Actions cadence is committed, but repository secrets still require an operator because GitHub CLI is installed but not authenticated and no production tenant exists for a scoped monitor token.
+Status as of 2026-05-15: live Railway validation is complete for transactional email, external object storage, and required upload malware scanning. SMS relay infrastructure is deployed and healthy, but real SMS delivery is intentionally pending real SMS provider credentials and recipients. GitHub CLI is authenticated and the available production operability secrets are installed. Scheduled GitHub Actions dispatch is pending merge because GitHub only exposes the new `production-operability.yml` workflow after it exists on the default branch. Production currently has zero tenants, so scoped monitor token creation must wait for real tenant onboarding.
 
 ## Validation Log
 
@@ -14,7 +14,11 @@ Status as of 2026-05-15: live Railway validation is complete for transactional e
 | 2026-05-15 | Operator | Live SMS provider smoke | Pending | Requires provider credentials, recipients, and `/ready` HTTP 200 | Configure Africa's Talking or equivalent |
 | 2026-05-15 | Codex | Live malware scanner smoke | Passed | Railway scanner health; authenticated clean/EICAR probes | Scanner uses ClamAV daily/bytecode database mode for Railway memory limits |
 | 2026-05-15 | Codex | Live object storage smoke | Passed | Railway API env write/read/delete probe | Railway S3-compatible bucket configured |
-| 2026-05-15 | Operator | Scheduled GitHub Actions monitor | Pending | Requires GitHub secrets, authenticated GitHub CLI, and monitor token | Authenticate `gh` and create a real tenant first |
+| 2026-05-15 | Codex | GitHub Actions provider/query/readiness secrets | Passed | GitHub secret names installed without exposing values | Monitor and SMS secrets intentionally absent |
+| 2026-05-15 | Codex | Production provider smoke | Passed | Railway `npm run smoke:providers`: 9 passed, 0 failed, 1 skipped | SMS skipped until real provider credentials exist |
+| 2026-05-15 | Codex | Production query-plan review | Passed | Railway `npm run perf:query-plan-review`: ok true | Library catalog search remains allowed by current gate |
+| 2026-05-15 | Codex | Release readiness gate | Passed | `npm run release:readiness`: ok true | Current branch |
+| 2026-05-15 | Operator | Scheduled GitHub Actions monitor | Pending | Workflow dispatch returned 404 because workflow is not on default branch yet | Merge workflow, create real tenant, then add monitor secrets |
 | 2026-05-15 | Operator | Real pilot school workflow checklist | Pending | Requires controlled pilot tenant; production currently has zero tenants | Execute checklist after real onboarding |
 
 ## Required Before Marking Complete
