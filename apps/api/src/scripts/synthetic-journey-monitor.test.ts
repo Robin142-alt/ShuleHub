@@ -41,7 +41,7 @@ test('synthetic journeys are read-only and exclude retired attendance', () => {
   );
 });
 
-test('synthetic journey plan refuses remote targets without opt-in and requires tenant credentials', () => {
+test('synthetic journey plan refuses remote targets without opt-in and explicit tenant journeys require credentials', () => {
   assert.throws(
     () =>
       buildSyntheticJourneyPlan({
@@ -59,6 +59,23 @@ test('synthetic journey plan refuses remote targets without opt-in and requires 
       buildSyntheticJourneyPlan({
         apiBaseUrl: 'http://127.0.0.1:3100',
         webBaseUrl: 'http://127.0.0.1:3000',
+        journeys: [
+          {
+            id: 'tenant-only',
+            description: 'Tenant-only check.',
+            steps: [
+              {
+                id: 'students',
+                target: 'api',
+                method: 'GET',
+                path: '/students',
+                auth: 'tenant',
+                targetP95Ms: 900,
+                description: 'Students.',
+              },
+            ],
+          },
+        ],
       }),
     /requires tenantId and monitorToken or accessToken/i,
   );
@@ -80,6 +97,22 @@ test('synthetic journey plan prefers scoped monitor tokens over human access tok
   assert.ok(tenantStep);
   assert.equal(tenantStep.headers.authorization, 'Bearer shm_monitor-token');
   assert.equal(tenantStep.headers['x-tenant-id'], 'tenant-1');
+});
+
+test('synthetic journey plan keeps public checks when tenant credentials are absent', () => {
+  const plan = buildSyntheticJourneyPlan({
+    apiBaseUrl: 'http://127.0.0.1:3100',
+    webBaseUrl: 'http://127.0.0.1:3000',
+  });
+
+  assert.deepEqual(
+    plan.journeys.map((journey) => journey.id),
+    ['public-readiness', 'public-status-page', 'exams-workspace', 'discipline-workspace'],
+  );
+  assert.equal(
+    plan.journeys.flatMap((journey) => journey.steps).some((step) => step.auth === 'tenant'),
+    false,
+  );
 });
 
 test('runSyntheticJourneyMonitor groups step outcomes by journey', async () => {

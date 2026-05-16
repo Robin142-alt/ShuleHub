@@ -343,7 +343,12 @@ export function validateSyntheticJourneys(
 export function buildSyntheticJourneyPlan(
   options: SyntheticJourneyPlanOptions,
 ): SyntheticJourneyPlan {
-  const journeys = options.journeys ?? SYNTHETIC_JOURNEYS;
+  const hasTenantCredentials = Boolean(options.tenantId && (options.monitorToken ?? options.accessToken));
+  const journeys = options.journeys ?? (
+    hasTenantCredentials
+      ? SYNTHETIC_JOURNEYS
+      : SYNTHETIC_JOURNEYS.filter((journey) => journey.steps.every((step) => step.auth === 'none'))
+  );
   const validationErrors = validateSyntheticJourneys(journeys);
 
   if (validationErrors.length > 0) {

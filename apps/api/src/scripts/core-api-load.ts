@@ -264,7 +264,12 @@ export function buildCoreApiLoadPlan(options: CoreApiLoadPlanOptions): CoreApiLo
     throw new Error(`Invalid core API load workloads: ${validationErrors.join('; ')}`);
   }
 
-  const endpoints = CORE_API_LOAD_WORKLOADS.map((workload) => {
+  const hasTenantCredentials = Boolean(options.tenantId && (options.monitorToken ?? options.accessToken));
+  const workloads = hasTenantCredentials
+    ? CORE_API_LOAD_WORKLOADS
+    : CORE_API_LOAD_WORKLOADS.filter((workload) => workload.auth === 'none');
+
+  const endpoints = workloads.map((workload) => {
     const headers: Record<string, string> = {
       accept: workload.path.endsWith('/export') ? 'text/csv' : 'application/json',
       'user-agent': 'shule-hub-core-api-load-probe',

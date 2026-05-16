@@ -55,6 +55,18 @@ test('core API load plan prefers scoped monitor tokens over human access tokens'
   assert.equal(tenantEndpoint.headers['x-tenant-id'], 'tenant-a');
 });
 
+test('core API load plan keeps public workloads when tenant credentials are absent', () => {
+  const plan = buildCoreApiLoadPlan({
+    baseUrl: 'http://127.0.0.1:3000',
+  });
+
+  assert.deepEqual(
+    plan.endpoints.map((endpoint) => endpoint.id),
+    ['health-ready', 'support-public-status'],
+  );
+  assert.equal(plan.endpoints.some((endpoint) => endpoint.auth === 'tenant'), false);
+});
+
 test('core API load workload validation rejects retired attendance probes', () => {
   const errors = validateCoreApiLoadWorkloads([
     ...CORE_API_LOAD_WORKLOADS,
