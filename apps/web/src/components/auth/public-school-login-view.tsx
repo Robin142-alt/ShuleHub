@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -15,19 +15,16 @@ import { AuthPasswordField } from "@/components/auth/auth-password-field";
 import {
   MobileTrustRow,
   SecurityBadge,
-  TenantSelector,
 } from "@/components/auth/auth-security";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
-import { resolveSchoolBrandingIdentifier } from "@/lib/auth/school-branding";
 import { useExperienceSession } from "@/lib/auth/use-experience-session";
 
 const publicSchoolSchema = z.object({
-  schoolAddress: z.string().trim().min(2, "Enter your school code or workspace address."),
   identifier: z
     .string()
     .trim()
     .email("Enter a valid work email address."),
-  password: z.string().min(8, "Enter your workspace password."),
+  password: z.string().min(8, "Enter your password."),
 });
 
 type PublicSchoolForm = z.infer<typeof publicSchoolSchema>;
@@ -45,25 +42,25 @@ const intentCopy: Record<
 > = {
   school: {
     badge: "Institutional access",
-    title: "Sign in to your school operations workspace",
+    title: "Sign in to your school account",
     description:
-      "Find the school workspace first, then continue with your role-aware staff account.",
+      "Use your school email and password. ShuleHub opens the correct school automatically.",
     message:
       "Financial workflows, academics, support, and communication stay inside the verified school workspace.",
   },
   teacher: {
     badge: "Teacher access",
-    title: "Open your teaching workspace",
+    title: "Open your teaching account",
     description:
-      "Find your school workspace, then continue to timetable, marks entry, assignments, and class communication.",
+      "Use your school email and password. Your classes and school access load automatically.",
     message:
       "Teacher access stays scoped to assigned classes, subjects, academic workflows, and school policies.",
   },
   accountant: {
     badge: "Finance access",
-    title: "Open the finance workspace",
+    title: "Open the finance account",
     description:
-      "Find your school workspace, then continue to collections, statements, M-PESA reconciliation, and audit-ready reporting.",
+      "Use your finance email and password. Collections, statements, and M-PESA tools open for your school.",
     message:
       "Finance sessions prioritize device awareness, role permissions, transaction safety, and clear audit trails.",
   },
@@ -75,44 +72,26 @@ export function PublicSchoolLoginView({
   intent?: PublicSchoolIntent;
 }) {
   const router = useRouter();
-  const [schoolAddress, setSchoolAddress] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<PublicSchoolForm>({
     resolver: zodResolver(publicSchoolSchema),
     defaultValues: {
-      schoolAddress: "",
       identifier: "",
       password: "",
     },
   });
-  const resolvedBranding = useMemo(
-    () => resolveSchoolBrandingIdentifier(schoolAddress),
-    [schoolAddress],
-  );
-  const authSession = useExperienceSession("school", {
-    tenantSlug: resolvedBranding?.slug ?? null,
-  });
+  const authSession = useExperienceSession("school");
   const copy = intentCopy[intent];
 
   const submit = handleSubmit(async (values) => {
-    if (!resolvedBranding) {
-      setValue("schoolAddress", values.schoolAddress, {
-        shouldValidate: true,
-        shouldDirty: true,
-      });
-      return;
-    }
-
     try {
       const result = await authSession.login({
         identifier: values.identifier.trim(),
         password: values.password,
-        tenantSlug: resolvedBranding.slug,
       });
       void router.push(result.redirectTo ?? "/school/admin");
     } catch {
@@ -126,7 +105,7 @@ export function PublicSchoolLoginView({
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             <SecurityBadge label={copy.badge} tone="success" />
-            <SecurityBadge label="Tenant selector" />
+            <SecurityBadge label="Automatic school access" />
             <SecurityBadge label="Secure session" />
           </div>
           <div>
@@ -148,24 +127,8 @@ export function PublicSchoolLoginView({
         />
 
         <div className="space-y-4">
-          <TenantSelector
-            value={schoolAddress}
-            onChange={(value) => {
-              setSchoolAddress(value);
-              setValue("schoolAddress", value, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-            }}
-            error={
-              errors.schoolAddress?.message ??
-              (schoolAddress && !resolvedBranding
-                ? "We could not match that school workspace."
-                : undefined)
-            }
-          />
           <AuthField
-            label="Work email address"
+            label="Email address"
             autoComplete="email"
             {...register("identifier")}
             error={errors.identifier?.message}
@@ -204,7 +167,6 @@ export function PublicSchoolLoginView({
         <AuthSubmitButton
           busy={isSubmitting || authSession.isSubmitting}
           type="submit"
-          disabled={!resolvedBranding}
         >
           Sign in securely
         </AuthSubmitButton>

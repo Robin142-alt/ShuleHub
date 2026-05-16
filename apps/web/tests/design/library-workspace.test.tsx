@@ -32,6 +32,8 @@ describe("librarian library workspace", () => {
       "Dashboard",
       "Catalog",
       "Borrowing",
+      "Scan Issue",
+      "Scan Return",
       "Returns",
       "Overdue",
       "Members",

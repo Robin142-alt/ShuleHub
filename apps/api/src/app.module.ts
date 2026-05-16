@@ -42,6 +42,7 @@ import { ExamsModule } from './modules/exams/exams.module';
 import { HrModule } from './modules/hr/hr.module';
 import { LibraryModule } from './modules/library/library.module';
 import { TimetableModule } from './modules/timetable/timetable.module';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { TimetableModule } from './modules/timetable/timetable.module';
     HrModule,
     LibraryModule,
     TimetableModule,
+    IntegrationsModule,
     FinanceModule,
     SyncModule,
     StudentsModule,

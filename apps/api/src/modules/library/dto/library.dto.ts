@@ -31,3 +31,27 @@ export class ReturnLibraryCopyDto {
   @Min(0)
   daily_fine_minor?: number;
 }
+
+export class IssueLibraryByScanDto {
+  @IsString()
+  borrower_scan_code!: string;
+
+  @IsString()
+  book_scan_code!: string;
+
+  @IsString()
+  due_on!: string;
+}
+
+export class ReturnLibraryByScanDto {
+  @IsString()
+  book_scan_code!: string;
+
+  @IsString()
+  returned_on!: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  daily_fine_minor?: number;
+}

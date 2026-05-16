@@ -2,8 +2,10 @@ import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 
 import { Permissions } from '../../auth/decorators/permissions.decorator';
 import {
+  IssueLibraryByScanDto,
   IssueLibraryCopyDto,
   ReserveLibraryCopyDto,
+  ReturnLibraryByScanDto,
   ReturnLibraryCopyDto,
 } from './dto/library.dto';
 import { LibraryService } from './library.service';
@@ -18,6 +20,12 @@ export class LibraryController {
     return this.libraryService.issueCopy(dto);
   }
 
+  @Post('circulation/issue')
+  @Permissions('library:write')
+  issueByScan(@Body() dto: IssueLibraryByScanDto) {
+    return this.libraryService.issueByScan(dto);
+  }
+
   @Post('reservations')
   @Permissions('library:write')
   reserveCopy(@Body() dto: ReserveLibraryCopyDto) {
@@ -28,6 +36,12 @@ export class LibraryController {
   @Permissions('library:write')
   returnCopy(@Body() dto: ReturnLibraryCopyDto) {
     return this.libraryService.returnCopy(dto);
+  }
+
+  @Post('circulation/return')
+  @Permissions('library:write')
+  returnByScan(@Body() dto: ReturnLibraryByScanDto) {
+    return this.libraryService.returnByScan(dto);
   }
 
   @Get('circulation')

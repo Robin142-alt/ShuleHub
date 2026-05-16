@@ -49,6 +49,7 @@ export class LibrarySchemaService implements OnModuleInit {
         tenant_id text NOT NULL,
         borrower_type text NOT NULL CHECK (borrower_type IN ('student', 'staff')),
         subject_id uuid NOT NULL,
+        scan_code text,
         restrictions jsonb NOT NULL DEFAULT '{}'::jsonb,
         created_at timestamptz NOT NULL DEFAULT NOW()
       );
@@ -115,6 +116,29 @@ export class LibrarySchemaService implements OnModuleInit {
         metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
         created_at timestamptz NOT NULL DEFAULT NOW()
       );
+
+      ALTER TABLE library_copies
+        ADD COLUMN IF NOT EXISTS barcode text,
+        ADD COLUMN IF NOT EXISTS qr_code text,
+        ADD COLUMN IF NOT EXISTS shelf_location text;
+
+      ALTER TABLE library_catalog_items
+        ADD COLUMN IF NOT EXISTS category text;
+
+      ALTER TABLE library_borrowers
+        ADD COLUMN IF NOT EXISTS scan_code text;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_library_copies_tenant_barcode
+        ON library_copies (tenant_id, barcode)
+        WHERE barcode IS NOT NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_library_copies_tenant_qr_code
+        ON library_copies (tenant_id, qr_code)
+        WHERE qr_code IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS ix_library_borrowers_tenant_scan_code
+        ON library_borrowers (tenant_id, scan_code)
+        WHERE scan_code IS NOT NULL;
 
       CREATE OR REPLACE FUNCTION prevent_library_ledger_mutation()
       RETURNS trigger

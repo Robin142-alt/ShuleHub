@@ -70,6 +70,28 @@ export class TenantMembershipsRepository {
     return membership;
   }
 
+  async findActiveMembershipsByUser(userId: string): Promise<TenantMembershipEntity[]> {
+    const result = await this.databaseService.query<TenantMembershipRow>(
+      `
+        SELECT
+          id,
+          tenant_id,
+          user_id,
+          role_id,
+          role_code,
+          role_name,
+          status,
+          created_at,
+          updated_at
+        FROM app.find_active_memberships_by_user_for_auth($1)
+        ORDER BY created_at DESC
+      `,
+      [userId],
+    );
+
+    return result.rows.map((row) => this.mapTenantMembership(row));
+  }
+
   async createOrActivateMembership(input: {
     tenant_id: string;
     user_id: string;

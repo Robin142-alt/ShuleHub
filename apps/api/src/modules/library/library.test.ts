@@ -161,3 +161,72 @@ test('LibraryService lists circulation ledger for the current tenant', async () 
   });
   assert.equal(rows[0]?.id, 'ledger-1');
 });
+
+test('LibraryService issues a book by scanner codes using ordinary keyboard input values', async () => {
+  const calls: string[] = [];
+  const service = new LibraryService(
+    { getStore: () => ({ tenant_id: 'tenant-a', user_id: 'librarian-1' }) } as never,
+    {
+      findBorrowerByScanCode: async () => ({ id: 'borrower-1', borrower_type: 'student' }),
+      findCopyByScanCodeForUpdate: async () => ({ id: 'copy-1', status: 'available', accession_number: 'ACC-001' }),
+      issueCopy: async () => {
+        calls.push('issue');
+        return { id: 'copy-1', status: 'issued' };
+      },
+      appendLedger: async () => {
+        calls.push('ledger');
+      },
+    } as never,
+    {} as never,
+  );
+
+  const issued = await service.issueByScan({
+    borrower_scan_code: 'ADM-001',
+    book_scan_code: 'ACC-001',
+    due_on: '2026-05-30',
+  });
+
+  assert.equal(issued.status, 'issued');
+  assert.deepEqual(calls, ['issue', 'ledger']);
+});
+
+test('LibraryService returns a book by scanned accession and calculates overdue fine', async () => {
+  const calls: string[] = [];
+  const service = new LibraryService(
+    { getStore: () => ({ tenant_id: 'tenant-a', user_id: 'librarian-1' }) } as never,
+    {
+      findCopyByScanCodeForUpdate: async () => ({ id: 'copy-1', status: 'issued', accession_number: 'ACC-001' }),
+      findActiveLoanByCopyId: async () => ({
+        id: 'loan-1',
+        copy_id: 'copy-1',
+        borrower_id: 'borrower-1',
+        due_on: '2026-05-01',
+      }),
+      returnCopy: async () => {
+        calls.push('return');
+        return { id: 'loan-1', status: 'returned' };
+      },
+      createFine: async () => {
+        calls.push('fine');
+        return { id: 'fine-1', amount_minor: 5000 };
+      },
+      appendLedger: async () => {
+        calls.push('ledger');
+      },
+    } as never,
+    {
+      createLibraryFineCharge: async () => {
+        calls.push('billing');
+      },
+    } as never,
+  );
+
+  const returned = await service.returnByScan({
+    book_scan_code: 'ACC-001',
+    returned_on: '2026-05-06',
+    daily_fine_minor: 1000,
+  });
+
+  assert.equal(returned.status, 'returned');
+  assert.deepEqual(calls, ['return', 'fine', 'billing', 'ledger']);
+});

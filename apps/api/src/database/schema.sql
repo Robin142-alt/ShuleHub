@@ -65,17 +65,10 @@ SET search_path = public, app, pg_temp
 AS $$
 DECLARE
   request_user_id text;
-  request_tenant_id text;
   request_path text;
 BEGIN
   request_user_id := COALESCE(NULLIF(current_setting('app.user_id', true), ''), 'anonymous');
-  request_tenant_id := NULLIF(current_setting('app.tenant_id', true), '');
   request_path := COALESCE(NULLIF(current_setting('app.path', true), ''), '');
-
-  IF request_tenant_id IS NULL THEN
-    RAISE EXCEPTION 'Tenant context is required for auth user lookup'
-      USING ERRCODE = '42501';
-  END IF;
 
   IF request_user_id <> 'anonymous' THEN
     RAISE EXCEPTION 'Auth user lookup is only available before authentication'
@@ -105,6 +98,60 @@ $$;
 
 DROP FUNCTION IF EXISTS app.ensure_global_user_for_seed(text, text, text);
 DROP FUNCTION IF EXISTS app.ensure_global_user_for_registration(text, text, text);
+
+CREATE OR REPLACE FUNCTION app.find_active_memberships_by_user_for_auth(input_user_id uuid)
+RETURNS TABLE (
+  id uuid,
+  tenant_id text,
+  user_id uuid,
+  role_id uuid,
+  role_code text,
+  role_name text,
+  status text,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, app, pg_temp
+AS $$
+DECLARE
+  request_user_id text;
+  request_path text;
+BEGIN
+  request_user_id := COALESCE(NULLIF(current_setting('app.user_id', true), ''), 'anonymous');
+  request_path := COALESCE(NULLIF(current_setting('app.path', true), ''), '');
+
+  IF request_user_id <> 'anonymous' THEN
+    RAISE EXCEPTION 'Membership auto-resolution is only available before authentication'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF request_path <> '/auth/login' THEN
+    RAISE EXCEPTION 'Membership auto-resolution is only available on login routes'
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    tm.id,
+    tm.tenant_id,
+    tm.user_id,
+    tm.role_id,
+    r.code AS role_code,
+    r.name AS role_name,
+    tm.status,
+    tm.created_at,
+    tm.updated_at
+  FROM tenant_memberships tm
+  INNER JOIN roles r
+    ON r.tenant_id = tm.tenant_id
+   AND r.id = tm.role_id
+  WHERE tm.user_id = input_user_id
+    AND tm.status = 'active'
+  ORDER BY tm.created_at DESC;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION app.create_global_user_from_invitation(
   input_email text,
@@ -942,6 +989,47 @@ CREATE TABLE mpesa_transactions (
     ON DELETE SET NULL
 );
 
+CREATE TABLE mpesa_c2b_payments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id tenant_key NOT NULL,
+  mpesa_config_id uuid,
+  payment_channel_id uuid,
+  trans_id text NOT NULL,
+  transaction_type text NOT NULL,
+  business_short_code text NOT NULL,
+  bill_ref_number text,
+  invoice_number text,
+  amount_minor bigint NOT NULL,
+  currency_code char(3) NOT NULL DEFAULT 'KES',
+  phone_number text,
+  payer_name text,
+  org_account_balance text,
+  third_party_trans_id text,
+  status text NOT NULL DEFAULT 'pending_review',
+  matched_invoice_id uuid,
+  matched_student_id uuid,
+  manual_fee_payment_id uuid,
+  ledger_transaction_id uuid,
+  received_at timestamptz NOT NULL,
+  matched_at timestamptz,
+  raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT NOW(),
+  updated_at timestamptz NOT NULL DEFAULT NOW(),
+  CONSTRAINT ck_mpesa_c2b_payments_tenant_id_non_global CHECK (tenant_id <> 'global'),
+  CONSTRAINT ck_mpesa_c2b_payments_trans_id_not_blank CHECK (btrim(trans_id) <> ''),
+  CONSTRAINT ck_mpesa_c2b_payments_business_short_code_not_blank CHECK (btrim(business_short_code) <> ''),
+  CONSTRAINT ck_mpesa_c2b_payments_amount_minor CHECK (amount_minor > 0),
+  CONSTRAINT ck_mpesa_c2b_payments_currency CHECK (currency_code ~ '^[A-Z]{3}$'),
+  CONSTRAINT ck_mpesa_c2b_payments_status CHECK (status IN ('pending_review', 'matched', 'rejected')),
+  CONSTRAINT uq_mpesa_c2b_payments_tenant_id_id UNIQUE (tenant_id, id),
+  CONSTRAINT uq_mpesa_c2b_payments_tenant_trans_id UNIQUE (tenant_id, trans_id),
+  CONSTRAINT fk_mpesa_c2b_payments_ledger_transaction
+    FOREIGN KEY (tenant_id, ledger_transaction_id)
+    REFERENCES transactions (tenant_id, id)
+    ON DELETE SET NULL
+);
+
 ALTER TABLE payment_intents
 ADD COLUMN IF NOT EXISTS student_id uuid;
 
@@ -1150,6 +1238,125 @@ CREATE TABLE billing_notifications (
     ON DELETE CASCADE
 );
 
+CREATE TABLE fee_structures (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id tenant_key NOT NULL,
+  name text NOT NULL,
+  academic_year text NOT NULL,
+  term text NOT NULL,
+  grade_level text NOT NULL,
+  class_name text,
+  currency_code char(3) NOT NULL DEFAULT 'KES',
+  status text NOT NULL DEFAULT 'active',
+  due_days integer NOT NULL DEFAULT 14,
+  line_items jsonb NOT NULL DEFAULT '[]'::jsonb,
+  total_amount_minor bigint NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_by_user_id uuid,
+  created_at timestamptz NOT NULL DEFAULT NOW(),
+  updated_at timestamptz NOT NULL DEFAULT NOW(),
+  CONSTRAINT ck_fee_structures_tenant_id_non_global CHECK (tenant_id <> 'global'),
+  CONSTRAINT ck_fee_structures_name_not_blank CHECK (btrim(name) <> ''),
+  CONSTRAINT ck_fee_structures_academic_year_not_blank CHECK (btrim(academic_year) <> ''),
+  CONSTRAINT ck_fee_structures_term_not_blank CHECK (btrim(term) <> ''),
+  CONSTRAINT ck_fee_structures_grade_level_not_blank CHECK (btrim(grade_level) <> ''),
+  CONSTRAINT ck_fee_structures_currency CHECK (currency_code ~ '^[A-Z]{3}$'),
+  CONSTRAINT ck_fee_structures_status CHECK (status IN ('draft', 'active', 'archived')),
+  CONSTRAINT ck_fee_structures_due_days CHECK (due_days >= 0 AND due_days <= 365),
+  CONSTRAINT ck_fee_structures_line_items CHECK (
+    jsonb_typeof(line_items) = 'array'
+    AND jsonb_array_length(line_items) > 0
+  ),
+  CONSTRAINT ck_fee_structures_total CHECK (total_amount_minor > 0),
+  CONSTRAINT uq_fee_structures_tenant_id_id UNIQUE (tenant_id, id)
+);
+
+CREATE TABLE manual_fee_payments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id tenant_key NOT NULL,
+  idempotency_key text NOT NULL,
+  receipt_number text NOT NULL,
+  payment_method text NOT NULL,
+  status text NOT NULL DEFAULT 'received',
+  student_id uuid,
+  invoice_id uuid,
+  amount_minor bigint NOT NULL,
+  currency_code char(3) NOT NULL DEFAULT 'KES',
+  payer_name text,
+  received_at timestamptz NOT NULL DEFAULT NOW(),
+  deposited_at timestamptz,
+  cleared_at timestamptz,
+  bounced_at timestamptz,
+  reversed_at timestamptz,
+  cheque_number text,
+  drawer_bank text,
+  deposit_reference text,
+  external_reference text,
+  asset_account_code text NOT NULL DEFAULT '1120-BANK-CLEARING',
+  fee_control_account_code text NOT NULL DEFAULT '1100-AR-FEES',
+  ledger_transaction_id uuid,
+  reversal_ledger_transaction_id uuid,
+  notes text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_by_user_id uuid,
+  created_at timestamptz NOT NULL DEFAULT NOW(),
+  updated_at timestamptz NOT NULL DEFAULT NOW(),
+  CONSTRAINT ck_manual_fee_payments_tenant_id_non_global CHECK (tenant_id <> 'global'),
+  CONSTRAINT ck_manual_fee_payments_idempotency_key_not_blank CHECK (btrim(idempotency_key) <> ''),
+  CONSTRAINT ck_manual_fee_payments_receipt_number_not_blank CHECK (btrim(receipt_number) <> ''),
+  CONSTRAINT ck_manual_fee_payments_method CHECK (payment_method IN ('cash', 'cheque', 'bank_deposit', 'eft', 'mpesa_c2b')),
+  CONSTRAINT ck_manual_fee_payments_status CHECK (status IN ('received', 'deposited', 'cleared', 'bounced', 'reversed')),
+  CONSTRAINT ck_manual_fee_payments_amount CHECK (amount_minor > 0),
+  CONSTRAINT ck_manual_fee_payments_currency CHECK (currency_code ~ '^[A-Z]{3}$'),
+  CONSTRAINT ck_manual_fee_payments_target CHECK (student_id IS NOT NULL OR invoice_id IS NOT NULL),
+  CONSTRAINT ck_manual_fee_payments_cheque_fields CHECK (
+    payment_method <> 'cheque'
+    OR (cheque_number IS NOT NULL AND btrim(cheque_number) <> '' AND drawer_bank IS NOT NULL AND btrim(drawer_bank) <> '')
+  ),
+  CONSTRAINT uq_manual_fee_payments_tenant_id_id UNIQUE (tenant_id, id),
+  CONSTRAINT uq_manual_fee_payments_idempotency UNIQUE (tenant_id, idempotency_key),
+  CONSTRAINT uq_manual_fee_payments_receipt_number UNIQUE (tenant_id, receipt_number),
+  CONSTRAINT fk_manual_fee_payments_invoice
+    FOREIGN KEY (tenant_id, invoice_id)
+    REFERENCES invoices (tenant_id, id)
+    ON DELETE SET NULL,
+  CONSTRAINT fk_manual_fee_payments_ledger_transaction
+    FOREIGN KEY (tenant_id, ledger_transaction_id)
+    REFERENCES transactions (tenant_id, id)
+    ON DELETE SET NULL,
+  CONSTRAINT fk_manual_fee_payments_reversal_ledger_transaction
+    FOREIGN KEY (tenant_id, reversal_ledger_transaction_id)
+    REFERENCES transactions (tenant_id, id)
+    ON DELETE SET NULL
+);
+
+CREATE TABLE manual_fee_payment_allocations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id tenant_key NOT NULL,
+  manual_payment_id uuid NOT NULL,
+  invoice_id uuid,
+  student_id uuid,
+  allocation_type text NOT NULL,
+  amount_minor bigint NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT NOW(),
+  CONSTRAINT ck_manual_fee_payment_allocations_tenant_id_non_global CHECK (tenant_id <> 'global'),
+  CONSTRAINT ck_manual_fee_payment_allocations_type CHECK (allocation_type IN ('invoice', 'credit')),
+  CONSTRAINT ck_manual_fee_payment_allocations_amount CHECK (amount_minor > 0),
+  CONSTRAINT ck_manual_fee_payment_allocations_invoice_target CHECK (
+    allocation_type <> 'invoice' OR invoice_id IS NOT NULL
+  ),
+  CONSTRAINT uq_manual_fee_payment_allocations_tenant_id_id UNIQUE (tenant_id, id),
+  CONSTRAINT fk_manual_fee_payment_allocations_payment
+    FOREIGN KEY (tenant_id, manual_payment_id)
+    REFERENCES manual_fee_payments (tenant_id, id)
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_manual_fee_payment_allocations_invoice
+    FOREIGN KEY (tenant_id, invoice_id)
+    REFERENCES invoices (tenant_id, id)
+    ON DELETE RESTRICT
+);
+
 CREATE TABLE sync_devices (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id tenant_key NOT NULL,
@@ -1346,6 +1553,17 @@ CREATE INDEX ix_mpesa_transactions_status
 CREATE INDEX ix_mpesa_transactions_receipt_number
   ON mpesa_transactions (tenant_id, mpesa_receipt_number);
 
+CREATE INDEX ix_mpesa_c2b_payments_status_received
+  ON mpesa_c2b_payments (tenant_id, status, received_at DESC);
+
+CREATE INDEX ix_mpesa_c2b_payments_reference
+  ON mpesa_c2b_payments (tenant_id, bill_ref_number, received_at DESC)
+  WHERE bill_ref_number IS NOT NULL;
+
+CREATE INDEX ix_mpesa_c2b_payments_student
+  ON mpesa_c2b_payments (tenant_id, matched_student_id, received_at DESC)
+  WHERE matched_student_id IS NOT NULL;
+
 CREATE INDEX ix_students_status_created_at
   ON students (tenant_id, status, created_at DESC);
 
@@ -1387,6 +1605,31 @@ CREATE INDEX ix_billing_notifications_subscription_scheduled_for
 
 CREATE INDEX ix_billing_notifications_status_channel
   ON billing_notifications (tenant_id, status, channel, scheduled_for DESC);
+
+CREATE INDEX ix_fee_structures_scope
+  ON fee_structures (tenant_id, academic_year DESC, term, grade_level, class_name, status);
+
+CREATE UNIQUE INDEX ux_fee_structures_active_scope
+  ON fee_structures (tenant_id, academic_year, term, grade_level, (COALESCE(class_name, '')))
+  WHERE status = 'active';
+
+CREATE INDEX ix_manual_fee_payments_status_received
+  ON manual_fee_payments (tenant_id, status, received_at DESC);
+
+CREATE INDEX ix_manual_fee_payments_student
+  ON manual_fee_payments (tenant_id, student_id, received_at DESC)
+  WHERE student_id IS NOT NULL;
+
+CREATE INDEX ix_manual_fee_payments_invoice
+  ON manual_fee_payments (tenant_id, invoice_id, received_at DESC)
+  WHERE invoice_id IS NOT NULL;
+
+CREATE INDEX ix_manual_fee_payment_allocations_payment
+  ON manual_fee_payment_allocations (tenant_id, manual_payment_id, created_at ASC);
+
+CREATE UNIQUE INDEX ux_manual_fee_payment_allocations_invoice_once
+  ON manual_fee_payment_allocations (tenant_id, manual_payment_id, invoice_id, allocation_type)
+  WHERE invoice_id IS NOT NULL;
 
 CREATE INDEX ix_sync_devices_last_seen_at
   ON sync_devices (tenant_id, last_seen_at DESC);
@@ -1483,6 +1726,11 @@ BEFORE UPDATE ON mpesa_transactions
 FOR EACH ROW
 EXECUTE FUNCTION app.set_updated_at();
 
+CREATE TRIGGER trg_mpesa_c2b_payments_set_updated_at
+BEFORE UPDATE ON mpesa_c2b_payments
+FOR EACH ROW
+EXECUTE FUNCTION app.set_updated_at();
+
 CREATE TRIGGER trg_students_set_updated_at
 BEFORE UPDATE ON students
 FOR EACH ROW
@@ -1502,6 +1750,21 @@ CREATE TRIGGER trg_invoices_set_updated_at
 BEFORE UPDATE ON invoices
 FOR EACH ROW
 EXECUTE FUNCTION app.set_updated_at();
+
+CREATE TRIGGER trg_fee_structures_set_updated_at
+BEFORE UPDATE ON fee_structures
+FOR EACH ROW
+EXECUTE FUNCTION app.set_updated_at();
+
+CREATE TRIGGER trg_manual_fee_payments_set_updated_at
+BEFORE UPDATE ON manual_fee_payments
+FOR EACH ROW
+EXECUTE FUNCTION app.set_updated_at();
+
+CREATE TRIGGER trg_manual_fee_allocations_prevent_update
+BEFORE UPDATE OR DELETE ON manual_fee_payment_allocations
+FOR EACH ROW
+EXECUTE FUNCTION app.prevent_append_only_mutation();
 
 CREATE TRIGGER trg_sync_devices_set_updated_at
 BEFORE UPDATE ON sync_devices
@@ -1604,6 +1867,9 @@ ALTER TABLE callback_logs FORCE ROW LEVEL SECURITY;
 ALTER TABLE mpesa_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mpesa_transactions FORCE ROW LEVEL SECURITY;
 
+ALTER TABLE mpesa_c2b_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mpesa_c2b_payments FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE students FORCE ROW LEVEL SECURITY;
 
@@ -1621,6 +1887,15 @@ ALTER TABLE usage_records FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE billing_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing_notifications FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE fee_structures ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fee_structures FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE manual_fee_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE manual_fee_payments FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE manual_fee_payment_allocations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE manual_fee_payment_allocations FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE sync_devices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sync_devices FORCE ROW LEVEL SECURITY;
@@ -1994,6 +2269,27 @@ CREATE POLICY mpesa_transactions_delete_policy
   FOR DELETE
   USING (tenant_id = app.current_tenant_id());
 
+CREATE POLICY mpesa_c2b_payments_select_policy
+  ON mpesa_c2b_payments
+  FOR SELECT
+  USING (tenant_id = app.current_tenant_id());
+
+CREATE POLICY mpesa_c2b_payments_insert_policy
+  ON mpesa_c2b_payments
+  FOR INSERT
+  WITH CHECK (tenant_id = app.current_tenant_id());
+
+CREATE POLICY mpesa_c2b_payments_update_policy
+  ON mpesa_c2b_payments
+  FOR UPDATE
+  USING (tenant_id = app.current_tenant_id())
+  WITH CHECK (tenant_id = app.current_tenant_id());
+
+CREATE POLICY mpesa_c2b_payments_delete_policy
+  ON mpesa_c2b_payments
+  FOR DELETE
+  USING (tenant_id = app.current_tenant_id());
+
 CREATE POLICY students_select_policy
   ON students
   FOR SELECT
@@ -2120,6 +2416,58 @@ CREATE POLICY billing_notifications_delete_policy
   ON billing_notifications
   FOR DELETE
   USING (tenant_id = app.current_tenant_id());
+
+CREATE POLICY fee_structures_select_policy
+  ON fee_structures
+  FOR SELECT
+  USING (tenant_id = app.current_tenant_id());
+
+CREATE POLICY fee_structures_insert_policy
+  ON fee_structures
+  FOR INSERT
+  WITH CHECK (tenant_id = app.current_tenant_id());
+
+CREATE POLICY fee_structures_update_policy
+  ON fee_structures
+  FOR UPDATE
+  USING (tenant_id = app.current_tenant_id())
+  WITH CHECK (tenant_id = app.current_tenant_id());
+
+CREATE POLICY fee_structures_delete_policy
+  ON fee_structures
+  FOR DELETE
+  USING (tenant_id = app.current_tenant_id());
+
+CREATE POLICY manual_fee_payments_select_policy
+  ON manual_fee_payments
+  FOR SELECT
+  USING (tenant_id = app.current_tenant_id());
+
+CREATE POLICY manual_fee_payments_insert_policy
+  ON manual_fee_payments
+  FOR INSERT
+  WITH CHECK (tenant_id = app.current_tenant_id());
+
+CREATE POLICY manual_fee_payments_update_policy
+  ON manual_fee_payments
+  FOR UPDATE
+  USING (tenant_id = app.current_tenant_id())
+  WITH CHECK (tenant_id = app.current_tenant_id());
+
+CREATE POLICY manual_fee_payments_delete_policy
+  ON manual_fee_payments
+  FOR DELETE
+  USING (tenant_id = app.current_tenant_id());
+
+CREATE POLICY manual_fee_payment_allocations_select_policy
+  ON manual_fee_payment_allocations
+  FOR SELECT
+  USING (tenant_id = app.current_tenant_id());
+
+CREATE POLICY manual_fee_payment_allocations_insert_policy
+  ON manual_fee_payment_allocations
+  FOR INSERT
+  WITH CHECK (tenant_id = app.current_tenant_id());
 
 CREATE POLICY sync_devices_select_policy
   ON sync_devices

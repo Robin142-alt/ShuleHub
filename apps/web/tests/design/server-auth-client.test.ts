@@ -104,17 +104,43 @@ describe("server auth client production gateway", () => {
     );
   });
 
-  it("requires an explicit tenant workspace for school sign-in", async () => {
+  it("lets the backend resolve the school tenant during sign-in", async () => {
     process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.invalid";
+    const fetchMock = jest.mocked(global.fetch).mockResolvedValue(
+      jsonResponse({
+        tokens: {
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+        },
+        user: {
+          user_id: "user-school-admin",
+          tenant_id: "school-alpha",
+          role: "admin",
+          audience: "school",
+          email: "admin@example.invalid",
+          display_name: "School Admin",
+          permissions: ["students:read"],
+          session_id: "session-school-admin",
+        },
+      }),
+    );
     const client = createServerAuthClient(buildRequest("localhost:3000"));
 
-    await expect(
-      client.login({
-        audience: "school",
-        identifier: "admin@example.invalid",
-        password: "ManagedByPasswordVault!42",
+    const session = await client.login({
+      audience: "school",
+      identifier: "admin@example.invalid",
+      password: "ManagedByPasswordVault!42",
+    });
+
+    expect(session.tenantSlug).toBe("school-alpha");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.invalid/auth/login",
+      expect.objectContaining({
+        headers: expect.not.objectContaining({
+          "x-tenant-id": expect.any(String),
+        }),
       }),
-    ).rejects.toThrow("School workspace is required.");
+    );
   });
 
   it("routes school staff to the backend tenant context and role home", async () => {

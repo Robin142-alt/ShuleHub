@@ -20,6 +20,8 @@ export type LibrarySectionId =
   | "dashboard"
   | "catalog"
   | "borrowing"
+  | "scan-issue"
+  | "scan-return"
   | "returns"
   | "overdue"
   | "members"
@@ -31,6 +33,8 @@ export const librarySections: LibrarySectionId[] = [
   "dashboard",
   "catalog",
   "borrowing",
+  "scan-issue",
+  "scan-return",
   "returns",
   "overdue",
   "members",
@@ -47,6 +51,8 @@ export const librarySidebarItems: Array<{
   { id: "dashboard", label: "Dashboard", href: "/library/dashboard" },
   { id: "catalog", label: "Catalog", href: "/library/catalog" },
   { id: "borrowing", label: "Borrowing", href: "/library/borrowing" },
+  { id: "scan-issue", label: "Scan Issue", href: "/library/scan-issue" },
+  { id: "scan-return", label: "Scan Return", href: "/library/scan-return" },
   { id: "returns", label: "Returns", href: "/library/returns" },
   { id: "overdue", label: "Overdue", href: "/library/overdue" },
   { id: "members", label: "Members", href: "/library/members" },

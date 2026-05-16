@@ -4,6 +4,7 @@ import {
   HttpCode,
   HttpStatus,
   Optional,
+  Param,
   Post,
   Req,
   UnauthorizedException,
@@ -17,6 +18,7 @@ import { DatabaseService } from '../../../database/database.service';
 import { SloMetricsService } from '../../observability/slo-metrics.service';
 import { StructuredLoggerService } from '../../observability/structured-logger.service';
 import { TenantFinanceConfigService } from '../../tenant-finance/tenant-finance-config.service';
+import { DarajaIntegrationService } from '../../integrations/daraja-integration.service';
 import { MpesaCallbackResponseDto } from '../dto/mpesa-callback-response.dto';
 import {
   PAYMENTS_PROCESS_JOB,
@@ -42,11 +44,28 @@ export class MpesaCallbackController {
     @Optional() private readonly sloMetrics?: SloMetricsService,
     @Optional() private readonly tenantFinanceConfigService?: TenantFinanceConfigService,
     @Optional() private readonly databaseService?: DatabaseService,
+    @Optional() private readonly darajaIntegrationService?: DarajaIntegrationService,
   ) {}
 
   @Post('callback')
   @HttpCode(HttpStatus.OK)
   async handleCallback(@Req() request: Request): Promise<MpesaCallbackResponseDto> {
+    return this.handleCallbackInternal(request, null);
+  }
+
+  @Post('callback/:integrationId')
+  @HttpCode(HttpStatus.OK)
+  async handleIntegrationCallback(
+    @Param('integrationId') integrationId: string,
+    @Req() request: Request,
+  ): Promise<MpesaCallbackResponseDto> {
+    return this.handleCallbackInternal(request, integrationId);
+  }
+
+  private async handleCallbackInternal(
+    request: Request,
+    integrationId: string | null,
+  ): Promise<MpesaCallbackResponseDto> {
     const requestContext = this.requestContext.requireStore();
     const rawBody = this.getRawBody(request);
     const inspection = this.mpesaSignatureService.inspectCallback(rawBody, request.headers);
@@ -73,6 +92,7 @@ export class MpesaCallbackController {
       request.body,
       parsedCallback,
       requestContext.tenant_id,
+      integrationId,
     );
     const tenantId = resolvedTenant.tenant_id;
 
@@ -118,20 +138,22 @@ export class MpesaCallbackController {
       throw new BadRequestException('MPESA callback is missing required fields');
     }
 
-    try {
-      await this.tenantFinanceConfigService?.assertCallbackBelongsToTenant({
-        tenant_id: tenantId,
-        payload: request.body,
-        checkout_request_id: parsedCallback.checkout_request_id,
-        merchant_request_id: parsedCallback.merchant_request_id,
-      });
-    } catch (error) {
-      await this.callbackLogsRepository.markRejected(
-        tenantId,
-        callbackLog.id,
-        error instanceof Error ? error.message : String(error),
-      );
-      throw error;
+    if (!integrationId) {
+      try {
+        await this.tenantFinanceConfigService?.assertCallbackBelongsToTenant({
+          tenant_id: tenantId,
+          payload: request.body,
+          checkout_request_id: parsedCallback.checkout_request_id,
+          merchant_request_id: parsedCallback.merchant_request_id,
+        });
+      } catch (error) {
+        await this.callbackLogsRepository.markRejected(
+          tenantId,
+          callbackLog.id,
+          error instanceof Error ? error.message : String(error),
+        );
+        throw error;
+      }
     }
 
     const accepted = await this.mpesaReplayProtectionService.registerDelivery(
@@ -256,7 +278,21 @@ export class MpesaCallbackController {
       | ReturnType<MpesaService['parseCallbackPayload']>
       | null,
     fallbackTenantId: string | null,
+    integrationId: string | null,
   ): Promise<{ tenant_id: string; shortcode: string | null }> {
+    if (integrationId && this.darajaIntegrationService) {
+      const integration = await this.darajaIntegrationService.getCredentialsForCallback(integrationId);
+
+      if (!integration) {
+        throw new UnauthorizedException('Daraja integration is not active');
+      }
+
+      return {
+        tenant_id: integration.tenant_id,
+        shortcode: integration.shortcode ?? integration.paybill_number ?? integration.till_number,
+      };
+    }
+
     if (this.tenantFinanceConfigService) {
       return this.tenantFinanceConfigService.resolveTenantForMpesaCallback({
         payload,

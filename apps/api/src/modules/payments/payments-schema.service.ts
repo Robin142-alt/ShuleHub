@@ -150,6 +150,54 @@ export class PaymentsSchemaService implements OnModuleInit {
           ON DELETE SET NULL
       );
 
+      CREATE TABLE IF NOT EXISTS mpesa_c2b_payments (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        mpesa_config_id uuid,
+        payment_channel_id uuid,
+        trans_id text NOT NULL,
+        transaction_type text NOT NULL,
+        business_short_code text NOT NULL,
+        bill_ref_number text,
+        invoice_number text,
+        amount_minor bigint NOT NULL,
+        currency_code char(3) NOT NULL DEFAULT 'KES',
+        phone_number text,
+        payer_name text,
+        org_account_balance text,
+        third_party_trans_id text,
+        status text NOT NULL DEFAULT 'pending_review',
+        matched_invoice_id uuid,
+        matched_student_id uuid,
+        manual_fee_payment_id uuid,
+        ledger_transaction_id uuid,
+        received_at timestamptz NOT NULL,
+        matched_at timestamptz,
+        raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT ck_mpesa_c2b_payments_trans_id_not_blank CHECK (btrim(trans_id) <> ''),
+        CONSTRAINT ck_mpesa_c2b_payments_business_short_code_not_blank CHECK (btrim(business_short_code) <> ''),
+        CONSTRAINT ck_mpesa_c2b_payments_amount_minor CHECK (amount_minor > 0),
+        CONSTRAINT ck_mpesa_c2b_payments_currency CHECK (currency_code ~ '^[A-Z]{3}$'),
+        CONSTRAINT ck_mpesa_c2b_payments_status CHECK (status IN ('pending_review', 'matched', 'rejected')),
+        CONSTRAINT uq_mpesa_c2b_payments_tenant_id_id UNIQUE (tenant_id, id),
+        CONSTRAINT uq_mpesa_c2b_payments_tenant_trans_id UNIQUE (tenant_id, trans_id),
+        CONSTRAINT fk_mpesa_c2b_payments_mpesa_config
+          FOREIGN KEY (tenant_id, mpesa_config_id)
+          REFERENCES tenant_mpesa_configs (tenant_id, id)
+          ON DELETE SET NULL,
+        CONSTRAINT fk_mpesa_c2b_payments_payment_channel
+          FOREIGN KEY (tenant_id, payment_channel_id)
+          REFERENCES tenant_payment_channels (tenant_id, id)
+          ON DELETE SET NULL,
+        CONSTRAINT fk_mpesa_c2b_payments_ledger_transaction
+          FOREIGN KEY (tenant_id, ledger_transaction_id)
+          REFERENCES transactions (tenant_id, id)
+          ON DELETE SET NULL
+      );
+
       ALTER TABLE payment_intents
       ADD COLUMN IF NOT EXISTS student_id uuid;
 
@@ -177,6 +225,13 @@ export class PaymentsSchemaService implements OnModuleInit {
       ADD COLUMN IF NOT EXISTS transaction_id text;
       ALTER TABLE mpesa_transactions
       ADD COLUMN IF NOT EXISTS mpesa_short_code text;
+
+      ALTER TABLE mpesa_c2b_payments
+      ADD COLUMN IF NOT EXISTS invoice_number text;
+      ALTER TABLE mpesa_c2b_payments
+      ADD COLUMN IF NOT EXISTS matched_student_id uuid;
+      ALTER TABLE mpesa_c2b_payments
+      ADD COLUMN IF NOT EXISTS manual_fee_payment_id uuid;
 
       DO $$
       BEGIN
@@ -265,6 +320,14 @@ export class PaymentsSchemaService implements OnModuleInit {
       CREATE UNIQUE INDEX IF NOT EXISTS ux_mpesa_transactions_transaction_id
         ON mpesa_transactions (transaction_id)
         WHERE transaction_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS ix_mpesa_c2b_payments_status_received
+        ON mpesa_c2b_payments (tenant_id, status, received_at DESC);
+      CREATE INDEX IF NOT EXISTS ix_mpesa_c2b_payments_reference
+        ON mpesa_c2b_payments (tenant_id, bill_ref_number, received_at DESC)
+        WHERE bill_ref_number IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS ix_mpesa_c2b_payments_student
+        ON mpesa_c2b_payments (tenant_id, matched_student_id, received_at DESC)
+        WHERE matched_student_id IS NOT NULL;
 
       ALTER TABLE payment_intents ENABLE ROW LEVEL SECURITY;
       ALTER TABLE payment_intents FORCE ROW LEVEL SECURITY;
@@ -272,6 +335,8 @@ export class PaymentsSchemaService implements OnModuleInit {
       ALTER TABLE callback_logs FORCE ROW LEVEL SECURITY;
       ALTER TABLE mpesa_transactions ENABLE ROW LEVEL SECURITY;
       ALTER TABLE mpesa_transactions FORCE ROW LEVEL SECURITY;
+      ALTER TABLE mpesa_c2b_payments ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE mpesa_c2b_payments FORCE ROW LEVEL SECURITY;
 
       DROP POLICY IF EXISTS payment_intents_rls_policy ON payment_intents;
       CREATE POLICY payment_intents_rls_policy ON payment_intents
@@ -291,6 +356,12 @@ export class PaymentsSchemaService implements OnModuleInit {
       USING (tenant_id = current_setting('app.tenant_id', true))
       WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
+      DROP POLICY IF EXISTS mpesa_c2b_payments_rls_policy ON mpesa_c2b_payments;
+      CREATE POLICY mpesa_c2b_payments_rls_policy ON mpesa_c2b_payments
+      FOR ALL
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
       DROP TRIGGER IF EXISTS trg_payment_intents_set_updated_at ON payment_intents;
       CREATE TRIGGER trg_payment_intents_set_updated_at
       BEFORE UPDATE ON payment_intents
@@ -306,6 +377,12 @@ export class PaymentsSchemaService implements OnModuleInit {
       DROP TRIGGER IF EXISTS trg_mpesa_transactions_set_updated_at ON mpesa_transactions;
       CREATE TRIGGER trg_mpesa_transactions_set_updated_at
       BEFORE UPDATE ON mpesa_transactions
+      FOR EACH ROW
+      EXECUTE FUNCTION set_updated_at();
+
+      DROP TRIGGER IF EXISTS trg_mpesa_c2b_payments_set_updated_at ON mpesa_c2b_payments;
+      CREATE TRIGGER trg_mpesa_c2b_payments_set_updated_at
+      BEFORE UPDATE ON mpesa_c2b_payments
       FOR EACH ROW
       EXECUTE FUNCTION set_updated_at();
     `);

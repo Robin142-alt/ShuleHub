@@ -106,7 +106,7 @@ describe("enterprise authentication flows", () => {
     expect(screen.queryByText(/managed-by-vault/i)).toBeNull();
 
     await user.type(
-      screen.getByLabelText(/work email address/i),
+      screen.getByLabelText(/email address/i),
       "finance.admin@example.invalid",
     );
     await user.type(
@@ -190,18 +190,14 @@ describe("enterprise authentication flows", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /sign in to your school operations workspace/i,
+        name: /sign in to your school account/i,
       }),
     ).toBeVisible();
     expect(screen.queryByText(/one premium platform/i)).toBeNull();
     expect(screen.queryByText(/enter workspace/i)).toBeNull();
 
     await user.type(
-      screen.getByLabelText(/school code or workspace/i),
-      "school-alpha",
-    );
-    await user.type(
-      screen.getByLabelText(/work email address/i),
+      screen.getByLabelText(/email address/i),
       "finance.admin@example.invalid",
     );
     await user.type(
@@ -346,7 +342,7 @@ describe("enterprise authentication flows", () => {
       />,
     );
 
-    await user.type(screen.getByLabelText(/work email address/i), "0712345678");
+    await user.type(screen.getByLabelText(/email address/i), "0712345678");
     await user.type(screen.getByLabelText(/^password$/i), "managed-by-vault");
     await user.click(screen.getByRole("button", { name: /sign in securely/i }));
 
