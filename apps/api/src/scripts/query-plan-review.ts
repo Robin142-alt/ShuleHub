@@ -230,6 +230,37 @@ export const QUERY_PLAN_REVIEWS: readonly QueryPlanReview[] = [
     parameters: ['tenant-a', 'mpesa callback'],
     protectedTables: ['support_tickets'],
   },
+  {
+    id: 'discipline-incident-queue',
+    description: 'Discipline incident queue should use tenant/status/severity indexes.',
+    sql: `
+      SELECT id, incident_number, title, severity, status
+      FROM discipline_incidents
+      WHERE tenant_id = $1
+        AND deleted_at IS NULL
+        AND status = $2
+        AND severity = $3
+      ORDER BY occurred_at DESC, created_at DESC
+      LIMIT 50
+    `,
+    parameters: ['tenant-a', 'under_review', 'high'],
+    protectedTables: ['discipline_incidents'],
+  },
+  {
+    id: 'counselling-session-schedule',
+    description: 'Counselling schedule should use counsellor and scheduled date indexes.',
+    sql: `
+      SELECT id, student_id, scheduled_for, status
+      FROM counselling_sessions
+      WHERE tenant_id = $1
+        AND counsellor_user_id = $2::uuid
+        AND status = $3
+      ORDER BY scheduled_for ASC
+      LIMIT 50
+    `,
+    parameters: ['tenant-a', '11111111-1111-1111-1111-111111111111', 'scheduled'],
+    protectedTables: ['counselling_sessions'],
+  },
 ];
 
 const RETIRED_QUERY_PATTERN = /attendance/i;

@@ -25,6 +25,9 @@ export const HIGH_VOLUME_WORKFLOW_LOADS: HighVolumeWorkflowLoad[] = [
   { id: 'library-circulation', method: 'GET', path: '/library/circulation', targetP95Ms: 700 },
   { id: 'support-status', method: 'GET', path: '/support/public/system-status', targetP95Ms: 500 },
   { id: 'support-tickets', method: 'GET', path: '/support/tickets', targetP95Ms: 700 },
+  { id: 'discipline-incident-queue', method: 'GET', path: '/discipline/incidents', targetP95Ms: 700 },
+  { id: 'discipline-analytics', method: 'GET', path: '/discipline/analytics/overview', targetP95Ms: 800 },
+  { id: 'counselling-dashboard', method: 'GET', path: '/counselling/dashboard', targetP95Ms: 800 },
   { id: 'report-export-jobs', method: 'GET', path: '/reports/export-jobs', targetP95Ms: 800 },
 ];
 

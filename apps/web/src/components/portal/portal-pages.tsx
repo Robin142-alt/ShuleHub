@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { SmartphoneCharging } from "lucide-react";
 
+import { ParentDisciplineView } from "@/components/discipline/discipline-workspace";
 import { ActivityListCard, SimpleListCard } from "@/components/experience/activity-list-card";
 import { MetricGrid } from "@/components/experience/metric-grid";
 import { PortalShell } from "@/components/portal/portal-shell";
@@ -356,6 +357,7 @@ export function PortalPages({
       {section === "dashboard" ? <PortalDashboard viewer={viewer} /> : null}
       {section === "fees" ? <PortalFeesPage viewer={viewer} /> : null}
       {section === "academics" ? <PortalAcademicsPage /> : null}
+      {section === "discipline" ? <ParentDisciplineView /> : null}
       {section === "messages" ? <PortalMessagesPage /> : null}
       {section === "downloads" ? <PortalDownloadsPage /> : null}
       {section === "notifications" ? <PortalNotificationsPage /> : null}

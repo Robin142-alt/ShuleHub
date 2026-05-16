@@ -188,6 +188,33 @@ export const CORE_API_LOAD_WORKLOADS: readonly CoreApiLoadWorkload[] = [
     targetP95Ms: 1500,
     description: 'Server-side billing invoice CSV artifact export.',
   },
+  {
+    id: 'discipline-incidents',
+    method: 'GET',
+    path: '/discipline/incidents',
+    auth: 'tenant',
+    weight: 2,
+    targetP95Ms: 900,
+    description: 'Tenant-scoped discipline incident queue read path.',
+  },
+  {
+    id: 'discipline-analytics',
+    method: 'GET',
+    path: '/discipline/analytics/overview',
+    auth: 'tenant',
+    weight: 1,
+    targetP95Ms: 1000,
+    description: 'Discipline dashboard analytics read path.',
+  },
+  {
+    id: 'counselling-dashboard',
+    method: 'GET',
+    path: '/counselling/dashboard',
+    auth: 'tenant',
+    weight: 1,
+    targetP95Ms: 1000,
+    description: 'Counselling dashboard aggregate read path.',
+  },
 ];
 
 const RETIRED_WORKLOAD_PATTERN = /attendance/i;

@@ -17,7 +17,8 @@ export type StreamingUploadOwnerType =
   | 'admission_document'
   | 'hr_document'
   | 'library_attachment'
-  | 'support_attachment';
+  | 'support_attachment'
+  | 'discipline_attachment';
 
 export interface StreamingUploadServiceOptions {
   maxFileBytes?: number;

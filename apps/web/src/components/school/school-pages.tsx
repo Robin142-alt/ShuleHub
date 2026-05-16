@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, BookOpenCheck, FileSpreadsheet, Printer, Send, UserPlus } from "lucide-react";
 
 import { ActivityListCard, SimpleListCard } from "@/components/experience/activity-list-card";
+import { DisciplineWorkspace } from "@/components/discipline/discipline-workspace";
 import { MetricGrid } from "@/components/experience/metric-grid";
 import { QuickActionBar } from "@/components/experience/quick-action-bar";
 import { AdmissionsModuleScreen } from "@/components/modules/admissions/admissions-module-screen";
@@ -4305,6 +4306,9 @@ export function SchoolPages({
           role={role}
           schoolName={workspace.branding.name}
         />
+      ) : null}
+      {!studentId && section === "discipline" ? (
+        <DisciplineWorkspace tenantSlug={tenantSlug} />
       ) : null}
       {!studentId && section === "timetable" ? (
         <SchoolBasicCardPage

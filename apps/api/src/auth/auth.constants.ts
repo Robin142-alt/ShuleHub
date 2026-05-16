@@ -19,6 +19,8 @@ export const DEFAULT_ROLE_STAFF = 'staff';
 export const DEFAULT_ROLE_PARENT = 'parent';
 export const DEFAULT_ROLE_STUDENT = 'student';
 export const DEFAULT_ROLE_LIBRARIAN = 'librarian';
+export const DEFAULT_ROLE_COUNSELLOR = 'school_counsellor';
+export const DEFAULT_ROLE_DISCIPLINE_MASTER = 'discipline_master';
 export const DEFAULT_ROLE_SUPPORT_AGENT = 'support_agent';
 export const DEFAULT_ROLE_SUPPORT_LEAD = 'support_lead';
 export const SUPERADMIN_ROLE_OWNER = 'platform_owner';
@@ -78,6 +80,14 @@ export const DEFAULT_PERMISSION_CATALOG = [
   { resource: 'support', action: 'create', description: 'Create tenant support tickets' },
   { resource: 'support', action: 'reply', description: 'Reply to support ticket conversations and upload support attachments' },
   { resource: 'support', action: 'manage', description: 'Manage, assign, escalate, resolve, and analyze support tickets' },
+  { resource: 'discipline', action: 'read', description: 'View permitted discipline incidents, actions, and behavior summaries' },
+  { resource: 'discipline', action: 'write', description: 'Report discipline incidents, add evidence, and record permitted discipline updates' },
+  { resource: 'discipline', action: 'manage', description: 'Manage discipline cases, workflows, settings, escalations, and parent notices' },
+  { resource: 'discipline', action: 'approve', description: 'Approve high-severity disciplinary actions such as suspension or expulsion' },
+  { resource: 'discipline', action: 'reports', description: 'Export discipline reports and analytics' },
+  { resource: 'counselling', action: 'read', description: 'View permitted counselling referrals, sessions, and improvement plans' },
+  { resource: 'counselling', action: 'write', description: 'Create counselling referrals, sessions, notes, and improvement plan updates' },
+  { resource: 'counselling', action: 'manage', description: 'Manage confidential counselling workflows and follow-up plans' },
 ] as const;
 
 export const DEFAULT_ROLE_CATALOG = [
@@ -140,6 +150,14 @@ export const DEFAULT_ROLE_CATALOG = [
       'support:view',
       'support:create',
       'support:reply',
+      'discipline:read',
+      'discipline:write',
+      'discipline:manage',
+      'discipline:approve',
+      'discipline:reports',
+      'counselling:read',
+      'counselling:write',
+      'counselling:manage',
     ],
   },
   {
@@ -166,6 +184,8 @@ export const DEFAULT_ROLE_CATALOG = [
       'exams:read',
       'exams:enter-marks',
       'school_sms:send',
+      'discipline:read',
+      'discipline:write',
       'support:view',
       'support:create',
       'support:reply',
@@ -188,6 +208,7 @@ export const DEFAULT_ROLE_CATALOG = [
       'daraja:read',
       'daraja:write',
       'daraja:test',
+      'discipline:read',
       'support:view',
       'support:create',
       'support:reply',
@@ -200,6 +221,8 @@ export const DEFAULT_ROLE_CATALOG = [
     permissions: [
       'auth:read',
       'students:read',
+      'discipline:read',
+      'discipline:write',
       'support:view',
       'support:create',
       'support:reply',
@@ -214,6 +237,7 @@ export const DEFAULT_ROLE_CATALOG = [
       'payments:create',
       'portal:read_own_children',
       'portal:message_school',
+      'discipline:read',
       'support:view',
       'support:create',
       'support:reply',
@@ -238,6 +262,39 @@ export const DEFAULT_ROLE_CATALOG = [
       'auth:read',
       'library:read',
       'library:write',
+      'support:view',
+      'support:create',
+      'support:reply',
+    ],
+  },
+  {
+    code: DEFAULT_ROLE_DISCIPLINE_MASTER,
+    name: 'Discipline Master',
+    description: 'Dean of students access for discipline case management and parent workflows',
+    permissions: [
+      'auth:read',
+      'students:read',
+      'discipline:read',
+      'discipline:write',
+      'discipline:manage',
+      'discipline:reports',
+      'counselling:read',
+      'support:view',
+      'support:create',
+      'support:reply',
+    ],
+  },
+  {
+    code: DEFAULT_ROLE_COUNSELLOR,
+    name: 'School Counsellor',
+    description: 'Confidential counselling, referrals, sessions, and behavior improvement planning',
+    permissions: [
+      'auth:read',
+      'students:read',
+      'discipline:read',
+      'counselling:read',
+      'counselling:write',
+      'counselling:manage',
       'support:view',
       'support:create',
       'support:reply',

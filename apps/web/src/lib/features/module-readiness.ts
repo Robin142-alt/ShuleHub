@@ -8,6 +8,7 @@ const productionReadyModules = new Set([
   "mpesa",
   "inventory",
   "library",
+  "discipline",
   "exams",
   "settings",
   "support-new-ticket",
