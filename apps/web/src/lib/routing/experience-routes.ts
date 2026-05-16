@@ -4,6 +4,7 @@ export const SUPERADMIN_SECTIONS = [
   "revenue",
   "subscriptions",
   "mpesa-monitoring",
+  "sms-settings",
   "support",
   "support-open",
   "support-in-progress",

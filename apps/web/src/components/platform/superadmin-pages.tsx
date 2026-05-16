@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { StatusPill } from "@/components/ui/status-pill";
+import { getCsrfToken } from "@/lib/auth/csrf-client";
 import type { ExperienceNotificationItem } from "@/lib/experiences/types";
 import {
   callbackFailures,
@@ -94,6 +95,65 @@ const emptySchoolForm = {
   adminName: "",
   adminEmail: "",
 };
+
+type PlatformSmsProviderCode = "textsms_kenya" | "africas_talking" | "twilio";
+
+type PlatformSmsProvider = {
+  id: string;
+  provider_name: string;
+  provider_code: PlatformSmsProviderCode;
+  api_key_masked: string;
+  username_masked?: string | null;
+  sender_id: string;
+  base_url?: string | null;
+  is_active: boolean;
+  is_default: boolean;
+  last_test_status?: string | null;
+  last_tested_at?: string | null;
+  updated_at?: string | null;
+};
+
+type PlatformSmsProviderForm = {
+  provider_name: string;
+  provider_code: PlatformSmsProviderCode;
+  api_key: string;
+  username: string;
+  sender_id: string;
+  base_url: string;
+  is_active: boolean;
+  is_default: boolean;
+};
+
+const smsProviderOptions: Array<{
+  code: PlatformSmsProviderCode;
+  label: string;
+}> = [
+  { code: "textsms_kenya", label: "TextSMS Kenya" },
+  { code: "africas_talking", label: "Africa's Talking" },
+  { code: "twilio", label: "Twilio" },
+];
+
+const emptySmsProviderForm: PlatformSmsProviderForm = {
+  provider_name: "TextSMS Kenya",
+  provider_code: "textsms_kenya",
+  api_key: "",
+  username: "",
+  sender_id: "SHULEHUB",
+  base_url: "",
+  is_active: true,
+  is_default: true,
+};
+
+type ApiEnvelope<T> = {
+  data: T;
+  meta?: Record<string, unknown>;
+};
+
+function unwrapPlatformPayload<T>(payload: T | ApiEnvelope<T> | null): T | null {
+  return payload && typeof payload === "object" && "data" in payload
+    ? (payload as ApiEnvelope<T>).data
+    : (payload as T | null);
+}
 
 function mapPlatformSchoolToTenantRow(row: PlatformSchool): (typeof tenantRows)[number] {
   return {
@@ -644,12 +704,447 @@ function NotificationsPage() {
   );
 }
 
-function SettingsPage() {
+function PlatformNotice({ tone, message }: { tone: "success" | "error"; message: string }) {
+  return (
+    <div
+      role={tone === "error" ? "alert" : "status"}
+      className={`rounded-xl border px-4 py-3 text-sm ${
+        tone === "success"
+          ? "border-success/20 bg-success/10 text-foreground"
+          : "border-danger/20 bg-danger/10 text-foreground"
+      }`}
+    >
+      {message}
+    </div>
+  );
+}
+
+async function parsePlatformSmsResponse<T>(response: Response): Promise<T> {
+  const payload = (await response.json().catch(() => null)) as
+    | { message?: string }
+    | ApiEnvelope<T>
+    | T
+    | null;
+
+  if (!response.ok) {
+    throw new Error(
+      payload && typeof payload === "object" && "message" in payload && payload.message
+        ? payload.message
+        : "Unable to complete this SMS settings request.",
+    );
+  }
+
+  return unwrapPlatformPayload<T>(payload as T | ApiEnvelope<T> | null) as T;
+}
+
+function toProviderForm(provider: PlatformSmsProvider): PlatformSmsProviderForm {
+  return {
+    provider_name: provider.provider_name,
+    provider_code: provider.provider_code,
+    api_key: "",
+    username: "",
+    sender_id: provider.sender_id,
+    base_url: provider.base_url ?? "",
+    is_active: provider.is_active,
+    is_default: provider.is_default,
+  };
+}
+
+function getProviderTone(provider: PlatformSmsProvider): "ok" | "warning" | "critical" {
+  if (!provider.is_active) return "warning";
+  if (provider.last_test_status === "failed") return "critical";
+  if (provider.is_default || provider.last_test_status === "ok") return "ok";
+  return "warning";
+}
+
+function PlatformSmsSettingsPage() {
+  const [providers, setProviders] = useState<PlatformSmsProvider[]>([]);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const [form, setForm] = useState<PlatformSmsProviderForm>(emptySmsProviderForm);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const selectedProvider = providers.find((provider) => provider.id === selectedProviderId) ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProviders() {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch("/api/platform/sms/providers", {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const payload = await parsePlatformSmsResponse<PlatformSmsProvider[]>(response);
+
+        if (!cancelled) {
+          setProviders(Array.isArray(payload) ? payload : []);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : "Unable to load SMS providers.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadProviders();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function updateForm<K extends keyof PlatformSmsProviderForm>(
+    key: K,
+    value: PlatformSmsProviderForm[K],
+  ) {
+    setForm((current) => ({ ...current, [key]: value }));
+    setNotice(null);
+    setError(null);
+  }
+
+  function startCreate() {
+    setSelectedProviderId(null);
+    setForm(emptySmsProviderForm);
+    setNotice(null);
+    setError(null);
+  }
+
+  function startEdit(provider: PlatformSmsProvider) {
+    setSelectedProviderId(provider.id);
+    setForm(toProviderForm(provider));
+    setNotice(null);
+    setError(null);
+  }
+
+  async function reloadProviders() {
+    const response = await fetch("/api/platform/sms/providers", {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    const payload = await parsePlatformSmsResponse<PlatformSmsProvider[]>(response);
+
+    setProviders(Array.isArray(payload) ? payload : []);
+  }
+
+  async function saveProvider() {
+    setIsSaving(true);
+    setNotice(null);
+    setError(null);
+
+    try {
+      const trimmedApiKey = form.api_key.trim();
+
+      if (!selectedProvider && trimmedApiKey.length < 8) {
+        setError("Enter the provider API key before saving a new SMS provider.");
+        return;
+      }
+
+      const body: Record<string, unknown> = {
+        provider_name: form.provider_name.trim(),
+        provider_code: form.provider_code,
+        username: form.username.trim() || undefined,
+        sender_id: form.sender_id.trim(),
+        base_url: form.base_url.trim() || undefined,
+        is_active: form.is_active,
+        is_default: form.is_default,
+      };
+
+      if (trimmedApiKey) {
+        body.api_key = trimmedApiKey;
+      }
+
+      const response = await fetch(
+        selectedProvider
+          ? `/api/platform/sms/providers/${encodeURIComponent(selectedProvider.id)}`
+          : "/api/platform/sms/providers",
+        {
+          method: selectedProvider ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-shulehub-csrf": await getCsrfToken(),
+          },
+          credentials: "same-origin",
+          body: JSON.stringify(body),
+        },
+      );
+      const provider = await parsePlatformSmsResponse<PlatformSmsProvider>(response);
+
+      await reloadProviders();
+      setSelectedProviderId(provider.id);
+      setForm(toProviderForm(provider));
+      setNotice("SMS provider saved securely. Secrets are masked and are not shown again.");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Unable to save SMS provider.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function testProvider(provider: PlatformSmsProvider) {
+    setNotice(null);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/platform/sms/providers/${encodeURIComponent(provider.id)}/test`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-shulehub-csrf": await getCsrfToken(),
+          },
+          credentials: "same-origin",
+        },
+      );
+
+      await parsePlatformSmsResponse<PlatformSmsProvider>(response);
+      await reloadProviders();
+      setNotice(`${provider.provider_name} connection test passed.`);
+    } catch (testError) {
+      setError(testError instanceof Error ? testError.message : "SMS provider test failed.");
+    }
+  }
+
+  async function setDefaultProvider(provider: PlatformSmsProvider) {
+    setNotice(null);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/platform/sms/providers/${encodeURIComponent(provider.id)}/set-default`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-shulehub-csrf": await getCsrfToken(),
+          },
+          credentials: "same-origin",
+        },
+      );
+
+      await parsePlatformSmsResponse<PlatformSmsProvider>(response);
+      await reloadProviders();
+      setNotice(`${provider.provider_name} is now the default SMS provider.`);
+    } catch (defaultError) {
+      setError(defaultError instanceof Error ? defaultError.message : "Unable to set default provider.");
+    }
+  }
+
+  const providerRows = providers.map((provider) => ({
+    ...provider,
+    providerLabel:
+      smsProviderOptions.find((option) => option.code === provider.provider_code)?.label
+      ?? provider.provider_name,
+  }));
+
+  const providerColumns: DataTableColumn<(typeof providerRows)[number]>[] = [
+    { id: "provider", header: "Provider", render: (row) => <span className="font-semibold">{row.provider_name}</span> },
+    { id: "type", header: "Type", render: (row) => row.providerLabel },
+    { id: "sender", header: "Sender ID", render: (row) => row.sender_id },
+    { id: "key", header: "API key", render: (row) => row.api_key_masked },
+    {
+      id: "status",
+      header: "Status",
+      render: (row) => (
+        <StatusPill
+          label={row.is_default ? "Default" : row.is_active ? "Active" : "Disabled"}
+          tone={getProviderTone(row)}
+        />
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      render: (row) => (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button size="sm" variant="secondary" onClick={() => startEdit(row)}>
+            Edit
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => testProvider(row)}>
+            Test
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setDefaultProvider(row)}>
+            Make default
+          </Button>
+        </div>
+      ),
+      className: "text-right",
+      headerClassName: "text-right",
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <SuperadminPageHeader
+        title="SMS settings"
+        description="Configure platform-owned SMS providers here. Schools consume SMS credits, but they never see API keys or provider credentials."
+        actions={
+          <Button variant="secondary" onClick={startCreate}>
+            <Plus className="h-4 w-4" />
+            Add provider
+          </Button>
+        }
+      />
+
+      {notice ? <PlatformNotice tone="success" message={notice} /> : null}
+      {error ? <PlatformNotice tone="error" message={error} /> : null}
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <DataTable
+          title="Platform SMS providers"
+          subtitle={isLoading ? "Loading provider settings..." : "Credentials are encrypted at rest and only returned as masked values."}
+          columns={providerColumns}
+          rows={providerRows}
+          getRowKey={(row) => row.id}
+          emptyMessage="No SMS provider has been configured yet."
+        />
+
+        <Card className="space-y-4 p-5">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.14em] text-muted">
+              {selectedProvider ? "Edit provider" : "New provider"}
+            </p>
+            <h3 className="mt-1 text-lg font-semibold text-foreground">
+              Provider credentials
+            </h3>
+            <p className="mt-1 text-sm leading-6 text-muted">
+              Add TextSMS Kenya, Africa&apos;s Talking, or Twilio credentials. Secret fields are write-only after saving.
+            </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-2 text-sm text-foreground">
+              <span className="font-medium">Provider name</span>
+              <input
+                className="input-base"
+                value={form.provider_name}
+                onChange={(event) => updateForm("provider_name", event.target.value)}
+              />
+            </label>
+            <label className="space-y-2 text-sm text-foreground">
+              <span className="font-medium">Provider</span>
+              <select
+                className="input-base"
+                value={form.provider_code}
+                disabled={Boolean(selectedProvider)}
+                onChange={(event) =>
+                  updateForm("provider_code", event.target.value as PlatformSmsProviderCode)
+                }
+              >
+                {smsProviderOptions.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-2 text-sm text-foreground">
+              <span className="font-medium">API key</span>
+              <input
+                className="input-base"
+                type="password"
+                value={form.api_key}
+                placeholder={selectedProvider?.api_key_masked ?? "Paste provider API key"}
+                onChange={(event) => updateForm("api_key", event.target.value)}
+              />
+            </label>
+            <label className="space-y-2 text-sm text-foreground">
+              <span className="font-medium">Username</span>
+              <input
+                className="input-base"
+                value={form.username}
+                placeholder={selectedProvider?.username_masked ?? "Optional username"}
+                onChange={(event) => updateForm("username", event.target.value)}
+              />
+            </label>
+            <label className="space-y-2 text-sm text-foreground">
+              <span className="font-medium">Sender ID</span>
+              <input
+                className="input-base"
+                value={form.sender_id}
+                onChange={(event) => updateForm("sender_id", event.target.value)}
+              />
+            </label>
+            <label className="space-y-2 text-sm text-foreground">
+              <span className="font-medium">Base URL</span>
+              <input
+                className="input-base"
+                value={form.base_url}
+                placeholder="Optional provider endpoint"
+                onChange={(event) => updateForm("base_url", event.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-muted p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(event) => updateForm("is_active", event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-border"
+              />
+              <span>
+                <span className="block font-semibold text-foreground">Enable provider</span>
+                <span className="mt-1 block text-muted">Allow schools to send through this provider.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-muted p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={form.is_default}
+                onChange={(event) => updateForm("is_default", event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-border"
+              />
+              <span>
+                <span className="block font-semibold text-foreground">Make default</span>
+                <span className="mt-1 block text-muted">Use this provider for new SMS dispatches.</span>
+              </span>
+            </label>
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm leading-6 text-muted">
+            Provider secrets are never exposed after save. Schools only see SMS balance, usage, logs, and purchase requests.
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={isSaving} onClick={saveProvider}>
+              {isSaving ? "Saving..." : selectedProvider ? "Save changes" : "Save provider"}
+            </Button>
+            {selectedProvider ? (
+              <Button variant="secondary" onClick={() => testProvider(selectedProvider)}>
+                Test connection
+              </Button>
+            ) : null}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function SettingsPage({ routeMode }: { routeMode: SuperadminRouteMode }) {
   return (
     <div className="space-y-6">
       <SuperadminPageHeader
         title="Settings"
         description="Platform-wide controls, webhook posture, notification defaults, and support-response policies."
+        actions={
+          <Link href={buildSuperadminHref("sms-settings", routeMode)}>
+            <Button variant="secondary">Open SMS settings</Button>
+          </Link>
+        }
       />
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="p-5">
@@ -815,6 +1310,7 @@ export function SuperadminPages({
       {normalizedSection === "revenue" ? <RevenuePage /> : null}
       {normalizedSection === "subscriptions" ? <SubscriptionsPage /> : null}
       {normalizedSection === "mpesa-monitoring" ? <MpesaMonitoringPage /> : null}
+      {normalizedSection === "sms-settings" ? <PlatformSmsSettingsPage /> : null}
       {normalizedSection === "users" ? <UsersPage /> : null}
       {normalizedSection === "support" ? <SupportPage /> : null}
       {normalizedSection === "support-open" ? <PlatformSupportWorkspace defaultView="support-open" /> : null}
@@ -826,7 +1322,7 @@ export function SuperadminPages({
       {normalizedSection === "audit-logs" ? <AuditLogsPage /> : null}
       {normalizedSection === "infrastructure" ? <InfrastructurePage /> : null}
       {normalizedSection === "notifications" ? <NotificationsPage /> : null}
-      {normalizedSection === "settings" ? <SettingsPage /> : null}
+      {normalizedSection === "settings" ? <SettingsPage routeMode={routeMode} /> : null}
     </PlatformShell>
   );
 }

@@ -297,13 +297,20 @@ export function DisciplineWorkspace({
   }, [normalizedTenantSlug]);
 
   useEffect(() => {
-    void loadOperationalData();
+    const timeoutId = window.setTimeout(() => {
+      void loadOperationalData();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadOperationalData]);
 
   useEffect(() => {
     if (!selectedIncidentId || !normalizedTenantSlug) {
-      setSelectedIncident(null);
-      return;
+      const timeoutId = window.setTimeout(() => {
+        setSelectedIncident(null);
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
 
     let cancelled = false;
@@ -1108,7 +1115,11 @@ export function ParentDisciplineView({
   }, [normalizedTenantSlug]);
 
   useEffect(() => {
-    void loadParentIncidents();
+    const timeoutId = window.setTimeout(() => {
+      void loadParentIncidents();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadParentIncidents]);
 
   async function acknowledge() {
