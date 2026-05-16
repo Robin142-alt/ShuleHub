@@ -142,15 +142,9 @@ async function requestBackendAuth<T>(
 }
 
 async function loginSchoolAudience(input: LoginInput) {
-  const tenantSlug = input.tenantSlug?.trim() || null;
-
-  if (!tenantSlug) {
-    throw unauthorized("School workspace is required.");
-  }
-
   const response = await requestBackendAuth<BackendAuthResponse>("/auth/login", {
     audience: "school",
-    tenantSlug,
+    tenantSlug: input.tenantSlug?.trim() || null,
     method: "POST",
     body: {
       email: input.identifier.trim(),
@@ -162,7 +156,7 @@ async function loginSchoolAudience(input: LoginInput) {
   return buildGatewaySession({
     audience: "school",
     userLabel: response.user.display_name || response.user.email,
-    tenantSlug,
+    tenantSlug: response.user.tenant_id,
     role: response.user.role,
     accessToken: response.tokens.access_token,
     refreshToken: response.tokens.refresh_token,
@@ -195,10 +189,9 @@ async function loginSuperadminAudience(input: LoginInput) {
 }
 
 async function loginPortalAudience(input: LoginInput) {
-  const tenantSlug = input.tenantSlug?.trim() || null;
   const response = await requestBackendAuth<BackendAuthResponse>("/auth/login", {
     audience: "portal",
-    tenantSlug,
+    tenantSlug: input.tenantSlug?.trim() || null,
     method: "POST",
     body: {
       email: input.identifier.trim(),
@@ -210,7 +203,7 @@ async function loginPortalAudience(input: LoginInput) {
   return buildGatewaySession({
     audience: "portal",
     userLabel: response.user.display_name || response.user.email,
-    tenantSlug,
+    tenantSlug: response.user.tenant_id,
     viewer: response.user.role === "student" ? "student" : "parent",
     role: response.user.role,
     accessToken: response.tokens.access_token,

@@ -17,7 +17,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { useDeferredValue, useMemo, useState, useTransition, type ReactNode } from "react";
+import { useDeferredValue, useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -65,6 +65,7 @@ import {
   syncLibraryBorrowing,
   syncLibraryReturn,
 } from "@/lib/library/library-sync";
+import { getCsrfToken } from "@/lib/auth/csrf-client";
 import { supportSidebarItems } from "@/lib/support/support-data";
 
 type CatalogSortKey = "title" | "availability" | "category" | "status";
@@ -108,6 +109,16 @@ const sectionCopy: Record<
     title: "Borrowing",
     description: "Search member, search book, check availability, assign due date, issue, and print receipt.",
     icon: ClipboardList,
+  },
+  "scan-issue": {
+    title: "Scan Issue",
+    description: "Issue books quickly with USB, Bluetooth, or handheld QR/barcode scanners that type into normal browser fields.",
+    icon: BookOpenCheck,
+  },
+  "scan-return": {
+    title: "Scan Return",
+    description: "Return scanned books, calculate overdue fines, and update copy availability without hardware-specific drivers.",
+    icon: RotateCcw,
   },
   returns: {
     title: "Returns",
@@ -172,6 +183,229 @@ function toneRing(tone: StatusTone) {
   }
 
   return "border-success/25 bg-success/5";
+}
+
+function ScannerIssueSection() {
+  const [borrowerCode, setBorrowerCode] = useState("");
+  const [bookCode, setBookCode] = useState("");
+  const [dueOn, setDueOn] = useState(defaultLibraryDueDate());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage(null);
+    setError(null);
+
+    if (!borrowerCode.trim() || !bookCode.trim() || !dueOn) {
+      setError("Scan the student ID and book code, then choose a due date.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await postScannerAction("/api/library/scan-issue", {
+        borrower_scan_code: borrowerCode.trim(),
+        book_scan_code: bookCode.trim(),
+        due_on: dueOn,
+      });
+
+      setMessage(result);
+      setBookCode("");
+    } catch (scanError) {
+      setError(scanError instanceof Error ? scanError.message : "Book issue failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <ScannerPanel
+      title="Scan-to-issue"
+      description="Scan the student ID, scan the book QR/barcode, and the system issues the copy through the live library API."
+      message={message}
+      error={error}
+    >
+      <form className="grid gap-3 lg:grid-cols-[1fr_1fr_180px_auto]" onSubmit={handleSubmit}>
+        <label className="space-y-1">
+          <span className="text-[12px] font-semibold text-muted">Student ID or admission barcode</span>
+          <input
+            autoFocus
+            className="w-full rounded-[var(--radius-sm)] border border-border bg-white px-3 py-2 text-[13px] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+            value={borrowerCode}
+            onChange={(event) => setBorrowerCode(event.target.value)}
+            placeholder="Scan student ID"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[12px] font-semibold text-muted">Book QR/barcode</span>
+          <input
+            className="w-full rounded-[var(--radius-sm)] border border-border bg-white px-3 py-2 text-[13px] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+            value={bookCode}
+            onChange={(event) => setBookCode(event.target.value)}
+            placeholder="Scan book"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[12px] font-semibold text-muted">Due date</span>
+          <input
+            type="date"
+            className="w-full rounded-[var(--radius-sm)] border border-border bg-white px-3 py-2 text-[13px] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+            value={dueOn}
+            onChange={(event) => setDueOn(event.target.value)}
+          />
+        </label>
+        <div className="flex items-end">
+          <Button className="w-full lg:w-auto" disabled={isSubmitting} type="submit">
+            <BookOpenCheck className="h-3.5 w-3.5" />
+            {isSubmitting ? "Issuing..." : "Issue"}
+          </Button>
+        </div>
+      </form>
+    </ScannerPanel>
+  );
+}
+
+function ScannerReturnSection() {
+  const [bookCode, setBookCode] = useState("");
+  const [returnedOn, setReturnedOn] = useState(new Date().toISOString().slice(0, 10));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage(null);
+    setError(null);
+
+    if (!bookCode.trim() || !returnedOn) {
+      setError("Scan the book code and confirm the return date.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await postScannerAction("/api/library/scan-return", {
+        book_scan_code: bookCode.trim(),
+        returned_on: returnedOn,
+      });
+
+      setMessage(result);
+      setBookCode("");
+    } catch (scanError) {
+      setError(scanError instanceof Error ? scanError.message : "Book return failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <ScannerPanel
+      title="Scan-to-return"
+      description="Scan the returned book and the system closes the active loan, calculates overdue fines, and restores availability."
+      message={message}
+      error={error}
+    >
+      <form className="grid gap-3 lg:grid-cols-[1fr_180px_auto]" onSubmit={handleSubmit}>
+        <label className="space-y-1">
+          <span className="text-[12px] font-semibold text-muted">Book QR/barcode</span>
+          <input
+            autoFocus
+            className="w-full rounded-[var(--radius-sm)] border border-border bg-white px-3 py-2 text-[13px] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+            value={bookCode}
+            onChange={(event) => setBookCode(event.target.value)}
+            placeholder="Scan book"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[12px] font-semibold text-muted">Returned on</span>
+          <input
+            type="date"
+            className="w-full rounded-[var(--radius-sm)] border border-border bg-white px-3 py-2 text-[13px] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+            value={returnedOn}
+            onChange={(event) => setReturnedOn(event.target.value)}
+          />
+        </label>
+        <div className="flex items-end">
+          <Button className="w-full lg:w-auto" disabled={isSubmitting} type="submit">
+            <RotateCcw className="h-3.5 w-3.5" />
+            {isSubmitting ? "Returning..." : "Return"}
+          </Button>
+        </div>
+      </form>
+    </ScannerPanel>
+  );
+}
+
+function ScannerPanel({
+  title,
+  description,
+  message,
+  error,
+  children,
+}: {
+  title: string;
+  description: string;
+  message: string | null;
+  error: string | null;
+  children: ReactNode;
+}) {
+  return (
+    <Card className="p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-[16px] font-bold text-foreground">{title}</h2>
+          <p className="mt-1 max-w-2xl text-[13px] leading-5 text-muted">{description}</p>
+        </div>
+        <StatusPill label="Keyboard scanner ready" tone="ok" compact />
+      </div>
+      <div className="mt-4">{children}</div>
+      {message ? (
+        <div className="mt-4 rounded-[var(--radius-sm)] border border-teal-200 bg-teal-50 px-3 py-2 text-[13px] font-semibold text-teal-800">
+          {message}
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mt-4 rounded-[var(--radius-sm)] border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-semibold text-rose-800">
+          {error}
+        </div>
+      ) : null}
+      <div className="mt-4 rounded-[var(--radius-sm)] border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] leading-5 text-slate-600">
+        USB and Bluetooth scanners usually behave like keyboards. Keep the cursor in the scan field and scan; most scanners submit with Enter automatically.
+      </div>
+    </Card>
+  );
+}
+
+async function postScannerAction(endpoint: string, body: Record<string, string>) {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch(endpoint, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      "x-shulehub-csrf": csrfToken,
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | { synced?: boolean; message?: string }
+    | null;
+
+  if (!response.ok || payload?.synced === false) {
+    throw new Error(payload?.message ?? "Scanner action could not be completed.");
+  }
+
+  return payload?.message ?? "Scanner action completed.";
+}
+
+function defaultLibraryDueDate() {
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + 14);
+  return dueDate.toISOString().slice(0, 10);
 }
 
 function formatStatus(value: string) {
@@ -1078,6 +1312,14 @@ export function LibraryWorkspace({
     );
   }
 
+  function renderScannerIssue() {
+    return <ScannerIssueSection />;
+  }
+
+  function renderScannerReturn() {
+    return <ScannerReturnSection />;
+  }
+
   function renderActiveSection() {
     switch (section) {
       case "dashboard":
@@ -1086,6 +1328,10 @@ export function LibraryWorkspace({
         return renderCatalog();
       case "borrowing":
         return renderBorrowing();
+      case "scan-issue":
+        return renderScannerIssue();
+      case "scan-return":
+        return renderScannerReturn();
       case "returns":
         return renderReturns();
       case "overdue":

@@ -11,6 +11,36 @@ import { renderWithProviders } from "./test-utils";
 
 jest.setTimeout(20_000);
 
+function jsonResponse(body: unknown, init?: ResponseInit) {
+  return {
+    status: init?.status ?? 200,
+    ok: (init?.status ?? 200) >= 200 && (init?.status ?? 200) < 300,
+    json: async () => body,
+  } as Response;
+}
+
+function emptyReconciliationReport() {
+  return {
+    period: {
+      from: "2026-05-01",
+      to: "2026-05-16",
+      payment_method: null,
+    },
+    totals: {
+      transaction_count: 0,
+      total_amount_minor: "0",
+      cleared_count: 0,
+      cleared_amount_minor: "0",
+      pending_count: 0,
+      pending_amount_minor: "0",
+      exception_count: 0,
+      exception_amount_minor: "0",
+    },
+    method_summaries: [],
+    rows: [],
+  };
+}
+
 describe("experience actions", () => {
   it("supports shell search and notifications inside the hosted school workspace", async () => {
     const user = userEvent.setup();
@@ -100,31 +130,58 @@ describe("experience actions", () => {
 
   it("records a school payment through the collections workspace", async () => {
     const user = userEvent.setup();
-    renderWithProviders(
-      createElement(SchoolPages, {
-        role: "admin",
-        tenantSlug: "barakaacademy",
-        section: "finance",
-      }),
-    );
+    const originalFetch = global.fetch;
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse(emptyReconciliationReport()))
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse({ token: "csrf-payment-token" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "manual-payment-1", status: "cleared" }))
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse(emptyReconciliationReport()));
 
-    await user.click(screen.getByRole("button", { name: /record payment/i }));
+    global.fetch = fetchMock as unknown as typeof fetch;
 
-    const dialog = await screen.findByRole("dialog", { name: /record payment/i });
-    fireEvent.change(within(dialog).getByLabelText(/payment student/i), {
-      target: { value: "Mercy Atieno" },
-    });
-    fireEvent.change(within(dialog).getByLabelText(/payment amount/i), {
-      target: { value: "18500" },
-    });
-    fireEvent.change(within(dialog).getByLabelText(/payment reference/i), {
-      target: { value: "SMX82KQ4" },
-    });
+    try {
+      renderWithProviders(
+        createElement(SchoolPages, {
+          role: "admin",
+          tenantSlug: "barakaacademy",
+          section: "finance",
+        }),
+      );
 
-    await user.click(within(dialog).getByRole("button", { name: /save payment/i }));
+      await user.click(screen.getByRole("button", { name: /record payment/i }));
 
-    expect(await screen.findByText(/payment recorded for mercy atieno/i)).toBeVisible();
-    expect(screen.getAllByText("Matched").length).toBeGreaterThan(0);
+      const dialog = await screen.findByRole("dialog", { name: /record payment/i });
+      fireEvent.change(within(dialog).getByLabelText(/payment student/i), {
+        target: { value: "Mercy Atieno" },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/payment amount/i), {
+        target: { value: "18500" },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/payment reference/i), {
+        target: { value: "SMX82KQ4" },
+      });
+
+      await user.click(within(dialog).getByRole("button", { name: /save payment/i }));
+
+      expect(await screen.findByText(/payment recorded and posted to finance activity/i)).toBeVisible();
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/billing/manual-fee-payments"),
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "x-shulehub-csrf": "csrf-payment-token",
+          }),
+        }),
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 
   it("blocks manual MPESA reconciliation when the receipt is not in live tenant data", async () => {

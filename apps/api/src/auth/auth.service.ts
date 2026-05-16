@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
 
 import { RequestContextService } from '../common/request-context/request-context.service';
+import { DatabaseService } from '../database/database.service';
 import {
   SUPERADMIN_ROLE_OWNER,
 } from './auth.constants';
@@ -52,6 +53,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     @Optional() private readonly mfaService?: MfaService,
     @Optional() private readonly trustedDeviceService?: TrustedDeviceService,
+    @Optional() private readonly databaseService?: DatabaseService,
   ) {}
 
   extractBearerToken(request: Request): string | null {
@@ -119,11 +121,7 @@ export class AuthService {
       return this.loginPlatformOwner(dto, metadata);
     }
 
-    const tenantId = this.requireTenantId();
     const audience = this.requireTenantScopedAudience(dto.audience);
-
-    await this.authorizationRepository.ensureTenantAuthorizationBaseline(tenantId);
-
     const user = await this.usersRepository.findByEmail(dto.email);
 
     if (!user || user.status !== 'active') {
@@ -136,11 +134,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const membership = await this.tenantMembershipsRepository.findActiveMembership(user.id, tenantId);
+    const membership = await this.resolveLoginMembership(user.id);
+    const tenantId = membership.tenant_id;
 
-    if (!membership) {
-      throw new UnauthorizedException('User does not have access to this tenant');
-    }
+    await this.activateResolvedTenantContext(tenantId);
+    await this.authorizationRepository.ensureTenantAuthorizationBaseline(tenantId);
 
     const permissions = this.resolveEmailVerificationPermissions(
       user,
@@ -629,5 +627,39 @@ export class AuthService {
     }
 
     return tenantId;
+  }
+
+  private async resolveLoginMembership(userId: string): Promise<TenantMembershipEntity> {
+    const currentTenantId = this.requestContext.getStore()?.tenant_id;
+
+    if (currentTenantId) {
+      const currentMembership = await this.tenantMembershipsRepository.findActiveMembership(
+        userId,
+        currentTenantId,
+      );
+
+      if (currentMembership) {
+        return currentMembership;
+      }
+    }
+
+    const memberships = await this.tenantMembershipsRepository.findActiveMembershipsByUser(userId);
+
+    if (memberships.length === 1) {
+      return memberships[0];
+    }
+
+    if (memberships.length > 1) {
+      throw new UnauthorizedException('Multiple school workspaces are linked to this account. Choose a school after sign-in.');
+    }
+
+    throw new UnauthorizedException('User does not have access to an active school workspace');
+  }
+
+  private async activateResolvedTenantContext(tenantId: string): Promise<void> {
+    this.requestContext.setTenantId(tenantId);
+
+    const store = this.requestContext.requireStore();
+    await this.databaseService?.synchronizeRequestSession(store);
   }
 }

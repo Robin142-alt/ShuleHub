@@ -488,6 +488,108 @@ test('AuthService exposes verified email state on tenant auth responses', async 
   assert.equal(response.user.email_verified_at, '2026-05-14T00:00:00.000Z');
 });
 
+test('AuthService resolves a single active school membership without requiring a tenant code', async () => {
+  const requestContext = new RequestContextService();
+  let synchronizedTenantId: string | null = null;
+  let ensuredTenantId: string | null = null;
+  const service = new AuthService(
+    requestContext,
+    {
+      findByEmail: async () => ({
+        id: 'user-admin',
+        tenant_id: 'global',
+        email: 'principal@greenhillacademy.sc.ke',
+        password_hash: 'hashed-password',
+        display_name: 'School Principal',
+        status: 'active',
+        email_verified_at: '2026-05-14T00:00:00.000Z',
+      }),
+    } as never,
+    {
+      findActiveMembershipsByUser: async () => [
+        {
+          id: 'membership-greenhill',
+          tenant_id: 'greenhill-academy',
+          user_id: 'user-admin',
+          role_id: 'role-owner',
+          role_code: 'owner',
+          role_name: 'Owner',
+          status: 'active',
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      ],
+    } as never,
+    {
+      ensureTenantAuthorizationBaseline: async (tenantId: string) => {
+        ensuredTenantId = tenantId;
+      },
+      getPermissionsByRoleId: async () => ['*:*'],
+    } as never,
+    {
+      compare: async () => true,
+    } as never,
+    {
+      issueTokenPair: async (payload: Record<string, unknown>) => ({
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+        token_type: 'Bearer' as const,
+        access_expires_in: 900,
+        refresh_expires_in: 86400,
+        access_expires_at: '2026-05-14T00:15:00.000Z',
+        refresh_expires_at: '2026-05-15T00:00:00.000Z',
+        access_token_id: 'access-token-id',
+        refresh_token_id: 'refresh-token-id',
+        session_id: String(payload.session_id),
+      }),
+    } as never,
+    {
+      createSession: async () => undefined,
+    } as never,
+    { get: () => undefined } as never,
+    undefined,
+    undefined,
+    {
+      synchronizeRequestSession: async (context: { tenant_id?: string | null }) => {
+        synchronizedTenantId = context.tenant_id ?? null;
+      },
+    } as never,
+  );
+
+  const response = await requestContext.run(
+    {
+      request_id: 'req-auto-tenant-login',
+      tenant_id: null,
+      user_id: 'anonymous',
+      role: 'guest',
+      session_id: null,
+      permissions: [],
+      is_authenticated: false,
+      client_ip: '127.0.0.1',
+      user_agent: 'test-suite',
+      method: 'POST',
+      path: '/auth/login',
+      started_at: '2026-05-16T00:00:00.000Z',
+    },
+    () =>
+      service.login(
+        {
+          email: 'principal@greenhillacademy.sc.ke',
+          password: 'SecurePass!2026',
+          audience: 'school',
+        },
+        {
+          ip_address: '127.0.0.1',
+          user_agent: 'test-suite',
+        },
+      ),
+  );
+
+  assert.equal(response.user.tenant_id, 'greenhill-academy');
+  assert.equal(ensuredTenantId, 'greenhill-academy');
+  assert.equal(synchronizedTenantId, 'greenhill-academy');
+});
+
 test('AuthService enforces MFA and can persist a trusted device during high-privilege login', async () => {
   const requestContext = new RequestContextService();
   const securityChecks: Record<string, unknown> = {};

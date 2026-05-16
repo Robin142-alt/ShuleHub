@@ -8,11 +8,13 @@ import { AccountEntity } from '../finance/entities/account.entity';
 import { CallbackLogEntity } from './entities/callback-log.entity';
 import { PaymentIntentEntity } from './entities/payment-intent.entity';
 import { MpesaCallbackController } from './controllers/mpesa-callback.controller';
+import { MpesaC2bService } from './services/mpesa-c2b.service';
 import { MpesaCallbackProcessorService } from './services/mpesa-callback-processor.service';
 import { MpesaService } from './services/mpesa.service';
 import { MpesaSignatureService } from './services/mpesa-signature.service';
 import { ParsedMpesaCallback } from './payments.types';
 import { TenantFinanceConfigService } from '../tenant-finance/tenant-finance-config.service';
+import { MpesaC2bPaymentEntity } from './entities/mpesa-c2b-payment.entity';
 
 const makeAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity =>
   Object.assign(new AccountEntity(), {
@@ -128,6 +130,38 @@ const makeCallbackLog = (callback: ParsedMpesaCallback): CallbackLogEntity =>
     updated_at: new Date(),
   });
 
+const makeC2bPayment = (
+  overrides: Partial<MpesaC2bPaymentEntity> = {},
+): MpesaC2bPaymentEntity =>
+  Object.assign(new MpesaC2bPaymentEntity(), {
+    id: overrides.id ?? '00000000-0000-0000-0000-000000000701',
+    tenant_id: overrides.tenant_id ?? 'tenant-a',
+    mpesa_config_id: overrides.mpesa_config_id ?? '00000000-0000-0000-0000-000000000901',
+    payment_channel_id: overrides.payment_channel_id ?? '00000000-0000-0000-0000-000000000902',
+    trans_id: overrides.trans_id ?? 'QF12345678',
+    transaction_type: overrides.transaction_type ?? 'Pay Bill',
+    business_short_code: overrides.business_short_code ?? '247247',
+    bill_ref_number: overrides.bill_ref_number ?? 'INV-2026-001',
+    invoice_number: overrides.invoice_number ?? null,
+    amount_minor: overrides.amount_minor ?? '125000',
+    currency_code: overrides.currency_code ?? 'KES',
+    phone_number: overrides.phone_number ?? '254700000001',
+    payer_name: overrides.payer_name ?? 'Jane Parent',
+    org_account_balance: overrides.org_account_balance ?? null,
+    third_party_trans_id: overrides.third_party_trans_id ?? null,
+    status: overrides.status ?? 'pending_review',
+    matched_invoice_id: overrides.matched_invoice_id ?? null,
+    matched_student_id: overrides.matched_student_id ?? null,
+    manual_fee_payment_id: overrides.manual_fee_payment_id ?? null,
+    ledger_transaction_id: overrides.ledger_transaction_id ?? null,
+    received_at: overrides.received_at ?? new Date('2026-05-15T09:30:45.000Z'),
+    matched_at: overrides.matched_at ?? null,
+    raw_payload: overrides.raw_payload ?? {},
+    metadata: overrides.metadata ?? {},
+    created_at: overrides.created_at ?? new Date(),
+    updated_at: overrides.updated_at ?? new Date(),
+  });
+
 test('MpesaSignatureService validates the configured HMAC callback signature', () => {
   const service = new MpesaSignatureService({
     get: (key: string): string | number | undefined => {
@@ -160,8 +194,48 @@ test('MpesaService parses a successful STK callback payload', () => {
       get: (): undefined => undefined,
     } as never,
     new RequestContextService(),
-    {} as never,
-    {} as never,
+    {
+      resolveMpesaConfigByShortcode: async () => ({
+        owner: 'tenant',
+        tenant_id: 'tenant-a',
+        mpesa_config_id: '00000000-0000-0000-0000-000000000901',
+        payment_channel_id: '00000000-0000-0000-0000-000000000902',
+        shortcode: '247247',
+        paybill_number: '247247',
+        till_number: null,
+        consumer_key: 'school-consumer-key',
+        consumer_secret: 'school-consumer-secret',
+        passkey: 'school-passkey',
+        initiator_name: 'school-api',
+        environment: 'sandbox',
+        base_url: 'https://sandbox.safaricom.co.ke',
+        callback_url: 'https://green-valley.example.com/payments/mpesa/c2b/confirmation',
+        transaction_type: 'CustomerPayBillOnline',
+        ledger_debit_account_code: '1110-MPESA-CLEARING',
+        ledger_credit_account_code: '1100-AR-FEES',
+      }),
+    } as never,
+    {
+      resolveMpesaConfigByShortcode: async () => ({
+        owner: 'tenant',
+        tenant_id: 'tenant-a',
+        mpesa_config_id: '00000000-0000-0000-0000-000000000901',
+        payment_channel_id: '00000000-0000-0000-0000-000000000902',
+        shortcode: '247247',
+        paybill_number: '247247',
+        till_number: null,
+        consumer_key: 'school-consumer-key',
+        consumer_secret: 'school-consumer-secret',
+        passkey: 'school-passkey',
+        initiator_name: 'school-api',
+        environment: 'sandbox',
+        base_url: 'https://sandbox.safaricom.co.ke',
+        callback_url: 'https://green-valley.example.com/payments/mpesa/c2b/confirmation',
+        transaction_type: 'CustomerPayBillOnline',
+        ledger_debit_account_code: '1110-MPESA-CLEARING',
+        ledger_credit_account_code: '1100-AR-FEES',
+      }),
+    } as never,
     {
       inspectPaymentIntentCreation: async (): Promise<void> => undefined,
     } as never,
@@ -205,6 +279,404 @@ test('MpesaService parses a successful STK callback payload', () => {
       PhoneNumber: 254700000001,
     },
   });
+});
+
+test('MpesaC2bService parses a direct Paybill confirmation into tenant-safe money fields', () => {
+  const service = new MpesaC2bService(
+    new RequestContextService(),
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+  );
+
+  const parsed = service.parseC2bPayload({
+    TransactionType: 'Pay Bill',
+    TransID: 'QF12345678',
+    TransTime: '20260515123045',
+    TransAmount: '1250',
+    BusinessShortCode: '247247',
+    BillRefNumber: 'INV-2026-001',
+    OrgAccountBalance: '30000',
+    MSISDN: '254700000001',
+    FirstName: 'Jane',
+    MiddleName: '',
+    LastName: 'Parent',
+  });
+
+  assert.deepEqual(parsed, {
+    transaction_type: 'Pay Bill',
+    trans_id: 'QF12345678',
+    transaction_occurred_at: '2026-05-15T09:30:45.000Z',
+    amount_minor: '125000',
+    business_short_code: '247247',
+    bill_ref_number: 'INV-2026-001',
+    invoice_number: null,
+    org_account_balance: '30000',
+    third_party_trans_id: null,
+    phone_number: '254700000001',
+    payer_name: 'Jane Parent',
+    metadata: {},
+  });
+});
+
+test('MpesaC2bService posts a matched direct Paybill payment through manual fee allocation', async () => {
+  const requestContext = new RequestContextService();
+  const c2bPayment = makeC2bPayment();
+  const matchedC2bPayment = makeC2bPayment({
+    status: 'matched',
+    matched_invoice_id: '00000000-0000-0000-0000-000000000801',
+    matched_student_id: '00000000-0000-0000-0000-000000000802',
+    manual_fee_payment_id: '00000000-0000-0000-0000-000000000803',
+    ledger_transaction_id: '00000000-0000-0000-0000-000000000804',
+    matched_at: new Date('2026-05-15T09:31:00.000Z'),
+  });
+  let manualPaymentInput: Record<string, unknown> | null = null;
+  let markedMatchedInput: Record<string, unknown> | null = null;
+
+  const service = new MpesaC2bService(
+    requestContext,
+    {
+      withRequestTransaction: async <T>(callbackFn: () => Promise<T>): Promise<T> => callbackFn(),
+      query: async (): Promise<{ rows: unknown[] }> => ({ rows: [] }),
+    } as never,
+    {
+      resolveMpesaConfigByShortcode: async () => ({
+        owner: 'tenant',
+        tenant_id: 'tenant-a',
+        mpesa_config_id: '00000000-0000-0000-0000-000000000901',
+        payment_channel_id: '00000000-0000-0000-0000-000000000902',
+        shortcode: '247247',
+        paybill_number: '247247',
+        till_number: null,
+        consumer_key: 'school-consumer-key',
+        consumer_secret: 'school-consumer-secret',
+        passkey: 'school-passkey',
+        initiator_name: 'school-api',
+        environment: 'sandbox',
+        base_url: 'https://sandbox.safaricom.co.ke',
+        callback_url: 'https://green-valley.example.com/payments/mpesa/c2b/confirmation',
+        transaction_type: 'CustomerPayBillOnline',
+        ledger_debit_account_code: '1110-MPESA-CLEARING',
+        ledger_credit_account_code: '1100-AR-FEES',
+      }),
+    } as never,
+    {
+      findByTenantAndTransId: async (): Promise<MpesaC2bPaymentEntity | null> => null,
+      createReceived: async () => ({ payment: c2bPayment, inserted: true }),
+      markMatched: async (input: Record<string, unknown>) => {
+        markedMatchedInput = input;
+        return matchedC2bPayment;
+      },
+      markPendingReview: async (): Promise<MpesaC2bPaymentEntity> => c2bPayment,
+    } as never,
+    {
+      findManualFeeInvoiceTargetByReference: async () => ({
+        id: '00000000-0000-0000-0000-000000000801',
+        tenant_id: 'tenant-a',
+        status: 'open',
+        total_amount_minor: '125000',
+        amount_paid_minor: '0',
+        metadata: {
+          student_id: '00000000-0000-0000-0000-000000000802',
+        },
+      }),
+    } as never,
+    {
+      createManualFeePayment: async (input: Record<string, unknown>) => {
+        manualPaymentInput = input;
+        return {
+          id: '00000000-0000-0000-0000-000000000803',
+          ledger_transaction_id: '00000000-0000-0000-0000-000000000804',
+          status: 'cleared',
+        };
+      },
+    } as never,
+  );
+
+  const result = await service.processConfirmation({
+    TransactionType: 'Pay Bill',
+    TransID: 'QF12345678',
+    TransTime: '20260515123045',
+    TransAmount: '1250',
+    BusinessShortCode: '247247',
+    BillRefNumber: 'INV-2026-001',
+    MSISDN: '254700000001',
+    FirstName: 'Jane',
+    LastName: 'Parent',
+  });
+
+  assert.equal(result.accepted, true);
+  assert.equal(result.duplicate, false);
+  assert.equal(result.status, 'matched');
+  assert.equal((manualPaymentInput as { payment_method?: string } | null)?.payment_method, 'mpesa_c2b');
+  assert.equal((manualPaymentInput as { invoice_id?: string } | null)?.invoice_id, '00000000-0000-0000-0000-000000000801');
+  assert.equal((manualPaymentInput as { student_id?: string } | null)?.student_id, '00000000-0000-0000-0000-000000000802');
+  assert.equal((manualPaymentInput as { asset_account_code?: string } | null)?.asset_account_code, '1110-MPESA-CLEARING');
+  assert.equal((manualPaymentInput as { external_reference?: string } | null)?.external_reference, 'QF12345678');
+  assert.equal((markedMatchedInput as { manual_fee_payment_id?: string } | null)?.manual_fee_payment_id, '00000000-0000-0000-0000-000000000803');
+  assert.equal((markedMatchedInput as { ledger_transaction_id?: string } | null)?.ledger_transaction_id, '00000000-0000-0000-0000-000000000804');
+});
+
+test('MpesaC2bService keeps unmatched direct Paybill payments for accountant review', async () => {
+  const requestContext = new RequestContextService();
+  const c2bPayment = makeC2bPayment({
+    bill_ref_number: 'UNKNOWN-ADM',
+  });
+  let manualPaymentCreated = false;
+  let pendingReviewInput: Record<string, unknown> | null = null;
+
+  const service = new MpesaC2bService(
+    requestContext,
+    {
+      withRequestTransaction: async <T>(callbackFn: () => Promise<T>): Promise<T> => callbackFn(),
+      query: async (): Promise<{ rows: unknown[] }> => ({ rows: [] }),
+    } as never,
+    {
+      resolveMpesaConfigByShortcode: async () => ({
+        owner: 'tenant',
+        tenant_id: 'tenant-a',
+        mpesa_config_id: '00000000-0000-0000-0000-000000000901',
+        payment_channel_id: '00000000-0000-0000-0000-000000000902',
+        shortcode: '247247',
+        paybill_number: '247247',
+        till_number: null,
+        consumer_key: 'school-consumer-key',
+        consumer_secret: 'school-consumer-secret',
+        passkey: 'school-passkey',
+        initiator_name: 'school-api',
+        environment: 'sandbox',
+        base_url: 'https://sandbox.safaricom.co.ke',
+        callback_url: 'https://green-valley.example.com/payments/mpesa/c2b/confirmation',
+        transaction_type: 'CustomerPayBillOnline',
+        ledger_debit_account_code: '1110-MPESA-CLEARING',
+        ledger_credit_account_code: '1100-AR-FEES',
+      }),
+    } as never,
+    {
+      findByTenantAndTransId: async (): Promise<MpesaC2bPaymentEntity | null> => null,
+      createReceived: async () => ({ payment: c2bPayment, inserted: true }),
+      markMatched: async (): Promise<never> => {
+        throw new Error('Unmatched C2B payment must not be marked matched');
+      },
+      markPendingReview: async (input: Record<string, unknown>) => {
+        pendingReviewInput = input;
+        return c2bPayment;
+      },
+    } as never,
+    {
+      findManualFeeInvoiceTargetByReference: async () => null,
+    } as never,
+    {
+      createManualFeePayment: async (): Promise<never> => {
+        manualPaymentCreated = true;
+        throw new Error('Unmatched C2B payment must not post a fee receipt');
+      },
+    } as never,
+  );
+
+  const result = await service.processConfirmation({
+    TransactionType: 'Pay Bill',
+    TransID: 'QF12345678',
+    TransTime: '20260515123045',
+    TransAmount: '1250',
+    BusinessShortCode: '247247',
+    BillRefNumber: 'UNKNOWN-ADM',
+    MSISDN: '254700000001',
+    FirstName: 'Jane',
+    LastName: 'Parent',
+  });
+
+  assert.equal(result.accepted, true);
+  assert.equal(result.status, 'pending_review');
+  assert.equal(manualPaymentCreated, false);
+  assert.equal((pendingReviewInput as { reason?: string } | null)?.reason, 'no_invoice_or_student_match');
+});
+
+test('MpesaC2bService treats duplicate direct Paybill confirmations as idempotent', async () => {
+  const requestContext = new RequestContextService();
+  let createReceivedCalled = false;
+  let manualPaymentCreated = false;
+
+  const service = new MpesaC2bService(
+    requestContext,
+    {
+      withRequestTransaction: async <T>(callbackFn: () => Promise<T>): Promise<T> => callbackFn(),
+      query: async (): Promise<{ rows: unknown[] }> => ({ rows: [] }),
+    } as never,
+    {
+      resolveMpesaConfigByShortcode: async () => ({
+        owner: 'tenant',
+        tenant_id: 'tenant-a',
+        mpesa_config_id: '00000000-0000-0000-0000-000000000901',
+        payment_channel_id: '00000000-0000-0000-0000-000000000902',
+        shortcode: '247247',
+        paybill_number: '247247',
+        till_number: null,
+        consumer_key: 'school-consumer-key',
+        consumer_secret: 'school-consumer-secret',
+        passkey: 'school-passkey',
+        initiator_name: 'school-api',
+        environment: 'sandbox',
+        base_url: 'https://sandbox.safaricom.co.ke',
+        callback_url: 'https://green-valley.example.com/payments/mpesa/c2b/confirmation',
+        transaction_type: 'CustomerPayBillOnline',
+        ledger_debit_account_code: '1110-MPESA-CLEARING',
+        ledger_credit_account_code: '1100-AR-FEES',
+      }),
+    } as never,
+    {
+      findByTenantAndTransId: async (): Promise<MpesaC2bPaymentEntity | null> =>
+        makeC2bPayment({
+          status: 'matched',
+          manual_fee_payment_id: '00000000-0000-0000-0000-000000000803',
+          ledger_transaction_id: '00000000-0000-0000-0000-000000000804',
+        }),
+      createReceived: async (): Promise<never> => {
+        createReceivedCalled = true;
+        throw new Error('Duplicate C2B payment must not be inserted again');
+      },
+      markMatched: async (): Promise<never> => {
+        throw new Error('Duplicate C2B payment must not be matched again');
+      },
+      markPendingReview: async (): Promise<never> => {
+        throw new Error('Duplicate C2B payment must not be changed');
+      },
+    } as never,
+    {
+      findManualFeeInvoiceTargetByReference: async (): Promise<never> => {
+        throw new Error('Duplicate C2B payment must not resolve allocation targets again');
+      },
+    } as never,
+    {
+      createManualFeePayment: async (): Promise<never> => {
+        manualPaymentCreated = true;
+        throw new Error('Duplicate C2B payment must not post a fee receipt');
+      },
+    } as never,
+  );
+
+  const result = await service.processConfirmation({
+    TransactionType: 'Pay Bill',
+    TransID: 'QF12345678',
+    TransTime: '20260515123045',
+    TransAmount: '1250',
+    BusinessShortCode: '247247',
+    BillRefNumber: 'INV-2026-001',
+    MSISDN: '254700000001',
+    FirstName: 'Jane',
+    LastName: 'Parent',
+  });
+
+  assert.equal(result.accepted, true);
+  assert.equal(result.duplicate, true);
+  assert.equal(result.status, 'matched');
+  assert.equal(createReceivedCalled, false);
+  assert.equal(manualPaymentCreated, false);
+});
+
+test('MpesaC2bService reconciles a pending direct Paybill payment from accountant review', async () => {
+  const requestContext = new RequestContextService();
+  const pendingPayment = makeC2bPayment({
+    id: '00000000-0000-0000-0000-000000000711',
+    status: 'pending_review',
+    bill_ref_number: 'UNKNOWN-ADM',
+    manual_fee_payment_id: null,
+    ledger_transaction_id: null,
+  });
+  const matchedPayment = makeC2bPayment({
+    ...pendingPayment,
+    status: 'matched',
+    matched_invoice_id: '00000000-0000-0000-0000-000000000801',
+    matched_student_id: '00000000-0000-0000-0000-000000000802',
+    manual_fee_payment_id: '00000000-0000-0000-0000-000000000803',
+    ledger_transaction_id: '00000000-0000-0000-0000-000000000804',
+  });
+  let manualPaymentInput: Record<string, unknown> | null = null;
+
+  const service = new MpesaC2bService(
+    requestContext,
+    {
+      withRequestTransaction: async <T>(callbackFn: () => Promise<T>): Promise<T> => callbackFn(),
+      query: async (): Promise<{ rows: unknown[] }> => ({ rows: [] }),
+    } as never,
+    {
+      resolveMpesaConfigByShortcode: async () => ({
+        owner: 'tenant',
+        tenant_id: 'tenant-a',
+        mpesa_config_id: '00000000-0000-0000-0000-000000000901',
+        payment_channel_id: '00000000-0000-0000-0000-000000000902',
+        shortcode: '247247',
+        paybill_number: '247247',
+        till_number: null,
+        consumer_key: 'school-consumer-key',
+        consumer_secret: 'school-consumer-secret',
+        passkey: 'school-passkey',
+        initiator_name: 'school-api',
+        environment: 'sandbox',
+        base_url: 'https://sandbox.safaricom.co.ke',
+        callback_url: 'https://green-valley.example.com/payments/mpesa/c2b/confirmation',
+        transaction_type: 'CustomerPayBillOnline',
+        ledger_debit_account_code: '1110-MPESA-CLEARING',
+        ledger_credit_account_code: '1100-AR-FEES',
+      }),
+    } as never,
+    {
+      lockById: async (): Promise<MpesaC2bPaymentEntity | null> => pendingPayment,
+      markMatched: async () => matchedPayment,
+    } as never,
+    {
+      lockManualFeeInvoiceForAllocation: async () => ({
+        id: '00000000-0000-0000-0000-000000000801',
+        tenant_id: 'tenant-a',
+        status: 'open',
+        total_amount_minor: '125000',
+        amount_paid_minor: '0',
+        metadata: {
+          student_id: '00000000-0000-0000-0000-000000000802',
+        },
+      }),
+    } as never,
+    {
+      createManualFeePayment: async (input: Record<string, unknown>) => {
+        manualPaymentInput = input;
+        return {
+          id: '00000000-0000-0000-0000-000000000803',
+          ledger_transaction_id: '00000000-0000-0000-0000-000000000804',
+          status: 'cleared',
+        };
+      },
+    } as never,
+  );
+
+  const result = await requestContext.run(
+    {
+      request_id: 'request-tenant-a',
+      tenant_id: 'tenant-a',
+      user_id: '00000000-0000-0000-0000-000000000499',
+      role: 'accountant',
+      session_id: 'session-tenant-a',
+      permissions: ['billing:update'],
+      is_authenticated: true,
+      client_ip: '127.0.0.1',
+      user_agent: 'payments-test',
+      method: 'POST',
+      path: '/payments/mpesa/c2b/payments/00000000-0000-0000-0000-000000000711/reconcile',
+      started_at: new Date().toISOString(),
+    },
+    () =>
+      service.reconcilePendingPayment('00000000-0000-0000-0000-000000000711', {
+        invoice_id: '00000000-0000-0000-0000-000000000801',
+        notes: 'Matched after accountant checked bank slip reference.',
+      }),
+  );
+
+  assert.equal(result.status, 'matched');
+  assert.equal((manualPaymentInput as { payment_method?: string } | null)?.payment_method, 'mpesa_c2b');
+  assert.equal((manualPaymentInput as { invoice_id?: string } | null)?.invoice_id, '00000000-0000-0000-0000-000000000801');
+  assert.equal((manualPaymentInput as { student_id?: string } | null)?.student_id, '00000000-0000-0000-0000-000000000802');
+  assert.equal((manualPaymentInput as { external_reference?: string } | null)?.external_reference, 'QF12345678');
 });
 
 test('TenantFinanceConfigService resolves only the active tenant-owned MPESA config', async () => {

@@ -134,6 +134,42 @@ export class TenantFinanceConfigRepository {
     return result.rows[0] ? this.mapMpesaConfig(result.rows[0]) : null;
   }
 
+  async findActiveMpesaConfigByShortcode(
+    shortcode: string,
+  ): Promise<TenantMpesaConfigRecord | null> {
+    const result = await this.databaseService.query<TenantMpesaConfigRow>(
+      `
+        SELECT
+          id,
+          tenant_id,
+          shortcode,
+          paybill_number,
+          till_number,
+          consumer_key,
+          consumer_secret,
+          passkey,
+          initiator_name,
+          environment,
+          callback_url,
+          status,
+          created_at,
+          updated_at
+        FROM tenant_mpesa_configs
+        WHERE status = 'active'
+          AND (
+            shortcode = $1
+            OR paybill_number = $1
+            OR till_number = $1
+          )
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `,
+      [shortcode],
+    );
+
+    return result.rows[0] ? this.mapMpesaConfig(result.rows[0]) : null;
+  }
+
   async findFinancialAccountsForTenant(
     tenantId: string,
   ): Promise<TenantFinancialAccountsRecord | null> {

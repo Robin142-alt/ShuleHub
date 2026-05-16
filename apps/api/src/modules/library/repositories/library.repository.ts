@@ -26,6 +26,46 @@ export class LibraryRepository {
     return result.rows[0] ?? null;
   }
 
+  async findCopyByScanCodeForUpdate(tenantId: string, scanCode: string) {
+    const result = await this.databaseService.query(
+      `
+        SELECT *
+        FROM library_copies
+        WHERE tenant_id = $1
+          AND (
+            id::text = $2
+            OR accession_number = $2
+            OR barcode = $2
+            OR qr_code = $2
+          )
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [tenantId, scanCode],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async findBorrowerByScanCode(tenantId: string, scanCode: string) {
+    const result = await this.databaseService.query(
+      `
+        SELECT *
+        FROM library_borrowers
+        WHERE tenant_id = $1
+          AND (
+            id::text = $2
+            OR subject_id::text = $2
+            OR scan_code = $2
+          )
+        LIMIT 1
+      `,
+      [tenantId, scanCode],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
   async issueCopy(input: IssueLibraryCopyDto & {
     tenant_id: string;
     issued_by_user_id: string | null;
@@ -85,6 +125,32 @@ export class LibraryRepository {
         LIMIT 1
       `,
       [tenantId, loanId],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async findActiveLoanByCopyId(tenantId: string, copyId: string) {
+    const result = await this.databaseService.query(
+      `
+        SELECT issue.*
+        FROM library_circulation_ledger issue
+        WHERE issue.tenant_id = $1
+          AND issue.copy_id = $2::uuid
+          AND issue.action = 'issue'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM library_circulation_ledger returned
+            WHERE returned.tenant_id = issue.tenant_id
+              AND returned.copy_id = issue.copy_id
+              AND returned.borrower_id = issue.borrower_id
+              AND returned.action = 'return'
+              AND returned.created_at >= issue.created_at
+          )
+        ORDER BY issue.created_at DESC
+        LIMIT 1
+      `,
+      [tenantId, copyId],
     );
 
     return result.rows[0] ?? null;

@@ -42,17 +42,10 @@ export class AuthSchemaService implements OnModuleInit {
       AS $$
       DECLARE
         request_user_id text;
-        request_tenant_id text;
         request_path text;
       BEGIN
         request_user_id := COALESCE(NULLIF(current_setting('app.user_id', true), ''), 'anonymous');
-        request_tenant_id := NULLIF(current_setting('app.tenant_id', true), '');
         request_path := COALESCE(NULLIF(current_setting('app.path', true), ''), '');
-
-        IF request_tenant_id IS NULL THEN
-          RAISE EXCEPTION 'Tenant context is required for auth user lookup'
-            USING ERRCODE = '42501';
-        END IF;
 
         IF request_user_id <> 'anonymous' THEN
           RAISE EXCEPTION 'Auth user lookup is only available before authentication'
@@ -85,6 +78,61 @@ export class AuthSchemaService implements OnModuleInit {
 
       DROP FUNCTION IF EXISTS app.ensure_global_user_for_seed(text, text, text);
       DROP FUNCTION IF EXISTS app.ensure_global_user_for_registration(text, text, text);
+
+      DROP FUNCTION IF EXISTS app.find_active_memberships_by_user_for_auth(uuid);
+      CREATE OR REPLACE FUNCTION app.find_active_memberships_by_user_for_auth(input_user_id uuid)
+      RETURNS TABLE (
+        id uuid,
+        tenant_id text,
+        user_id uuid,
+        role_id uuid,
+        role_code text,
+        role_name text,
+        status text,
+        created_at timestamptz,
+        updated_at timestamptz
+      )
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public, app, pg_temp
+      AS $$
+      DECLARE
+        request_user_id text;
+        request_path text;
+      BEGIN
+        request_user_id := COALESCE(NULLIF(current_setting('app.user_id', true), ''), 'anonymous');
+        request_path := COALESCE(NULLIF(current_setting('app.path', true), ''), '');
+
+        IF request_user_id <> 'anonymous' THEN
+          RAISE EXCEPTION 'Membership auto-resolution is only available before authentication'
+            USING ERRCODE = '42501';
+        END IF;
+
+        IF request_path <> '/auth/login' THEN
+          RAISE EXCEPTION 'Membership auto-resolution is only available on login routes'
+            USING ERRCODE = '42501';
+        END IF;
+
+        RETURN QUERY
+        SELECT
+          tm.id,
+          tm.tenant_id,
+          tm.user_id,
+          tm.role_id,
+          r.code AS role_code,
+          r.name AS role_name,
+          tm.status,
+          tm.created_at,
+          tm.updated_at
+        FROM tenant_memberships tm
+        INNER JOIN roles r
+          ON r.tenant_id = tm.tenant_id
+         AND r.id = tm.role_id
+        WHERE tm.user_id = input_user_id
+          AND tm.status = 'active'
+        ORDER BY tm.created_at DESC;
+      END;
+      $$;
 
       DROP FUNCTION IF EXISTS app.find_platform_owner_by_email_for_auth(text);
       CREATE OR REPLACE FUNCTION app.find_platform_owner_by_email_for_auth(input_email text)

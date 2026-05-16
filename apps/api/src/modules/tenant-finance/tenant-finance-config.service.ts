@@ -71,6 +71,61 @@ export class TenantFinanceConfigService {
     };
   }
 
+  async resolveMpesaConfigByShortcode(shortcode: string): Promise<ResolvedTenantMpesaConfig> {
+    const normalizedShortcode = shortcode.trim();
+
+    if (normalizedShortcode.length === 0) {
+      throw new BadRequestException('MPESA shortcode is required');
+    }
+
+    const mpesaConfig =
+      await this.repository.findActiveMpesaConfigByShortcode(normalizedShortcode);
+
+    if (!mpesaConfig) {
+      throw new NotFoundException(
+        `No active school-owned MPESA configuration was found for shortcode "${normalizedShortcode}"`,
+      );
+    }
+
+    const tenantId = mpesaConfig.tenant_id;
+    const financialAccounts =
+      (await this.repository.findFinancialAccountsForTenant(tenantId)) ?? {
+        tenant_id: tenantId,
+        mpesa_clearing_account_code:
+          this.configService.get<string>('mpesa.ledgerDebitAccountCode') ??
+          '1110-MPESA-CLEARING',
+        fee_control_account_code:
+          this.configService.get<string>('mpesa.ledgerCreditAccountCode') ??
+          '1100-AR-FEES',
+        currency_code: 'KES',
+      };
+    const paymentChannel = await this.repository.findActivePaymentChannelForMpesaConfig(
+      tenantId,
+      mpesaConfig.id,
+    );
+    const isTillChannel = Boolean(mpesaConfig.till_number);
+
+    return {
+      owner: 'tenant',
+      tenant_id: tenantId,
+      mpesa_config_id: mpesaConfig.id,
+      payment_channel_id: paymentChannel?.id ?? null,
+      shortcode: mpesaConfig.shortcode,
+      paybill_number: mpesaConfig.paybill_number,
+      till_number: mpesaConfig.till_number,
+      consumer_key: mpesaConfig.consumer_key,
+      consumer_secret: mpesaConfig.consumer_secret,
+      passkey: mpesaConfig.passkey,
+      initiator_name: mpesaConfig.initiator_name,
+      environment: mpesaConfig.environment,
+      base_url: this.resolveBaseUrl(mpesaConfig.environment),
+      callback_url: mpesaConfig.callback_url,
+      transaction_type: isTillChannel ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline',
+      ledger_debit_account_code: financialAccounts.mpesa_clearing_account_code,
+      ledger_credit_account_code: financialAccounts.fee_control_account_code,
+    };
+  }
+
   resolvePlatformMpesaConfig(tenantId: string): ResolvedTenantMpesaConfig {
     const shortCode = this.requireConfig('mpesa.shortCode');
 

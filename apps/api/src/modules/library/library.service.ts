@@ -3,7 +3,9 @@ import { BadRequestException, Injectable, Optional, UnauthorizedException } from
 import { RequestContextService } from '../../common/request-context/request-context.service';
 import type {
   IssueLibraryCopyDto,
+  IssueLibraryByScanDto,
   ReserveLibraryCopyDto,
+  ReturnLibraryByScanDto,
   ReturnLibraryCopyDto,
 } from './dto/library.dto';
 import { LibraryRepository } from './repositories/library.repository';
@@ -46,6 +48,50 @@ export class LibraryService {
       borrower_id: dto.borrower_id,
       action: 'issue',
       metadata: { due_on: dto.due_on },
+    });
+
+    return issued;
+  }
+
+  async issueByScan(dto: IssueLibraryByScanDto) {
+    const tenantId = this.requireTenantId();
+    const borrower = await this.libraryRepository.findBorrowerByScanCode(
+      tenantId,
+      dto.borrower_scan_code.trim(),
+    );
+
+    if (!borrower) {
+      throw new BadRequestException('Library borrower was not found for the scanned ID');
+    }
+
+    const copy = await this.libraryRepository.findCopyByScanCodeForUpdate(
+      tenantId,
+      dto.book_scan_code.trim(),
+    );
+
+    if (!copy || copy.status !== 'available') {
+      throw new BadRequestException('Scanned library copy is not available for issue');
+    }
+
+    const issued = await this.libraryRepository.issueCopy({
+      copy_id: copy.id,
+      borrower_id: borrower.id,
+      due_on: dto.due_on,
+      tenant_id: tenantId,
+      issued_by_user_id: this.getActorUserId(),
+    });
+
+    await this.libraryRepository.appendLedger({
+      tenant_id: tenantId,
+      copy_id: copy.id,
+      borrower_id: borrower.id,
+      action: 'issue',
+      metadata: {
+        due_on: dto.due_on,
+        source: 'scanner',
+        borrower_scan_code: dto.borrower_scan_code.trim(),
+        book_scan_code: dto.book_scan_code.trim(),
+      },
     });
 
     return issued;
@@ -112,6 +158,66 @@ export class LibraryService {
       metadata: {
         returned_on: dto.returned_on,
         overdue_fine_minor: fineAmount,
+      },
+    });
+
+    return returned;
+  }
+
+  async returnByScan(dto: ReturnLibraryByScanDto) {
+    const tenantId = this.requireTenantId();
+    const copy = await this.libraryRepository.findCopyByScanCodeForUpdate(
+      tenantId,
+      dto.book_scan_code.trim(),
+    );
+
+    if (!copy) {
+      throw new BadRequestException('Library copy was not found for the scanned code');
+    }
+
+    const loan = await this.libraryRepository.findActiveLoanByCopyId(tenantId, copy.id);
+
+    if (!loan) {
+      throw new BadRequestException('Scanned library copy does not have an active loan');
+    }
+
+    const returned = await this.libraryRepository.returnCopy({
+      loan_id: loan.id,
+      returned_on: dto.returned_on,
+      daily_fine_minor: dto.daily_fine_minor,
+      tenant_id: tenantId,
+      copy_id: loan.copy_id,
+    });
+    const fineAmount = this.calculateFineMinor(loan.due_on, dto.returned_on, dto.daily_fine_minor ?? 0);
+
+    if (fineAmount > 0) {
+      const fine = await this.libraryRepository.createFine({
+        tenant_id: tenantId,
+        borrower_id: loan.borrower_id,
+        copy_id: loan.copy_id,
+        reason: 'overdue',
+        amount_minor: fineAmount,
+      });
+
+      await this.billingService?.createLibraryFineCharge?.({
+        tenantId,
+        borrowerId: loan.borrower_id,
+        fineId: fine.id,
+        amountMinor: fineAmount,
+        reason: 'overdue',
+      });
+    }
+
+    await this.libraryRepository.appendLedger({
+      tenant_id: tenantId,
+      copy_id: loan.copy_id,
+      borrower_id: loan.borrower_id,
+      action: 'return',
+      metadata: {
+        returned_on: dto.returned_on,
+        overdue_fine_minor: fineAmount,
+        source: 'scanner',
+        book_scan_code: dto.book_scan_code.trim(),
       },
     });
 

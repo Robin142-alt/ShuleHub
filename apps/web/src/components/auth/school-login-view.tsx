@@ -27,7 +27,7 @@ const staffLoginSchema = z.object({
     .string()
     .trim()
     .email("Enter a valid work email address."),
-  password: z.string().min(8, "Enter your school workspace password."),
+  password: z.string().min(8, "Enter your password."),
 });
 
 type StaffLoginForm = z.infer<typeof staffLoginSchema>;
@@ -61,20 +61,20 @@ export function SchoolLoginView({
           tone: "error" as const,
           title: "Workspace not recognized",
           description:
-            "This school workspace could not be verified from the current link. Confirm the school address with your administrator.",
+            "This school address could not be verified. Use your official ShuleHub login page or contact your administrator.",
         }
       : resolution.status === "default"
         ? {
             tone: "warning" as const,
-            title: "Workspace required",
+            title: "School access pending",
             description:
-              "Use the school workspace address or invitation link issued by your administrator.",
+              "Use your email and password. ShuleHub will open the school linked to your account.",
           }
         : {
             tone: "info" as const,
-            title: "Tenant-isolated access",
+            title: "School-isolated access",
             description:
-              "Your session opens only this school's data, branding, modules, and role permissions.",
+              "Your session opens only your school's data, branding, modules, and role permissions.",
           };
 
   const submit = handleSubmit(async (values) => {
@@ -132,7 +132,7 @@ export function SchoolLoginView({
 
         <div className="space-y-4">
           <AuthField
-            label="Work email address"
+            label="Email address"
             autoComplete="email"
             {...register("identifier")}
             error={errors.identifier?.message}
@@ -181,7 +181,7 @@ export function SchoolLoginView({
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-600" />
             <p className="text-sm leading-6 text-slate-600">
-              Need account help? Contact your school administrator or use the official support channel for this workspace.
+              Need account help? Contact your school administrator or use the official support channel for your school.
             </p>
           </div>
         </div>

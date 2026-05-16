@@ -9,6 +9,7 @@ export type PaymentIntentStatus =
   | 'expired';
 
 export type MpesaTransactionStatus = 'succeeded' | 'failed';
+export type MpesaC2bPaymentStatus = 'pending_review' | 'matched' | 'rejected';
 export type PaymentOwner = 'tenant' | 'platform';
 export type CallbackLogStatus =
   | 'received'
@@ -123,6 +124,53 @@ export interface ParsedMpesaCallback {
   transaction_occurred_at: string | null;
   phone_number: string | null;
   metadata: Record<string, unknown>;
+}
+
+export interface MpesaC2bPayload {
+  TransactionType?: string | number | null;
+  TransID?: string | number | null;
+  TransTime?: string | number | null;
+  TransAmount?: string | number | null;
+  BusinessShortCode?: string | number | null;
+  BillRefNumber?: string | number | null;
+  InvoiceNumber?: string | number | null;
+  OrgAccountBalance?: string | number | null;
+  ThirdPartyTransID?: string | number | null;
+  MSISDN?: string | number | null;
+  FirstName?: string | number | null;
+  MiddleName?: string | number | null;
+  LastName?: string | number | null;
+  [key: string]: unknown;
+}
+
+export interface ParsedMpesaC2bPayment {
+  transaction_type: string;
+  trans_id: string;
+  transaction_occurred_at: string;
+  amount_minor: string;
+  business_short_code: string;
+  bill_ref_number: string | null;
+  invoice_number: string | null;
+  org_account_balance: string | null;
+  third_party_trans_id: string | null;
+  phone_number: string | null;
+  payer_name: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface MpesaC2bGatewayResponse {
+  ResultCode: number | string;
+  ResultDesc: string;
+}
+
+export interface MpesaC2bConfirmationResult {
+  accepted: boolean;
+  duplicate: boolean;
+  status: MpesaC2bPaymentStatus;
+  tenant_id: string;
+  mpesa_c2b_payment_id: string;
+  manual_fee_payment_id: string | null;
+  ledger_transaction_id: string | null;
 }
 
 export interface CallbackVerificationResult {

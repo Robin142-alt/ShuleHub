@@ -146,6 +146,39 @@ export class BillingSchemaService implements OnModuleInit {
         CONSTRAINT uq_billing_notifications_tenant_key UNIQUE (tenant_id, notification_key)
       );
 
+      CREATE TABLE IF NOT EXISTS fee_structures (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        name text NOT NULL,
+        academic_year text NOT NULL,
+        term text NOT NULL,
+        grade_level text NOT NULL,
+        class_name text,
+        currency_code char(3) NOT NULL DEFAULT 'KES',
+        status text NOT NULL DEFAULT 'active',
+        due_days integer NOT NULL DEFAULT 14,
+        line_items jsonb NOT NULL DEFAULT '[]'::jsonb,
+        total_amount_minor bigint NOT NULL,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_by_user_id uuid,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT ck_fee_structures_tenant_id_non_global CHECK (tenant_id <> 'global'),
+        CONSTRAINT ck_fee_structures_name_not_blank CHECK (btrim(name) <> ''),
+        CONSTRAINT ck_fee_structures_academic_year_not_blank CHECK (btrim(academic_year) <> ''),
+        CONSTRAINT ck_fee_structures_term_not_blank CHECK (btrim(term) <> ''),
+        CONSTRAINT ck_fee_structures_grade_level_not_blank CHECK (btrim(grade_level) <> ''),
+        CONSTRAINT ck_fee_structures_currency CHECK (currency_code ~ '^[A-Z]{3}$'),
+        CONSTRAINT ck_fee_structures_status CHECK (status IN ('draft', 'active', 'archived')),
+        CONSTRAINT ck_fee_structures_due_days CHECK (due_days >= 0 AND due_days <= 365),
+        CONSTRAINT ck_fee_structures_line_items CHECK (
+          jsonb_typeof(line_items) = 'array'
+          AND jsonb_array_length(line_items) > 0
+        ),
+        CONSTRAINT ck_fee_structures_total CHECK (total_amount_minor > 0),
+        CONSTRAINT uq_fee_structures_tenant_id_id UNIQUE (tenant_id, id)
+      );
+
       CREATE TABLE IF NOT EXISTS student_fee_payment_allocations (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         tenant_id text NOT NULL,
@@ -182,6 +215,72 @@ export class BillingSchemaService implements OnModuleInit {
         CONSTRAINT ck_student_fee_credits_remaining CHECK (remaining_amount_minor >= 0 AND remaining_amount_minor <= amount_minor)
       );
 
+      CREATE TABLE IF NOT EXISTS manual_fee_payments (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        idempotency_key text NOT NULL,
+        receipt_number text NOT NULL,
+        payment_method text NOT NULL,
+        status text NOT NULL DEFAULT 'received',
+        student_id uuid,
+        invoice_id uuid,
+        amount_minor bigint NOT NULL,
+        currency_code char(3) NOT NULL DEFAULT 'KES',
+        payer_name text,
+        received_at timestamptz NOT NULL DEFAULT NOW(),
+        deposited_at timestamptz,
+        cleared_at timestamptz,
+        bounced_at timestamptz,
+        reversed_at timestamptz,
+        cheque_number text,
+        drawer_bank text,
+        deposit_reference text,
+        external_reference text,
+        asset_account_code text NOT NULL DEFAULT '1120-BANK-CLEARING',
+        fee_control_account_code text NOT NULL DEFAULT '1100-AR-FEES',
+        ledger_transaction_id uuid,
+        reversal_ledger_transaction_id uuid,
+        notes text,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_by_user_id uuid,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT ck_manual_fee_payments_tenant_id_non_global CHECK (tenant_id <> 'global'),
+        CONSTRAINT ck_manual_fee_payments_idempotency_key_not_blank CHECK (btrim(idempotency_key) <> ''),
+        CONSTRAINT ck_manual_fee_payments_receipt_number_not_blank CHECK (btrim(receipt_number) <> ''),
+        CONSTRAINT ck_manual_fee_payments_method CHECK (payment_method IN ('cash', 'cheque', 'bank_deposit', 'eft', 'mpesa_c2b')),
+        CONSTRAINT ck_manual_fee_payments_status CHECK (status IN ('received', 'deposited', 'cleared', 'bounced', 'reversed')),
+        CONSTRAINT ck_manual_fee_payments_amount CHECK (amount_minor > 0),
+        CONSTRAINT ck_manual_fee_payments_currency CHECK (currency_code ~ '^[A-Z]{3}$'),
+        CONSTRAINT ck_manual_fee_payments_target CHECK (student_id IS NOT NULL OR invoice_id IS NOT NULL),
+        CONSTRAINT ck_manual_fee_payments_cheque_fields CHECK (
+          payment_method <> 'cheque'
+          OR (cheque_number IS NOT NULL AND btrim(cheque_number) <> '' AND drawer_bank IS NOT NULL AND btrim(drawer_bank) <> '')
+        ),
+        CONSTRAINT uq_manual_fee_payments_tenant_id_id UNIQUE (tenant_id, id),
+        CONSTRAINT uq_manual_fee_payments_idempotency UNIQUE (tenant_id, idempotency_key),
+        CONSTRAINT uq_manual_fee_payments_receipt_number UNIQUE (tenant_id, receipt_number)
+      );
+
+      CREATE TABLE IF NOT EXISTS manual_fee_payment_allocations (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id text NOT NULL,
+        manual_payment_id uuid NOT NULL,
+        invoice_id uuid,
+        student_id uuid,
+        allocation_type text NOT NULL,
+        amount_minor bigint NOT NULL,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT ck_manual_fee_payment_allocations_tenant_id_non_global CHECK (tenant_id <> 'global'),
+        CONSTRAINT ck_manual_fee_payment_allocations_type CHECK (allocation_type IN ('invoice', 'credit')),
+        CONSTRAINT ck_manual_fee_payment_allocations_amount CHECK (amount_minor > 0),
+        CONSTRAINT ck_manual_fee_payment_allocations_invoice_target CHECK (
+          allocation_type <> 'invoice' OR invoice_id IS NOT NULL
+        ),
+        CONSTRAINT uq_manual_fee_payment_allocations_tenant_id_id UNIQUE (tenant_id, id)
+      );
+
       DO $$
       BEGIN
         ALTER TABLE subscriptions
@@ -198,6 +297,13 @@ export class BillingSchemaService implements OnModuleInit {
         ALTER TABLE subscriptions
           ADD CONSTRAINT ck_subscriptions_status CHECK (
             status IN ('trialing', 'active', 'past_due', 'restricted', 'suspended', 'canceled', 'expired')
+          );
+
+        ALTER TABLE manual_fee_payments
+          DROP CONSTRAINT IF EXISTS ck_manual_fee_payments_method;
+        ALTER TABLE manual_fee_payments
+          ADD CONSTRAINT ck_manual_fee_payments_method CHECK (
+            payment_method IN ('cash', 'cheque', 'bank_deposit', 'eft', 'mpesa_c2b')
           );
 
         IF NOT EXISTS (
@@ -260,6 +366,68 @@ export class BillingSchemaService implements OnModuleInit {
             REFERENCES invoices (tenant_id, id)
             ON DELETE RESTRICT;
         END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'fk_manual_fee_payments_invoice'
+        ) THEN
+          ALTER TABLE manual_fee_payments
+          ADD CONSTRAINT fk_manual_fee_payments_invoice
+            FOREIGN KEY (tenant_id, invoice_id)
+            REFERENCES invoices (tenant_id, id)
+            ON DELETE SET NULL;
+        END IF;
+
+        IF to_regclass('public.transactions') IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'fk_manual_fee_payments_ledger_transaction'
+          ) THEN
+          ALTER TABLE manual_fee_payments
+          ADD CONSTRAINT fk_manual_fee_payments_ledger_transaction
+            FOREIGN KEY (tenant_id, ledger_transaction_id)
+            REFERENCES transactions (tenant_id, id)
+            ON DELETE SET NULL;
+        END IF;
+
+        IF to_regclass('public.transactions') IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'fk_manual_fee_payments_reversal_ledger_transaction'
+          ) THEN
+          ALTER TABLE manual_fee_payments
+          ADD CONSTRAINT fk_manual_fee_payments_reversal_ledger_transaction
+            FOREIGN KEY (tenant_id, reversal_ledger_transaction_id)
+            REFERENCES transactions (tenant_id, id)
+            ON DELETE SET NULL;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'fk_manual_fee_payment_allocations_payment'
+        ) THEN
+          ALTER TABLE manual_fee_payment_allocations
+          ADD CONSTRAINT fk_manual_fee_payment_allocations_payment
+            FOREIGN KEY (tenant_id, manual_payment_id)
+            REFERENCES manual_fee_payments (tenant_id, id)
+            ON DELETE RESTRICT;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'fk_manual_fee_payment_allocations_invoice'
+        ) THEN
+          ALTER TABLE manual_fee_payment_allocations
+          ADD CONSTRAINT fk_manual_fee_payment_allocations_invoice
+            FOREIGN KEY (tenant_id, invoice_id)
+            REFERENCES invoices (tenant_id, id)
+            ON DELETE RESTRICT;
+        END IF;
       END;
       $$;
 
@@ -280,12 +448,30 @@ export class BillingSchemaService implements OnModuleInit {
         ON billing_notifications (tenant_id, subscription_id, scheduled_for DESC);
       CREATE INDEX IF NOT EXISTS ix_billing_notifications_status_channel
         ON billing_notifications (tenant_id, status, channel, scheduled_for DESC);
+      CREATE INDEX IF NOT EXISTS ix_fee_structures_scope
+        ON fee_structures (tenant_id, academic_year DESC, term, grade_level, class_name, status);
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_fee_structures_active_scope
+        ON fee_structures (tenant_id, academic_year, term, grade_level, (COALESCE(class_name, '')))
+        WHERE status = 'active';
       CREATE INDEX IF NOT EXISTS ix_invoices_student_fee_allocation
         ON invoices (tenant_id, (metadata ->> 'student_id'), status, due_at ASC);
       CREATE INDEX IF NOT EXISTS ix_student_fee_payment_allocations_student
         ON student_fee_payment_allocations (tenant_id, student_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS ix_student_fee_credits_student_remaining
         ON student_fee_credits (tenant_id, student_id, remaining_amount_minor DESC);
+      CREATE INDEX IF NOT EXISTS ix_manual_fee_payments_status_received
+        ON manual_fee_payments (tenant_id, status, received_at DESC);
+      CREATE INDEX IF NOT EXISTS ix_manual_fee_payments_student
+        ON manual_fee_payments (tenant_id, student_id, received_at DESC)
+        WHERE student_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS ix_manual_fee_payments_invoice
+        ON manual_fee_payments (tenant_id, invoice_id, received_at DESC)
+        WHERE invoice_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS ix_manual_fee_payment_allocations_payment
+        ON manual_fee_payment_allocations (tenant_id, manual_payment_id, created_at ASC);
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_manual_fee_payment_allocations_invoice_once
+        ON manual_fee_payment_allocations (tenant_id, manual_payment_id, invoice_id, allocation_type)
+        WHERE invoice_id IS NOT NULL;
 
       ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
       ALTER TABLE subscriptions FORCE ROW LEVEL SECURITY;
@@ -295,10 +481,16 @@ export class BillingSchemaService implements OnModuleInit {
       ALTER TABLE usage_records FORCE ROW LEVEL SECURITY;
       ALTER TABLE billing_notifications ENABLE ROW LEVEL SECURITY;
       ALTER TABLE billing_notifications FORCE ROW LEVEL SECURITY;
+      ALTER TABLE fee_structures ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE fee_structures FORCE ROW LEVEL SECURITY;
       ALTER TABLE student_fee_payment_allocations ENABLE ROW LEVEL SECURITY;
       ALTER TABLE student_fee_payment_allocations FORCE ROW LEVEL SECURITY;
       ALTER TABLE student_fee_credits ENABLE ROW LEVEL SECURITY;
       ALTER TABLE student_fee_credits FORCE ROW LEVEL SECURITY;
+      ALTER TABLE manual_fee_payments ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE manual_fee_payments FORCE ROW LEVEL SECURITY;
+      ALTER TABLE manual_fee_payment_allocations ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE manual_fee_payment_allocations FORCE ROW LEVEL SECURITY;
 
       DROP POLICY IF EXISTS subscriptions_rls_policy ON subscriptions;
       CREATE POLICY subscriptions_rls_policy ON subscriptions
@@ -334,6 +526,12 @@ export class BillingSchemaService implements OnModuleInit {
       USING (tenant_id = current_setting('app.tenant_id', true))
       WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
+      DROP POLICY IF EXISTS fee_structures_rls_policy ON fee_structures;
+      CREATE POLICY fee_structures_rls_policy ON fee_structures
+      FOR ALL
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
       DROP POLICY IF EXISTS student_fee_payment_allocations_rls_policy ON student_fee_payment_allocations;
       CREATE POLICY student_fee_payment_allocations_rls_policy ON student_fee_payment_allocations
       FOR ALL
@@ -342,6 +540,18 @@ export class BillingSchemaService implements OnModuleInit {
 
       DROP POLICY IF EXISTS student_fee_credits_rls_policy ON student_fee_credits;
       CREATE POLICY student_fee_credits_rls_policy ON student_fee_credits
+      FOR ALL
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
+      DROP POLICY IF EXISTS manual_fee_payments_rls_policy ON manual_fee_payments;
+      CREATE POLICY manual_fee_payments_rls_policy ON manual_fee_payments
+      FOR ALL
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+
+      DROP POLICY IF EXISTS manual_fee_payment_allocations_rls_policy ON manual_fee_payment_allocations;
+      CREATE POLICY manual_fee_payment_allocations_rls_policy ON manual_fee_payment_allocations
       FOR ALL
       USING (tenant_id = current_setting('app.tenant_id', true))
       WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
@@ -371,6 +581,12 @@ export class BillingSchemaService implements OnModuleInit {
       FOR EACH ROW
       EXECUTE FUNCTION set_updated_at();
 
+      DROP TRIGGER IF EXISTS trg_fee_structures_set_updated_at ON fee_structures;
+      CREATE TRIGGER trg_fee_structures_set_updated_at
+      BEFORE UPDATE ON fee_structures
+      FOR EACH ROW
+      EXECUTE FUNCTION set_updated_at();
+
       DROP TRIGGER IF EXISTS trg_student_fee_allocations_prevent_update ON student_fee_payment_allocations;
       CREATE TRIGGER trg_student_fee_allocations_prevent_update
       BEFORE UPDATE OR DELETE ON student_fee_payment_allocations
@@ -382,6 +598,18 @@ export class BillingSchemaService implements OnModuleInit {
       BEFORE UPDATE ON student_fee_credits
       FOR EACH ROW
       EXECUTE FUNCTION set_updated_at();
+
+      DROP TRIGGER IF EXISTS trg_manual_fee_payments_set_updated_at ON manual_fee_payments;
+      CREATE TRIGGER trg_manual_fee_payments_set_updated_at
+      BEFORE UPDATE ON manual_fee_payments
+      FOR EACH ROW
+      EXECUTE FUNCTION set_updated_at();
+
+      DROP TRIGGER IF EXISTS trg_manual_fee_allocations_prevent_update ON manual_fee_payment_allocations;
+      CREATE TRIGGER trg_manual_fee_allocations_prevent_update
+      BEFORE UPDATE OR DELETE ON manual_fee_payment_allocations
+      FOR EACH ROW
+      EXECUTE FUNCTION app.prevent_append_only_mutation();
     `);
 
     this.logger.log('Billing schema, lifecycle, invoices, usage metering, and notifications verified');

@@ -512,6 +512,84 @@ export class InvoicesRepository {
     }));
   }
 
+  async lockManualFeeInvoiceForAllocation(
+    tenantId: string,
+    invoiceId: string,
+  ): Promise<StudentFeeInvoiceForAllocation | null> {
+    const result = await this.databaseService.query<StudentFeeInvoiceForAllocation>(
+      `
+        SELECT
+          id,
+          tenant_id,
+          status,
+          total_amount_minor::text,
+          amount_paid_minor::text,
+          metadata
+        FROM invoices
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+          AND status IN ('open', 'pending_payment')
+          AND amount_paid_minor < total_amount_minor
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [tenantId, invoiceId],
+    );
+
+    const row = result.rows[0];
+
+    return row
+      ? {
+          ...row,
+          metadata: row.metadata ?? {},
+        }
+      : null;
+  }
+
+  async findManualFeeInvoiceTargetByReference(
+    tenantId: string,
+    reference: string,
+  ): Promise<StudentFeeInvoiceForAllocation | null> {
+    const trimmedReference = reference.trim();
+    const result = await this.databaseService.query<StudentFeeInvoiceForAllocation>(
+      `
+        SELECT
+          id,
+          tenant_id,
+          status,
+          total_amount_minor::text,
+          amount_paid_minor::text,
+          metadata
+        FROM invoices
+        WHERE tenant_id = $1
+          AND (
+            invoice_number = $2
+            OR metadata ->> 'external_reference' = $2
+            OR metadata ->> 'account_reference' = $2
+            OR ($3::uuid IS NOT NULL AND id = $3::uuid)
+          )
+          AND status IN ('open', 'pending_payment')
+          AND amount_paid_minor < total_amount_minor
+        ORDER BY due_at ASC, issued_at ASC, created_at ASC
+        LIMIT 1
+      `,
+      [
+        tenantId,
+        trimmedReference,
+        this.isUuid(trimmedReference) ? trimmedReference : null,
+      ],
+    );
+
+    const row = result.rows[0];
+
+    return row
+      ? {
+          ...row,
+          metadata: row.metadata ?? {},
+        }
+      : null;
+  }
+
   async applyStudentFeeInvoicePayment(input: {
     tenantId: string;
     invoiceId: string;
@@ -560,6 +638,110 @@ export class InvoicesRepository {
         input.nextAmountPaidMinor,
         input.nextStatus,
       ],
+    );
+
+    return this.mapRow(result.rows[0]);
+  }
+
+  async applyManualFeeInvoicePayment(input: {
+    tenantId: string;
+    invoiceId: string;
+    amountMinor: string;
+    nextAmountPaidMinor: string;
+    nextStatus: 'pending_payment' | 'paid';
+  }): Promise<InvoiceEntity> {
+    const result = await this.databaseService.query<InvoiceRow>(
+      `
+        UPDATE invoices
+        SET
+          amount_paid_minor = $3::bigint,
+          status = $4,
+          paid_at = CASE WHEN $4 = 'paid' THEN NOW() ELSE paid_at END,
+          metadata = metadata || jsonb_build_object(
+            'last_manual_payment_amount_minor', $5::text
+          ),
+          updated_at = NOW()
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+        RETURNING
+          id,
+          tenant_id,
+          subscription_id,
+          invoice_number,
+          status,
+          currency_code,
+          description,
+          subtotal_amount_minor::text,
+          tax_amount_minor::text,
+          total_amount_minor::text,
+          amount_paid_minor::text,
+          billing_phone_number,
+          payment_intent_id,
+          issued_at,
+          due_at,
+          paid_at,
+          voided_at,
+          metadata,
+          created_at,
+          updated_at
+      `,
+      [
+        input.tenantId,
+        input.invoiceId,
+        input.nextAmountPaidMinor,
+        input.nextStatus,
+        input.amountMinor,
+      ],
+    );
+
+    return this.mapRow(result.rows[0]);
+  }
+
+  async reverseManualFeeInvoicePayment(input: {
+    tenantId: string;
+    invoiceId: string;
+    amountMinor: string;
+    nextStatus: 'open' | 'pending_payment';
+  }): Promise<InvoiceEntity> {
+    const result = await this.databaseService.query<InvoiceRow>(
+      `
+        UPDATE invoices
+        SET
+          amount_paid_minor = GREATEST(amount_paid_minor - $3::bigint, 0),
+          status = CASE
+            WHEN GREATEST(amount_paid_minor - $3::bigint, 0) = 0 THEN $4
+            ELSE 'pending_payment'
+          END,
+          paid_at = NULL,
+          metadata = metadata || jsonb_build_object(
+            'last_manual_reversal_amount_minor', $3::text
+          ),
+          updated_at = NOW()
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+        RETURNING
+          id,
+          tenant_id,
+          subscription_id,
+          invoice_number,
+          status,
+          currency_code,
+          description,
+          subtotal_amount_minor::text,
+          tax_amount_minor::text,
+          total_amount_minor::text,
+          amount_paid_minor::text,
+          billing_phone_number,
+          payment_intent_id,
+          issued_at,
+          due_at,
+          paid_at,
+          voided_at,
+          metadata,
+          created_at,
+          updated_at
+      `,
+      [input.tenantId, input.invoiceId, input.amountMinor, input.nextStatus],
     );
 
     return this.mapRow(result.rows[0]);
@@ -666,5 +848,11 @@ export class InvoicesRepository {
 
   private billingPhoneAad(tenantId: string): string {
     return `invoices:${tenantId}:billing_phone_number`;
+  }
+
+  private isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    );
   }
 }
