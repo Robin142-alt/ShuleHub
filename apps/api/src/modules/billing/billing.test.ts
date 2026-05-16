@@ -6,6 +6,7 @@ import { RequestContextService } from '../../common/request-context/request-cont
 import { BillingLifecycleGuard } from '../../guards/billing-lifecycle.guard';
 import { BillingLifecycleService } from './billing-lifecycle.service';
 import { BillingMpesaService } from './billing-mpesa.service';
+import { BillingSchemaService } from './billing-schema.service';
 import { BillingService } from './billing.service';
 import { InvoiceEntity } from './entities/invoice.entity';
 import { ManualFeePaymentEntity } from './entities/manual-fee-payment.entity';
@@ -73,6 +74,30 @@ const makeInvoice = (overrides: Partial<InvoiceEntity> = {}): InvoiceEntity =>
     created_at: overrides.created_at ?? new Date('2026-05-15T07:00:00.000Z'),
     updated_at: overrides.updated_at ?? new Date('2026-05-15T07:00:00.000Z'),
   });
+
+test('BillingSchemaService upgrades legacy fee structure columns before creating indexes', async () => {
+  let bootstrapSql = '';
+  const service = new BillingSchemaService({
+    runSchemaBootstrap: async (sql: string): Promise<void> => {
+      bootstrapSql = sql;
+    },
+  } as never);
+
+  await service.onModuleInit();
+
+  const addAcademicYearColumnIndex = bootstrapSql.indexOf(
+    'ADD COLUMN IF NOT EXISTS academic_year text',
+  );
+  const createFeeStructureScopeIndex = bootstrapSql.indexOf(
+    'CREATE INDEX IF NOT EXISTS ix_fee_structures_scope',
+  );
+
+  assert.notEqual(addAcademicYearColumnIndex, -1);
+  assert.notEqual(createFeeStructureScopeIndex, -1);
+  assert.ok(addAcademicYearColumnIndex < createFeeStructureScopeIndex);
+  assert.match(bootstrapSql, /ALTER TABLE fee_structures\s+NO FORCE ROW LEVEL SECURITY;/);
+  assert.match(bootstrapSql, /ALTER TABLE fee_structures\s+ALTER COLUMN academic_year SET NOT NULL;/);
+});
 
 test('BillingService provisions a plan-backed subscription', async () => {
   const requestContext = new RequestContextService();

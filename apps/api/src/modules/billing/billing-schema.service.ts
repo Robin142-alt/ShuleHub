@@ -428,6 +428,94 @@ export class BillingSchemaService implements OnModuleInit {
             REFERENCES invoices (tenant_id, id)
             ON DELETE RESTRICT;
         END IF;
+
+        IF to_regclass('public.fee_structures') IS NOT NULL THEN
+          ALTER TABLE fee_structures NO FORCE ROW LEVEL SECURITY;
+          ALTER TABLE fee_structures DISABLE ROW LEVEL SECURITY;
+
+          ALTER TABLE fee_structures
+            ADD COLUMN IF NOT EXISTS academic_year text;
+          ALTER TABLE fee_structures
+            ADD COLUMN IF NOT EXISTS term text;
+          ALTER TABLE fee_structures
+            ADD COLUMN IF NOT EXISTS grade_level text;
+          ALTER TABLE fee_structures
+            ADD COLUMN IF NOT EXISTS class_name text;
+          ALTER TABLE fee_structures
+            ADD COLUMN IF NOT EXISTS status text DEFAULT 'active';
+          ALTER TABLE fee_structures
+            ADD COLUMN IF NOT EXISTS due_days integer DEFAULT 14;
+          ALTER TABLE fee_structures
+            ADD COLUMN IF NOT EXISTS line_items jsonb DEFAULT '[]'::jsonb;
+          ALTER TABLE fee_structures
+            ADD COLUMN IF NOT EXISTS created_by_user_id uuid;
+
+          UPDATE fee_structures
+          SET academic_year = COALESCE(
+            NULLIF(btrim(academic_year), ''),
+            metadata ->> 'academic_year',
+            EXTRACT(YEAR FROM NOW())::text
+          )
+          WHERE academic_year IS NULL OR btrim(academic_year) = '';
+
+          UPDATE fee_structures
+          SET term = COALESCE(
+            NULLIF(btrim(term), ''),
+            metadata ->> 'term',
+            metadata ->> 'term_name',
+            'Term 1'
+          )
+          WHERE term IS NULL OR btrim(term) = '';
+
+          UPDATE fee_structures
+          SET grade_level = COALESCE(
+            NULLIF(btrim(grade_level), ''),
+            metadata ->> 'grade_level',
+            metadata ->> 'class_name',
+            'Unassigned'
+          )
+          WHERE grade_level IS NULL OR btrim(grade_level) = '';
+
+          UPDATE fee_structures
+          SET status = COALESCE(NULLIF(btrim(status), ''), 'active')
+          WHERE status IS NULL OR btrim(status) = '';
+
+          UPDATE fee_structures
+          SET due_days = COALESCE(due_days, 14)
+          WHERE due_days IS NULL;
+
+          UPDATE fee_structures
+          SET line_items = jsonb_build_array(
+            jsonb_build_object(
+              'name',
+              'Fees',
+              'amount_minor',
+              GREATEST(COALESCE(total_amount_minor, 0), 1)
+            )
+          )
+          WHERE line_items IS NULL
+             OR jsonb_typeof(line_items) <> 'array'
+             OR jsonb_array_length(line_items) = 0;
+
+          ALTER TABLE fee_structures
+            ALTER COLUMN academic_year SET NOT NULL;
+          ALTER TABLE fee_structures
+            ALTER COLUMN term SET NOT NULL;
+          ALTER TABLE fee_structures
+            ALTER COLUMN grade_level SET NOT NULL;
+          ALTER TABLE fee_structures
+            ALTER COLUMN status SET DEFAULT 'active';
+          ALTER TABLE fee_structures
+            ALTER COLUMN status SET NOT NULL;
+          ALTER TABLE fee_structures
+            ALTER COLUMN due_days SET DEFAULT 14;
+          ALTER TABLE fee_structures
+            ALTER COLUMN due_days SET NOT NULL;
+          ALTER TABLE fee_structures
+            ALTER COLUMN line_items SET DEFAULT '[]'::jsonb;
+          ALTER TABLE fee_structures
+            ALTER COLUMN line_items SET NOT NULL;
+        END IF;
       END;
       $$;
 
