@@ -9,7 +9,7 @@ Logger.overrideLogger(false);
 
 const originalFetch = globalThis.fetch;
 
-test('SupportNotificationDeliveryService reports provider readiness without exposing secrets', () => {
+test('SupportNotificationDeliveryService reports provider readiness without exposing secrets', async () => {
   const service = new SupportNotificationDeliveryService(
     {
       get: (key: string) => {
@@ -60,7 +60,7 @@ test('SupportNotificationDeliveryService reports provider readiness without expo
     {} as never,
   );
 
-  const status = service.getProviderStatus();
+  const status = await service.getProviderStatus();
 
   assert.deepEqual(status, {
     status: 'configured',
@@ -73,10 +73,13 @@ test('SupportNotificationDeliveryService reports provider readiness without expo
     },
     sms: {
       status: 'configured',
+      dispatch_provider_configured: true,
+      dispatch_provider_status: 'configured',
       webhook_url_configured: true,
       webhook_token_configured: true,
       recipients_configured: true,
       recipient_count: 1,
+      missing: [],
     },
     retry: {
       worker_enabled: true,
@@ -89,6 +92,101 @@ test('SupportNotificationDeliveryService reports provider readiness without expo
   assert.equal(JSON.stringify(status).includes('sms-secret-token'), false);
   assert.equal(JSON.stringify(status).includes('sms-gateway.test'), false);
   assert.equal(JSON.stringify(status).includes('support@shulehub.test'), false);
+});
+
+test('SupportNotificationDeliveryService reports precise missing provider status for dashboard-managed SMS', async () => {
+  const service = new SupportNotificationDeliveryService(
+    {
+      get: (key: string) => {
+        if (key === 'support.notificationEmails') {
+          return ['support@shulehub.test'];
+        }
+
+        if (key === 'support.notificationSmsRecipients') {
+          return ['+254700000001'];
+        }
+
+        return undefined;
+      },
+    } as never,
+    {
+      getTransactionalEmailStatus: () => ({
+        provider: 'resend',
+        status: 'configured',
+        api_key_configured: true,
+        sender_configured: true,
+        public_app_url_configured: true,
+      }),
+    } as never,
+    {} as never,
+    undefined,
+    {
+      getReadiness: async () => ({
+        status: 'missing_provider',
+        provider: null,
+        missing: ['default_provider'],
+      }),
+    } as never,
+  );
+
+  const status = await service.getProviderStatus();
+
+  assert.equal(status.status, 'missing_provider');
+  assert.equal(status.sms.status, 'missing_provider');
+  assert.equal(status.sms.dispatch_provider_configured, false);
+  assert.deepEqual(status.sms.missing, ['default_provider']);
+  assert.equal(JSON.stringify(status).includes('+254700000001'), false);
+});
+
+test('SupportNotificationDeliveryService sends support SMS notifications through platform dispatch when available', async () => {
+  const dispatched: Array<Record<string, unknown>> = [];
+  const deliveryUpdates: Array<{ id: string; status: string }> = [];
+  const service = new SupportNotificationDeliveryService(
+    { get: () => undefined } as never,
+    {} as never,
+    {
+      markNotificationDelivery: async (id: string, status: string) => {
+        deliveryUpdates.push({ id, status });
+      },
+    } as never,
+    undefined,
+    {
+      send: async (input: Record<string, unknown>) => {
+        dispatched.push(input);
+        return {
+          status: 'sent',
+          provider_id: 'provider-1',
+          provider_code: 'africas_talking',
+          provider_message_id: 'message-1',
+        };
+      },
+    } as never,
+  );
+
+  await service.deliverCreatedNotifications([
+    {
+      id: 'notification-platform-sms-1',
+      tenant_id: 'tenant-a',
+      ticket_id: 'ticket-1',
+      recipient_user_id: null,
+      recipient_type: 'support',
+      channel: 'sms',
+      title: 'Critical support ticket raised: SUP-2026-000151',
+      body: 'School Alpha reported admission import failures.',
+      delivery_status: 'queued',
+      metadata: {
+        recipient_phone: '+254700000003',
+        ticket_number: 'SUP-2026-000151',
+      },
+      created_at: '2026-05-12T09:00:00.000Z',
+    },
+  ]);
+
+  assert.equal(dispatched[0]?.to, '+254700000003');
+  assert.equal(dispatched[0]?.message, 'School Alpha reported admission import failures.');
+  assert.equal(dispatched[0]?.source, 'support_notification');
+  assert.equal(dispatched[0]?.tenant_id, 'tenant-a');
+  assert.deepEqual(deliveryUpdates, [{ id: 'notification-platform-sms-1', status: 'sent' }]);
 });
 
 test('SupportNotificationDeliveryService sends support email notifications to configured recipients', async () => {

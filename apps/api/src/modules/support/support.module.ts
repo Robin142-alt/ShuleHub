@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { IntegrationsModule } from '../integrations/integrations.module';
 import { SupportRepository } from './repositories/support.repository';
 import { SupportAttachmentStorageService } from './storage/support-attachment-storage.service';
 import { SupportController } from './support.controller';
@@ -10,6 +11,7 @@ import { SupportSlaMonitoringService } from './support-sla-monitoring.service';
 import { SupportStatusSubscriptionService } from './support-status-subscription.service';
 
 @Module({
+  imports: [IntegrationsModule],
   controllers: [SupportController],
   providers: [
     SupportSchemaService,

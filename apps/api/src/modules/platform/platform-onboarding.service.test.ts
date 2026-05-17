@@ -75,9 +75,11 @@ test('PlatformOnboardingService creates a school and sends an invite without exp
   const tokenInsert = queries.find((query) => query.text.includes('INSERT INTO auth_action_tokens'));
   assert.match(String(tokenInsert?.values[3]), /^[a-f0-9]{64}$/);
   assert.equal(String(tokenInsert?.values[2]), 'principal@example.test');
+  const outboxInsert = queries.find((query) => query.text.includes('INSERT INTO auth_email_outbox'));
+  assert.doesNotMatch(String(outboxInsert?.values[3] ?? ''), /token=|invite_url/);
 });
 
-test('PlatformOnboardingService rejects duplicate school workspace codes without sending an invite', async () => {
+test('PlatformOnboardingService rejects duplicate school URL slugs without sending an invite', async () => {
   const queries: Array<{ text: string; values: unknown[] }> = [];
   const baselines: string[] = [];
   const sentInvites: Array<{ to: string; inviteUrl: string }> = [];

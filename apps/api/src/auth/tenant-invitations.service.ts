@@ -233,10 +233,7 @@ export class TenantInvitationsService {
       const outboxId = await this.queueInvitationEmail({
         tenantId,
         email: invitation.email.toLowerCase(),
-        payload: {
-          ...metadata,
-          invite_url: inviteUrl,
-        },
+        payload: metadata,
       });
 
       try {
@@ -508,10 +505,7 @@ export class TenantInvitationsService {
         input.tenantId,
         input.email,
         'You have been invited to ShuleHub ERP',
-        JSON.stringify({
-          ...input.payload,
-          invite_url: input.inviteUrl,
-        }),
+        JSON.stringify(input.payload),
       ],
     );
     const outboxId = outboxResult.rows[0]?.id;

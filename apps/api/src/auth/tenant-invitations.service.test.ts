@@ -82,6 +82,8 @@ test('TenantInvitationsService sends a tenant-scoped role invitation without exp
   const tokenInsert = queries.find((query) => query.text.includes('INSERT INTO auth_action_tokens'));
   assert.match(String(tokenInsert?.values[3]), /^[a-f0-9]{64}$/);
   assert.equal(String(tokenInsert?.values[2]), 'teacher@example.test');
+  const outboxInsert = queries.find((query) => query.text.includes('INSERT INTO auth_email_outbox'));
+  assert.doesNotMatch(String(outboxInsert?.values[3] ?? ''), /token=|invite_url/);
 });
 
 test('TenantInvitationsService rejects unsupported tenant invitation roles before sending email', async () => {

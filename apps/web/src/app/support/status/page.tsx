@@ -263,14 +263,14 @@ async function fetchPublicStatus(): Promise<PublicStatusView> {
 function emptyStatus(unavailable: boolean): PublicStatusView {
   return {
     components: [
-      {
-        id: "status-api",
-        name: "Status service",
-        status: unavailable ? "Unavailable" : "Operational",
-        uptime: "N/A",
-        latency: "N/A",
-        tone: unavailable ? "warning" : "ok",
-      },
+          {
+            id: "status-api",
+            name: "Status feed",
+            status: unavailable ? "Live status temporarily unavailable" : "Operational",
+            uptime: unavailable ? "Checking" : "Tracked",
+            latency: unavailable ? "Checking" : "Tracked",
+            tone: unavailable ? "warning" : "ok",
+          },
     ],
     incidents: [],
     historicalIncidents: [],
@@ -302,7 +302,7 @@ function formatStatusLabel(status: string) {
 
 function formatUptime(value?: number | string | null) {
   if (value === null || value === undefined || value === "") {
-    return "N/A";
+    return "Checking";
   }
 
   const numeric = Number(value);
@@ -311,7 +311,7 @@ function formatUptime(value?: number | string | null) {
 
 function formatLatency(value?: number | string | null) {
   if (value === null || value === undefined || value === "") {
-    return "N/A";
+    return "Checking";
   }
 
   const numeric = Number(value);

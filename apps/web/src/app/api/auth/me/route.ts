@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { isExperienceAudience } from "@/lib/auth/experience-audience";
 import { createServerAuthClient } from "@/lib/auth/server-auth-client";
+import { toPublicExperienceGatewaySession } from "@/lib/auth/server-session";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
     const session = await authClient.me(audience, cookieStore);
 
     return NextResponse.json({
-      session,
+      session: toPublicExperienceGatewaySession(session),
       user: session.user,
     });
   } catch (error) {

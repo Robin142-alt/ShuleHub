@@ -6,7 +6,7 @@ const roleHomePaths: Record<string, string> = {
   admin: "/dashboard",
   school_admin: "/dashboard",
   bursar: "/finance/dashboard",
-  teacher: "/academics/dashboard",
+  teacher: "/dashboard",
   storekeeper: "/inventory/dashboard",
   librarian: "/library/dashboard",
   parent: "/portal/dashboard",

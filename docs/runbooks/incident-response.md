@@ -49,6 +49,81 @@ This runbook is for production incidents affecting Shule Hub schools, support op
 - State impact, affected modules, current status, and the next update time. Do not expose tenant names, secrets, tokens, phone numbers, or internal stack traces.
 - Keep support tickets updated with the same incident summary so tenant-scoped communication stays consistent.
 
+## Incident Drill Checklist
+
+Use this checklist for `npm run ops:incident-drill -- --dry-run` and for quarterly live game-day reviews.
+
+- Incident commander assigned: one named operator owns triage, decision logs, and final closeout.
+- Severity confirmed: classify as Critical, Major, Minor, or Maintenance before publishing updates.
+- Blast radius recorded: tenant, module, role, provider, and whether data integrity is affected.
+- Rollback decision recorded: decide forward fix, rollback, provider failover, or manual workaround.
+- Communications checkpoint completed: publish safe status update, support macro, and next update time.
+- Evidence captured: attach health/readiness output, workflow artifact links, provider smoke output, and timeline.
+- Closeout completed: record root cause, customer impact, permanent fix, owner, and due date.
+
+## Provider Outage Playbooks
+
+### Email outage
+
+- Primary owner: Support lead.
+- Confirm `RESEND_API_KEY`, `EMAIL_FROM`, and provider smoke without printing secrets.
+- Keep password recovery and invitation failures visible to operators; do not claim delivery success until provider sends.
+- Switch to in-app notices and support ticket updates while email is degraded.
+
+### SMS provider outage
+
+- Primary owner: Platform owner.
+- Confirm active platform SMS provider, relay `/ready`, school SMS wallet deduction behavior, and support SMS recipients.
+- Pause non-critical bulk SMS if delivery is failing; do not deduct credits for failed provider dispatches.
+- Use email and in-app notifications for critical incident communication until SMS recovers.
+
+### Daraja outage
+
+- Primary owner: Finance operations owner.
+- Confirm whether Safaricom, one school credential set, callback validation, or queue processing is affected.
+- Keep school funds in school-owned accounts; never reroute payments through the ERP.
+- Queue idempotent callback replays only after signature, amount, and tenant matching are verified.
+
+### Redis outage
+
+- Primary owner: Engineering owner.
+- Check replay protection, queue workers, rate limits, sessions, and BullMQ readiness.
+- Pause risky MPESA replay and notification retry paths if idempotency cannot be guaranteed.
+- Restore Redis, then replay only jobs with idempotency keys and clear ownership.
+
+### Postgres outage
+
+- Primary owner: Engineering owner.
+- Treat database unavailability or tenant isolation risk as Critical.
+- Pause writes, verify Neon/Postgres status, and keep public status updated.
+- Run restore checks only in DR/sandbox environments; never restore over production during live triage.
+
+### Object storage outage
+
+- Primary owner: Engineering owner.
+- Pause new uploads if read/write/delete smoke cannot verify a tenant-scoped object path.
+- Keep existing file metadata intact and prevent fallback storage that breaks tenant scoping.
+- Resume uploads only after signed URL and tenant-prefix checks pass.
+
+### Malware scanner outage
+
+- Primary owner: Security owner.
+- Keep `UPLOAD_MALWARE_SCAN_REQUIRED=true` in production.
+- Pause file uploads when clean scanning cannot be verified.
+- Resume uploads only after provider health and upload-policy validation pass.
+
+## Dependency Ownership Matrix
+
+| Dependency | Primary owner | Fallback owner | Escalation path | Acknowledgement SLA |
+|---|---|---|---|---:|
+| Email | Support lead | Platform owner | Resend/provider support, then engineering | 15 minutes |
+| SMS provider | Platform owner | Support lead | SMS relay logs, provider support, then engineering | 15 minutes |
+| Daraja | Finance operations owner | Platform owner | Safaricom Daraja support, then engineering | 15 minutes |
+| Redis | Engineering owner | Platform owner | Railway/Redis provider support | 10 minutes |
+| Postgres | Engineering owner | Platform owner | Neon/Postgres provider support | 10 minutes |
+| Object storage | Engineering owner | Security owner | Storage provider support | 15 minutes |
+| Malware scanner | Security owner | Engineering owner | Scanner provider/runtime owner | 15 minutes |
+
 ## Retired Modules
 
 Attendance is retired. Do not restore attendance navigation, routes, sync entities, load probes, report exports, or incident workarounds during an outage.

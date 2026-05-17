@@ -167,6 +167,7 @@ export class DatabaseFileStorageService {
     tenantId: string;
     storagePath: string;
     actorUserId?: string | null;
+    allowTenantBearerToken?: boolean;
     expiresAt: string;
     signingSecret: string;
   }): SignedFileObjectReadToken {
@@ -180,11 +181,17 @@ export class DatabaseFileStorageService {
       throw new BadRequestException('Signed file read token expiry must be an ISO timestamp');
     }
 
+    const actorUserId = input.actorUserId?.trim() || null;
+
+    if (!actorUserId && input.allowTenantBearerToken !== true) {
+      throw new BadRequestException('Signed file read tokens require an actor user');
+    }
+
     const payload: SignedFileObjectReadPayload = {
       purpose: 'file_object.read',
       tenant_id: tenantId,
       storage_path: storagePath,
-      actor_user_id: input.actorUserId?.trim() || null,
+      actor_user_id: actorUserId,
       expires_at: input.expiresAt,
     };
     const encodedPayload = encodeBase64Url(JSON.stringify(payload));
@@ -199,6 +206,7 @@ export class DatabaseFileStorageService {
 
   async readWithSignedToken(input: {
     tenantId: string;
+    actorUserId?: string | null;
     token: string;
     signingSecret: string;
     now?: string;
@@ -211,6 +219,13 @@ export class DatabaseFileStorageService {
     }
 
     this.assertTenantScopedStoragePath(payload.tenant_id, payload.storage_path);
+
+    if (
+      payload.actor_user_id
+      && input.actorUserId?.trim() !== payload.actor_user_id
+    ) {
+      throw new BadRequestException('Signed file read token does not belong to this actor');
+    }
 
     const nowMs = input.now ? Date.parse(input.now) : Date.now();
 

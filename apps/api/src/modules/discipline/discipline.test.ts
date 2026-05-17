@@ -438,3 +438,152 @@ test('CounsellingService dashboard is backed by counselling repository aggregate
   assert.equal(dashboard.followups_due, 5);
   assert.ok(dashboard.generated_at);
 });
+
+test('DisciplineService does not let report-only users read raw incident cases', async () => {
+  const requestContext = new RequestContextService();
+  const repository = {
+    findIncidentById: async () => ({
+      id: uuid('101'),
+      tenant_id: 'tenant-a',
+      school_id: uuid('201'),
+      student_id: uuid('301'),
+      class_id: uuid('401'),
+      academic_term_id: uuid('501'),
+      academic_year_id: uuid('601'),
+      offense_category_id: uuid('701'),
+      reporting_staff_id: uuid('801'),
+      assigned_staff_id: null,
+      incident_number: 'DIS-2026-000001',
+      title: 'Fighting',
+      severity: 'high',
+      status: 'under_review',
+      occurred_at: '2026-05-16T09:00:00.000Z',
+      reported_at: '2026-05-16T09:15:00.000Z',
+      location: 'Playground',
+      witnesses: [],
+      description: 'Internal incident details',
+      action_taken: null,
+      recommendations: null,
+      linked_counselling_referral_id: null,
+      behavior_points_delta: -15,
+      parent_notification_status: 'sent',
+      metadata: {},
+      deleted_at: null,
+      created_at: '2026-05-16T09:15:00.000Z',
+      updated_at: '2026-05-16T09:15:00.000Z',
+    }),
+  };
+  const service = new DisciplineService(
+    requestContext,
+    { withRequestTransaction: async <T>(callback: () => Promise<T>) => callback() } as never,
+    repository as never,
+  );
+
+  await assert.rejects(
+    () =>
+      requestContext.run(
+        {
+          tenant_id: 'tenant-a',
+          user_id: uuid('900'),
+          role: 'teacher',
+          permissions: ['discipline:reports'],
+          request_id: 'request-6',
+          session_id: null,
+          client_ip: '127.0.0.1',
+          user_agent: 'node-test',
+          method: 'GET',
+          path: '/discipline/incidents/00000000-0000-0000-0000-000000000101',
+          started_at: '2026-05-16T10:00:00.000Z',
+          is_authenticated: true,
+        },
+        () => service.getIncident(uuid('101')),
+      ),
+    /cannot access this discipline incident/i,
+  );
+});
+
+test('CounsellingService only exposes parent-visible notes to linked guardians', async () => {
+  const requestContext = new RequestContextService();
+  const noteEncryption = new CounsellingNoteEncryptionService({
+    get: (key: string) =>
+      key === 'security.piiEncryptionKey'
+        ? '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+        : undefined,
+  } as never);
+  const encrypted = noteEncryption.encrypt('Follow-up plan discussed with parent.');
+  let linked = false;
+  const disciplineRepository = {
+    isParentLinkedToStudent: async (input: Record<string, unknown>) => {
+      assert.equal(input.tenant_id, 'tenant-a');
+      assert.equal(input.parent_user_id, uuid('901'));
+      assert.equal(input.student_id, uuid('301'));
+      return linked;
+    },
+  };
+  const counsellingRepository = {
+    findSessionById: async () => ({
+      id: uuid('701'),
+      tenant_id: 'tenant-a',
+      school_id: uuid('201'),
+      student_id: uuid('301'),
+      referral_id: null,
+      counsellor_user_id: uuid('804'),
+      status: 'scheduled',
+      scheduled_for: '2026-05-16T10:00:00.000Z',
+      completed_at: null,
+      location: 'Counselling office',
+      agenda: 'Follow-up',
+      outcome_summary: null,
+      created_at: '2026-05-16T09:00:00.000Z',
+      updated_at: '2026-05-16T09:00:00.000Z',
+    }),
+    listNotes: async () => [
+      {
+        id: uuid('801'),
+        tenant_id: 'tenant-a',
+        school_id: uuid('201'),
+        student_id: uuid('301'),
+        counselling_session_id: uuid('701'),
+        counsellor_user_id: uuid('804'),
+        visibility: 'parent_visible',
+        ...encrypted,
+        safe_summary: 'Follow-up plan shared',
+        risk_indicators: [],
+        created_at: '2026-05-16T10:10:00.000Z',
+        updated_at: '2026-05-16T10:10:00.000Z',
+      },
+    ],
+  };
+  const service = new CounsellingService(
+    requestContext,
+    { withRequestTransaction: async <T>(callback: () => Promise<T>) => callback() } as never,
+    disciplineRepository as never,
+    counsellingRepository as never,
+    noteEncryption,
+  );
+  const parentContext = {
+    tenant_id: 'tenant-a',
+    user_id: uuid('901'),
+    role: 'parent',
+    permissions: ['portal:read_own_children'],
+    request_id: 'request-7',
+    session_id: null,
+    client_ip: '127.0.0.1',
+    user_agent: 'node-test',
+    method: 'GET',
+    path: '/counselling/sessions/00000000-0000-0000-0000-000000000701/notes',
+    started_at: '2026-05-16T10:00:00.000Z',
+    is_authenticated: true,
+  };
+
+  await assert.rejects(
+    () => requestContext.run(parentContext, () => service.listNotes(uuid('701'))),
+    /cannot access this counselling session/i,
+  );
+
+  linked = true;
+  const notes = await requestContext.run(parentContext, () => service.listNotes(uuid('701')));
+
+  assert.equal(notes[0]?.redacted, false);
+  assert.equal(notes[0]?.note, 'Follow-up plan discussed with parent.');
+});

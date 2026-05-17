@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 
 import { RequestContextService } from '../../common/request-context/request-context.service';
 import { AccountEntity } from '../finance/entities/account.entity';
 import { CallbackLogEntity } from './entities/callback-log.entity';
 import { PaymentIntentEntity } from './entities/payment-intent.entity';
 import { MpesaCallbackController } from './controllers/mpesa-callback.controller';
+import { MpesaC2bController } from './controllers/mpesa-c2b.controller';
 import { MpesaC2bService } from './services/mpesa-c2b.service';
 import { MpesaCallbackProcessorService } from './services/mpesa-callback-processor.service';
 import { MpesaService } from './services/mpesa.service';
@@ -186,6 +187,87 @@ test('MpesaSignatureService validates the configured HMAC callback signature', (
   });
 
   assert.equal(verification.signature, signature);
+});
+
+test('MpesaC2bController rejects unsigned callbacks when callback secret is missing', async () => {
+  let validationCalled = false;
+  const controller = new MpesaC2bController(
+    {
+      validatePayment: async () => {
+        validationCalled = true;
+        return { ResultCode: 0, ResultDesc: 'Accepted' };
+      },
+    } as never,
+    undefined,
+    {
+      get: (): string => '',
+    } as never,
+  );
+
+  await assert.rejects(
+    () =>
+      controller.validate(
+        {
+          headers: {},
+          body: {},
+          rawBody: Buffer.from('{}', 'utf8'),
+        } as never,
+        {} as never,
+      ),
+    (error: unknown) =>
+      error instanceof UnauthorizedException
+      && error.message === 'MPESA callback secret is not configured',
+  );
+  assert.equal(validationCalled, false);
+});
+
+test('MpesaC2bController verifies callback signatures before validation', async () => {
+  const config = {
+    get: (key: string): string | number | undefined => {
+      if (key === 'mpesa.callbackSecret') {
+        return 'top-secret';
+      }
+
+      if (key === 'mpesa.callbackTimestampToleranceSeconds') {
+        return 300;
+      }
+
+      return undefined;
+    },
+  };
+  const signatureService = new MpesaSignatureService(config as never);
+  const rawBody = JSON.stringify({
+    TransactionType: 'Pay Bill',
+    TransID: 'QF12345678',
+  });
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = signatureService.computeSignature(rawBody, timestamp);
+  let validationCalled = false;
+  const controller = new MpesaC2bController(
+    {
+      validatePayment: async () => {
+        validationCalled = true;
+        return { ResultCode: 0, ResultDesc: 'Accepted' };
+      },
+    } as never,
+    signatureService,
+    config as never,
+  );
+
+  const response = await controller.validate(
+    {
+      headers: {
+        'x-mpesa-signature': signature,
+        'x-mpesa-timestamp': timestamp,
+      },
+      body: JSON.parse(rawBody),
+      rawBody: Buffer.from(rawBody, 'utf8'),
+    } as never,
+    JSON.parse(rawBody),
+  );
+
+  assert.equal(validationCalled, true);
+  assert.deepEqual(response, { ResultCode: 0, ResultDesc: 'Accepted' });
 });
 
 test('MpesaService parses a successful STK callback payload', () => {
@@ -731,6 +813,91 @@ test('TenantFinanceConfigService resolves only the active tenant-owned MPESA con
   assert.equal(config.transaction_type, 'CustomerPayBillOnline');
   assert.equal(config.ledger_debit_account_code, '1110-MPESA-CLEARING');
   assert.equal(config.ledger_credit_account_code, '1100-AR-FEES');
+});
+
+test('TenantFinanceConfigService returns masked summary after saving MPESA config', async () => {
+  const captured: Record<string, unknown> = {};
+  const now = new Date('2026-05-16T10:00:00.000Z');
+  const summary = {
+    tenant_id: 'tenant-a',
+    mpesa_configs: [
+      {
+        id: '00000000-0000-0000-0000-000000000901',
+        tenant_id: 'tenant-a',
+        shortcode: '247247',
+        paybill_number: '247247',
+        till_number: null,
+        initiator_name: 'school-api',
+        environment: 'sandbox',
+        callback_url: 'https://green-valley.example.com/payments/mpesa/callback',
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+        consumer_key_masked: '****-key',
+        consumer_secret_masked: '****-secret',
+        passkey_masked: '****-passkey',
+      },
+    ],
+    bank_accounts: [],
+    payment_channels: [],
+    financial_accounts: null,
+    dashboard: {
+      todays_collections_minor: '0',
+      pending_reconciliations: 0,
+      failed_callbacks: 0,
+      unmatched_payments: 0,
+      mpesa_status: 'active',
+      reconciliation_status: 'balanced',
+    },
+  };
+  const service = new TenantFinanceConfigService(
+    {
+      upsertMpesaConfig: async (input: Record<string, unknown>) => {
+        captured.upsert = input;
+        return {
+          id: '00000000-0000-0000-0000-000000000901',
+          tenant_id: input.tenant_id,
+          shortcode: input.shortcode,
+          paybill_number: input.paybill_number,
+          till_number: input.till_number,
+          consumer_key: input.consumer_key,
+          consumer_secret: input.consumer_secret,
+          passkey: input.passkey,
+          initiator_name: input.initiator_name,
+          environment: input.environment,
+          callback_url: input.callback_url,
+          status: input.status,
+          created_at: now,
+          updated_at: now,
+        };
+      },
+      ensureMpesaPaymentChannel: async (input: Record<string, unknown>) => {
+        captured.channel = input;
+        return { id: '00000000-0000-0000-0000-000000000902' };
+      },
+      getSummary: async (tenantId: string) => {
+        assert.equal(tenantId, 'tenant-a');
+        return summary;
+      },
+    } as never,
+    { get: () => undefined } as never,
+  );
+
+  const result = await service.upsertMpesaConfig('tenant-a', {
+    shortcode: '247247',
+    paybill_number: '247247',
+    consumer_key: 'school-consumer-key',
+    consumer_secret: 'school-consumer-secret',
+    passkey: 'school-passkey',
+    initiator_name: 'school-api',
+    environment: 'sandbox',
+    callback_url: 'https://green-valley.example.com/payments/mpesa/callback',
+  });
+
+  assert.equal((captured.upsert as Record<string, unknown>).consumer_secret, 'school-consumer-secret');
+  assert.equal(JSON.stringify(result).includes('school-consumer-secret'), false);
+  assert.equal(JSON.stringify(result).includes('school-passkey'), false);
+  assert.equal(result.mpesa_configs[0]?.consumer_secret_masked, '****-secret');
 });
 
 test('MpesaService sends STK push with the resolved school shortcode and credentials', async () => {

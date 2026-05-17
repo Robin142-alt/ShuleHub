@@ -315,6 +315,7 @@ export class SupportRepository {
 
   async listTickets(options: {
     tenantId?: string;
+    requesterUserId?: string;
     search?: string;
     status?: SupportStatus;
     priority?: SupportPriority;
@@ -329,6 +330,12 @@ export class SupportRepository {
     if (options.tenantId) {
       conditions.push(`ticket.tenant_id = $${parameterIndex}`);
       values.push(options.tenantId);
+      parameterIndex += 1;
+    }
+
+    if (options.requesterUserId) {
+      conditions.push(`ticket.requester_user_id = $${parameterIndex}::uuid`);
+      values.push(options.requesterUserId);
       parameterIndex += 1;
     }
 
@@ -362,6 +369,10 @@ export class SupportRepository {
       values.push(options.module);
       parameterIndex += 1;
     }
+
+    const includeInternalAttachmentsParameter = parameterIndex;
+    values.push(!options.requesterUserId);
+    parameterIndex += 1;
 
     values.push(options.limit, options.offset);
     const whereSql = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -406,6 +417,7 @@ export class SupportRepository {
         LEFT JOIN support_attachments attachment
           ON attachment.tenant_id = ticket.tenant_id
          AND attachment.ticket_id = ticket.id
+         AND ($${includeInternalAttachmentsParameter}::boolean = TRUE OR attachment.attachment_type <> 'internal_note')
         ${whereSql}
         GROUP BY ticket.id, tenant.name, agent.display_name
         ORDER BY
@@ -425,7 +437,26 @@ export class SupportRepository {
     return result.rows.map((row) => this.mapTicket(row));
   }
 
-  async findTicketByIdForAccess(ticketId: string): Promise<SupportTicketRecord | null> {
+  async findTicketByIdForAccess(
+    ticketId: string,
+    options: { tenantId?: string; requesterUserId?: string } = {},
+  ): Promise<SupportTicketRecord | null> {
+    const conditions = ['ticket.id = $1::uuid'];
+    const values: unknown[] = [ticketId];
+    let parameterIndex = 2;
+
+    if (options.tenantId) {
+      conditions.push(`ticket.tenant_id = $${parameterIndex}`);
+      values.push(options.tenantId);
+      parameterIndex += 1;
+    }
+
+    if (options.requesterUserId) {
+      conditions.push(`ticket.requester_user_id = $${parameterIndex}::uuid`);
+      values.push(options.requesterUserId);
+      parameterIndex += 1;
+    }
+
     const result = await this.databaseService.query<SupportTicketRecord>(
       `
         SELECT
@@ -459,10 +490,10 @@ export class SupportRepository {
           ON tenant.tenant_id = ticket.tenant_id
         LEFT JOIN support_agents agent
           ON agent.id = ticket.assigned_agent_id
-        WHERE ticket.id = $1::uuid
+        WHERE ${conditions.join(' AND ')}
         LIMIT 1
       `,
-      [ticketId],
+      values,
     );
 
     return result.rows[0] ? this.mapTicket(result.rows[0]) : null;
@@ -862,7 +893,11 @@ export class SupportRepository {
     return result.rows[0];
   }
 
-  async listAttachments(tenantId: string, ticketId: string) {
+  async listAttachments(
+    tenantId: string,
+    ticketId: string,
+    options: { includeInternal?: boolean } = {},
+  ) {
     const result = await this.databaseService.query(
       `
         SELECT
@@ -881,12 +916,55 @@ export class SupportRepository {
         FROM support_attachments
         WHERE tenant_id = $1
           AND ticket_id = $2::uuid
+          AND ($3::boolean = TRUE OR attachment_type <> 'internal_note')
         ORDER BY created_at DESC
       `,
-      [tenantId, ticketId],
+      [tenantId, ticketId, options.includeInternal === true],
     );
 
     return result.rows;
+  }
+
+  async messageBelongsToTicket(input: {
+    tenant_id: string;
+    ticket_id: string;
+    message_id: string;
+  }): Promise<boolean> {
+    const result = await this.databaseService.query<{ exists: boolean }>(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM support_messages
+          WHERE tenant_id = $1
+            AND ticket_id = $2::uuid
+            AND id = $3::uuid
+        ) AS exists
+      `,
+      [input.tenant_id, input.ticket_id, input.message_id],
+    );
+
+    return result.rows[0]?.exists ?? false;
+  }
+
+  async internalNoteBelongsToTicket(input: {
+    tenant_id: string;
+    ticket_id: string;
+    internal_note_id: string;
+  }): Promise<boolean> {
+    const result = await this.databaseService.query<{ exists: boolean }>(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM support_internal_notes
+          WHERE tenant_id = $1
+            AND ticket_id = $2::uuid
+            AND id = $3::uuid
+        ) AS exists
+      `,
+      [input.tenant_id, input.ticket_id, input.internal_note_id],
+    );
+
+    return result.rows[0]?.exists ?? false;
   }
 
   async createNotifications(inputs: Array<{
@@ -1553,7 +1631,17 @@ export class SupportRepository {
   }
 
   async getAnalytics() {
-    const [statusCounts, priorityCounts, slaBreaches, recurringIssues, heatmap] = await Promise.all([
+    const [
+      statusCounts,
+      priorityCounts,
+      slaBreaches,
+      recurringIssues,
+      heatmap,
+      responseTiming,
+      firstResponseSla,
+      notificationDeliveryState,
+      activeIncidents,
+    ] = await Promise.all([
       this.databaseService.query(
         `
           SELECT status, COUNT(*)::int AS total
@@ -1600,6 +1688,55 @@ export class SupportRepository {
           ORDER BY day ASC
         `,
       ),
+      this.databaseService.query(
+        `
+          SELECT
+            COALESCE(
+              ROUND(
+                percentile_cont(0.5) WITHIN GROUP (
+                  ORDER BY EXTRACT(EPOCH FROM (first_responded_at - created_at)) / 60
+                )::numeric,
+                1
+              ),
+              0
+            )::float AS median_response_minutes
+          FROM support_tickets
+          WHERE first_responded_at IS NOT NULL
+            AND created_at >= NOW() - INTERVAL '30 days'
+        `,
+      ),
+      this.databaseService.query(
+        `
+          SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (
+              WHERE first_responded_at IS NOT NULL
+                AND first_responded_at <= first_response_due_at
+            )::int AS met,
+            COUNT(*) FILTER (
+              WHERE first_responded_at IS NULL
+                AND first_response_due_at < NOW()
+            )::int AS breached
+          FROM support_tickets
+          WHERE created_at >= NOW() - INTERVAL '30 days'
+        `,
+      ),
+      this.databaseService.query(
+        `
+          SELECT channel, delivery_status, COUNT(*)::int AS total
+          FROM support_notifications
+          WHERE created_at >= NOW() - INTERVAL '7 days'
+          GROUP BY channel, delivery_status
+          ORDER BY channel ASC, delivery_status ASC
+        `,
+      ),
+      this.databaseService.query(
+        `
+          SELECT COUNT(*)::int AS total
+          FROM support_incidents
+          WHERE status <> 'resolved'
+        `,
+      ),
     ]);
 
     return {
@@ -1608,6 +1745,22 @@ export class SupportRepository {
       sla_breaches: Number(slaBreaches.rows[0]?.total ?? 0),
       recurring_issues: recurringIssues.rows,
       ticket_heatmap: heatmap.rows,
+      median_response_minutes: Number(responseTiming.rows[0]?.median_response_minutes ?? 0),
+      first_response_sla: {
+        total: Number(firstResponseSla.rows[0]?.total ?? 0),
+        met: Number(firstResponseSla.rows[0]?.met ?? 0),
+        breached: Number(firstResponseSla.rows[0]?.breached ?? 0),
+      },
+      open_tickets: Number(
+        statusCounts.rows
+          .filter((row: { status?: string }) => row.status !== 'Resolved' && row.status !== 'Closed')
+          .reduce((total: number, row: { total?: number }) => total + Number(row.total ?? 0), 0),
+      ),
+      escalated_tickets: Number(
+        statusCounts.rows.find((row: { status?: string }) => row.status === 'Escalated')?.total ?? 0,
+      ),
+      notification_delivery_state: notificationDeliveryState.rows,
+      system_status_incidents: Number(activeIncidents.rows[0]?.total ?? 0),
     };
   }
 

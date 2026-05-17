@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { getCsrfToken } from "@/lib/auth/csrf-client";
 import type { ExperienceAudience } from "@/lib/auth/experience-audience";
-import type { ExperienceGatewaySession } from "@/lib/auth/server-session";
+import type { PublicExperienceGatewaySession } from "@/lib/auth/server-session";
 
 type LoginInput = {
   identifier: string;
@@ -15,8 +15,8 @@ type LoginInput = {
 
 type SessionResponse = {
   redirectTo?: string;
-  session: ExperienceGatewaySession;
-  user: ExperienceGatewaySession["user"];
+  session: PublicExperienceGatewaySession;
+  user: PublicExperienceGatewaySession["user"];
 };
 
 async function parseResponse(response: Response) {
@@ -43,8 +43,8 @@ export function useExperienceSession(
     autoLoad?: boolean;
   },
 ) {
-  const [session, setSession] = useState<ExperienceGatewaySession | null>(null);
-  const [user, setUser] = useState<ExperienceGatewaySession["user"] | null>(null);
+  const [session, setSession] = useState<PublicExperienceGatewaySession | null>(null);
+  const [user, setUser] = useState<PublicExperienceGatewaySession["user"] | null>(null);
   const [isLoading, setIsLoading] = useState(options?.autoLoad ?? false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

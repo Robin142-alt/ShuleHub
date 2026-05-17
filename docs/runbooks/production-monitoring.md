@@ -10,7 +10,10 @@ Implementation 7 uses scheduled, read-safe production probes to catch provider, 
 | Core API load probe | Hourly | `npm run load:core-api` | API URL, tenant id, monitor token |
 | Provider smoke | Every 6 hours | `npm run smoke:providers` | SMS, email, malware scanner, object storage |
 | Query-plan review | Nightly | `npm run perf:query-plan-review` | Production database URL |
+| Maintainability scan | Nightly and manual | `npm run maintainability:scan` | None |
 | Release readiness | Nightly and manual | `npm run release:readiness` | None |
+| Backup restore verification | Weekly and manual | `npm run dr:backup-restore` | DR database URL only |
+| Incident drill validation | Weekly and manual | `npm run ops:incident-drill -- --dry-run` | None |
 
 All scheduled runs are defined in [.github/workflows/production-operability.yml](/C:/Users/user/Desktop/PROJECTS/Shule%20hub/.github/workflows/production-operability.yml).
 
@@ -23,6 +26,7 @@ GitHub only allows manual dispatch for workflows that already exist on the repos
 - `PROD_MONITOR_TENANT_ID`
 - `PROD_MONITOR_ACCESS_TOKEN`
 - `PROD_DATABASE_URL`
+- `DR_DATABASE_URL`
 - `SUPPORT_NOTIFICATION_EMAILS`
 - `RESEND_API_KEY`
 - `EMAIL_FROM`
@@ -85,8 +89,30 @@ Open the `Production Operability` workflow and run one check at a time:
 - `query-plan`
 - `readiness`
 - `all`
+- `backup-restore`
+- `incident-drill`
 
 Use `all` before production promotion. Use individual checks while triaging to avoid noisy unrelated failures.
+
+## Alert Routing
+
+Every production alert must route to a real owner before the workflow is considered operational.
+
+| Alert type | Primary owner | Destination | Fallback owner | Acknowledgement SLA |
+|---|---|---|---|---:|
+| Synthetic journey failure | Support lead | GitHub Actions notification and support operations inbox | Platform owner | 15 minutes |
+| Core API load breach | Engineering owner | GitHub Actions notification and engineering operations inbox | Platform owner | 15 minutes |
+| Provider smoke failure | Platform owner | GitHub Actions notification and support operations inbox | Support lead | 15 minutes |
+| Query-plan regression | Engineering owner | GitHub Actions notification and engineering operations inbox | Platform owner | 1 business day |
+| Backup restore failure | Engineering owner | GitHub Actions notification and platform owner inbox | Platform owner | 30 minutes |
+| Security audit failure | Security owner | GitHub Actions notification and platform owner inbox | Engineering owner | 30 minutes |
+
+Manual verification:
+
+1. Dispatch the `Production Operability` workflow with `check=incident-drill`.
+2. Confirm `production-incident-drill.json` is uploaded.
+3. Confirm the owning inbox or GitHub notification destination receives the workflow result.
+4. Record the owner, destination, fallback owner, acknowledgement time, and artifact link in the incident timeline when an alert is tested.
 
 ## Triage
 
@@ -94,7 +120,12 @@ Use `all` before production promotion. Use individual checks while triaging to a
 - Core-load failure: compare p95/max latency with the route and query-plan review. Check database indexes before increasing capacity.
 - Provider smoke failure: check whether the failure is email, SMS, malware scanner, or object storage. Do not disable required provider flags to hide a broken dependency.
 - Query-plan failure: review the reported query and index recommendation. Treat tenant-wide scans on operational tables as release blockers.
+- Maintainability gate failure: fix the listed source file before release. The gate blocks internal UUID copy in school workflows, public status fallback telemetry that looks unfinished, and generated browser artifacts in review scope.
 - Release readiness failure: treat the missing artifact or gate failure as a code release issue, not an infrastructure incident.
+
+## Maintainability Gate
+
+Run `npm run maintainability:scan` before every production deployment. The gate blocks internal UUID copy in school workflows, public status fallback telemetry that looks unfinished, and generated browser artifacts in review scope.
 
 ## Rotation
 

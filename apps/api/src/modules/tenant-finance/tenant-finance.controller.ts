@@ -6,7 +6,7 @@ import { UpsertTenantBankAccountDto } from './dto/upsert-tenant-bank-account.dto
 import { UpsertTenantMpesaConfigDto } from './dto/upsert-tenant-mpesa-config.dto';
 import { UpdatePaymentChannelStatusDto } from './dto/update-payment-channel-status.dto';
 import { TenantFinanceConfigService } from './tenant-finance-config.service';
-import { ResolvedTenantMpesaConfig, TenantFinanceSummary } from './tenant-finance.types';
+import { TenantFinanceSummary } from './tenant-finance.types';
 
 @Controller('tenant-finance')
 export class TenantFinanceController {
@@ -25,7 +25,7 @@ export class TenantFinanceController {
   @Permissions('billing:update')
   async upsertMpesaConfig(
     @Body() dto: UpsertTenantMpesaConfigDto,
-  ): Promise<ResolvedTenantMpesaConfig> {
+  ): Promise<TenantFinanceSummary> {
     return this.tenantFinanceConfigService.upsertMpesaConfig(this.requireTenantId(), dto);
   }
 

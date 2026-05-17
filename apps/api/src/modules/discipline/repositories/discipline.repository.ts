@@ -439,23 +439,23 @@ export class DisciplineRepository {
           di.academic_term_id::text,
           di.academic_year_id::text,
           di.offense_category_id::text,
-          di.reporting_staff_id::text,
-          di.assigned_staff_id::text,
+          NULL::text AS reporting_staff_id,
+          NULL::text AS assigned_staff_id,
           di.incident_number,
           di.title,
           di.severity,
           di.status,
           di.occurred_at::text,
           di.reported_at::text,
-          di.location,
-          di.witnesses,
-          di.description,
-          di.action_taken,
-          di.recommendations,
-          di.linked_counselling_referral_id::text,
+          NULL::text AS location,
+          '[]'::jsonb AS witnesses,
+          di.title AS description,
+          NULL::text AS action_taken,
+          NULL::text AS recommendations,
+          NULL::text AS linked_counselling_referral_id,
           di.behavior_points_delta,
           di.parent_notification_status,
-          di.metadata,
+          jsonb_build_object('parent_safe', true) AS metadata,
           di.deleted_at::text,
           di.created_at::text,
           di.updated_at::text
@@ -467,7 +467,7 @@ export class DisciplineRepository {
          AND sg.status = 'active'
         WHERE di.tenant_id = $1
           AND di.deleted_at IS NULL
-          AND di.parent_notification_status IN ('queued', 'sent', 'acknowledged')
+          AND di.parent_notification_status IN ('sent', 'acknowledged')
         ORDER BY di.occurred_at DESC, di.created_at DESC
         LIMIT $3
         OFFSET $4

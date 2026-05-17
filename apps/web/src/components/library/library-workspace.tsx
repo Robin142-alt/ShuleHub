@@ -199,7 +199,7 @@ function ScannerIssueSection() {
     setError(null);
 
     if (!borrowerCode.trim() || !bookCode.trim() || !dueOn) {
-      setError("Scan the student ID and book code, then choose a due date.");
+      setError("Enter the learner name or admission number, scan the book code, then choose a due date.");
       return;
     }
 
@@ -222,21 +222,21 @@ function ScannerIssueSection() {
   }
 
   return (
-    <ScannerPanel
-      title="Scan-to-issue"
-      description="Scan the student ID, scan the book QR/barcode, and the system issues the copy through the live library API."
+      <ScannerPanel
+        title="Scan-to-issue"
+        description="Enter the learner name or admission number, scan the book QR/barcode, and the system issues the copy through the live library API."
       message={message}
       error={error}
     >
       <form className="grid gap-3 lg:grid-cols-[1fr_1fr_180px_auto]" onSubmit={handleSubmit}>
-        <label className="space-y-1">
-          <span className="text-[12px] font-semibold text-muted">Student ID or admission barcode</span>
+          <label className="space-y-1">
+          <span className="text-[12px] font-semibold text-muted">Learner name or admission number</span>
           <input
             autoFocus
             className="w-full rounded-[var(--radius-sm)] border border-border bg-white px-3 py-2 text-[13px] outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
             value={borrowerCode}
             onChange={(event) => setBorrowerCode(event.target.value)}
-            placeholder="Scan student ID"
+              placeholder="Type name or admission number"
           />
         </label>
         <label className="space-y-1">

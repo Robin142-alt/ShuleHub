@@ -116,7 +116,7 @@ export class SupportService {
         },
       });
       await this.createAndDispatchNotifications(
-        this.buildTicketCreatedNotifications(ticket, category),
+        await this.buildTicketCreatedNotifications(ticket, category),
       );
 
       return {
@@ -134,6 +134,9 @@ export class SupportService {
 
     return this.supportRepository.listTickets({
       tenantId,
+      requesterUserId: !supportOperator && this.requiresOwnSupportScope()
+        ? this.requireActorUserId()
+        : undefined,
       search: query.search?.trim() || undefined,
       status: query.status,
       priority: query.priority,
@@ -148,7 +151,9 @@ export class SupportService {
     const supportOperator = this.isSupportOperator();
     const [messages, attachments, statusLogs, internalNotes] = await Promise.all([
       this.supportRepository.listMessages(ticket.tenant_id, ticket.id),
-      this.supportRepository.listAttachments(ticket.tenant_id, ticket.id),
+      this.supportRepository.listAttachments(ticket.tenant_id, ticket.id, {
+        includeInternal: supportOperator,
+      }),
       this.supportRepository.listStatusLogs(ticket.tenant_id, ticket.id),
       supportOperator
         ? this.supportRepository.listInternalNotes(ticket.tenant_id, ticket.id)
@@ -378,6 +383,7 @@ export class SupportService {
 
     return this.databaseService.withRequestTransaction(async () => {
       const ticket = await this.requireTicket(ticketId);
+      await this.assertAttachmentTargetIsAllowed(ticket, dto);
       const persisted = await this.attachmentStorage.save({
         tenantId: ticket.tenant_id,
         ticketId: ticket.id,
@@ -463,13 +469,59 @@ export class SupportService {
   }
 
   private async requireTicket(ticketId: string): Promise<SupportTicketRecord> {
-    const ticket = await this.supportRepository.findTicketByIdForAccess(ticketId);
+    const supportOperator = this.isSupportOperator();
+    const ticket = await this.supportRepository.findTicketByIdForAccess(ticketId, {
+      tenantId: supportOperator ? undefined : this.requireTenantId(),
+      requesterUserId: !supportOperator && this.requiresOwnSupportScope()
+        ? this.requireActorUserId()
+        : undefined,
+    });
 
     if (!ticket) {
       throw new NotFoundException(`Support ticket "${ticketId}" was not found`);
     }
 
     return ticket;
+  }
+
+  private async assertAttachmentTargetIsAllowed(
+    ticket: SupportTicketRecord,
+    dto: UploadTicketAttachmentDto,
+  ): Promise<void> {
+    const messageId = dto.message_id?.trim() || null;
+    const internalNoteId = dto.internal_note_id?.trim() || null;
+
+    if (messageId && internalNoteId) {
+      throw new BadRequestException('A support attachment can target either a reply or an internal note, not both');
+    }
+
+    if (internalNoteId && !this.isSupportOperator()) {
+      throw new ForbiddenException('Only support agents can attach files to internal notes');
+    }
+
+    if (messageId) {
+      const belongsToTicket = await this.supportRepository.messageBelongsToTicket({
+        tenant_id: ticket.tenant_id,
+        ticket_id: ticket.id,
+        message_id: messageId,
+      });
+
+      if (!belongsToTicket) {
+        throw new BadRequestException('Support attachment reply target does not belong to this ticket');
+      }
+    }
+
+    if (internalNoteId) {
+      const belongsToTicket = await this.supportRepository.internalNoteBelongsToTicket({
+        tenant_id: ticket.tenant_id,
+        ticket_id: ticket.id,
+        internal_note_id: internalNoteId,
+      });
+
+      if (!belongsToTicket) {
+        throw new BadRequestException('Support attachment internal note target does not belong to this ticket');
+      }
+    }
   }
 
   private currentTenantOrGlobal(): string {
@@ -491,6 +543,16 @@ export class SupportService {
     return userId && userId !== 'anonymous' ? userId : null;
   }
 
+  private requireActorUserId(): string {
+    const userId = this.getActorUserId();
+
+    if (!userId) {
+      throw new UnauthorizedException('Authenticated support user context is required');
+    }
+
+    return userId;
+  }
+
   private isSupportOperator(): boolean {
     const context = this.requestContext.getStore();
 
@@ -502,6 +564,16 @@ export class SupportService {
       (context.role && SUPPORT_OPERATOR_ROLES.has(context.role))
         || context.permissions.includes('support:*')
         || context.permissions.includes('*:*'),
+    );
+  }
+
+  private requiresOwnSupportScope(): boolean {
+    const context = this.requestContext.getStore();
+
+    return (
+      context?.audience === 'portal'
+      || context?.role === 'parent'
+      || context?.role === 'student'
     );
   }
 
@@ -538,7 +610,7 @@ export class SupportService {
     };
   }
 
-  private buildTicketCreatedNotifications(
+  private async buildTicketCreatedNotifications(
     ticket: SupportTicketRecord,
     category: SupportCategoryRecord | null,
   ) {
@@ -571,7 +643,7 @@ export class SupportService {
         },
       ];
 
-      if (this.isSupportSmsConfigured()) {
+      if (await this.isSupportSmsConfigured()) {
         criticalNotifications.push({
           ...base,
           channel: 'sms' as const,
@@ -646,7 +718,13 @@ export class SupportService {
     ];
   }
 
-  private isSupportSmsConfigured(): boolean {
+  private async isSupportSmsConfigured(): Promise<boolean> {
+    const providerStatus = await this.notificationDelivery?.getProviderStatus();
+
+    if (providerStatus) {
+      return providerStatus.sms.status === 'configured';
+    }
+
     const webhookUrl = this.configService?.get<string>('support.notificationSmsWebhookUrl') ?? '';
     const recipients = this.configService?.get<string[] | string>('support.notificationSmsRecipients') ?? [];
     const recipientList = Array.isArray(recipients) ? recipients : recipients.split(',');

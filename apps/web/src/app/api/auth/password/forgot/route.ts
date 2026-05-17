@@ -1,55 +1,77 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
+import { validateCsrfRequest } from "@/lib/auth/csrf";
 import { getDashboardApiBaseUrl } from "@/lib/dashboard/api-client";
 
-function inferTenantSlug(request: Request) {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
-  const normalizedHost = host.split(":")[0]?.trim().toLowerCase() ?? "";
+const emailPattern = /\S+@\S+\.\S+/;
+const genericMessage =
+  "If the account is eligible, password recovery instructions have been sent.";
+const unavailableMessage =
+  "Password recovery is temporarily unavailable. Please contact support if you need immediate access.";
 
-  if (!normalizedHost || normalizedHost === "localhost" || normalizedHost === "127.0.0.1") {
-    return null;
-  }
-
-  return normalizedHost.split(".")[0] ?? null;
-}
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    if (!validateCsrfRequest(request)) {
+      return NextResponse.json(
+        { message: "Security check expired. Refresh the page and try again." },
+        { status: 403 },
+      );
+    }
+
     const body = (await request.json()) as {
+      audience?: "superadmin" | "school" | "portal";
       email?: string;
+      identifier?: string;
       tenantSlug?: string | null;
     };
-    const tenantSlug = body.tenantSlug?.trim() || inferTenantSlug(request);
-    const baseUrl = tenantSlug ? getDashboardApiBaseUrl(tenantSlug) : null;
+    const audience = body.audience ?? "school";
+    const identifier = (body.identifier ?? body.email ?? "").trim();
+
+    if (!emailPattern.test(identifier)) {
+      return NextResponse.json({ success: true, message: genericMessage });
+    }
+
+    const baseUrl = getDashboardApiBaseUrl(body.tenantSlug ?? undefined);
 
     if (!baseUrl) {
       return NextResponse.json(
-        { message: "Live password recovery is not configured for this tenant." },
+        { message: unavailableMessage },
         { status: 503 },
       );
     }
 
-    const response = await fetch(`${baseUrl}/auth/password/forgot`, {
+    const response = await fetch(`${baseUrl}/auth/password-recovery/request`, {
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
+        "x-auth-audience": audience,
+        ...(body.tenantSlug ? { "x-tenant-id": body.tenantSlug } : {}),
       },
-      body: JSON.stringify({ email: body.email }),
+      body: JSON.stringify({
+        audience,
+        email: identifier,
+      }),
       cache: "no-store",
     });
-    const payload = await response.json().catch(() => null);
+    const payload = (await response.json().catch(() => null)) as
+      | { message?: string }
+      | null;
 
-    return NextResponse.json(payload ?? {}, { status: response.status });
-  } catch (error) {
     return NextResponse.json(
       {
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to start password recovery.",
+        success: response.ok,
+        message: response.ok ? (payload?.message ?? genericMessage) : unavailableMessage,
       },
-      { status: 400 },
+      { status: response.ok ? 200 : response.status },
+    );
+  } catch {
+    return NextResponse.json(
+      {
+        message: unavailableMessage,
+      },
+      { status: 500 },
     );
   }
 }

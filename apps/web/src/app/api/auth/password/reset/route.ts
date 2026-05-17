@@ -1,40 +1,44 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
+import { validateCsrfRequest } from "@/lib/auth/csrf";
 import { getDashboardApiBaseUrl } from "@/lib/dashboard/api-client";
 
-function inferTenantSlug(request: Request) {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
-  const normalizedHost = host.split(":")[0]?.trim().toLowerCase() ?? "";
+const unavailableMessage =
+  "Password reset is temporarily unavailable. Please contact support if you need immediate access.";
 
-  if (!normalizedHost || normalizedHost === "localhost" || normalizedHost === "127.0.0.1") {
-    return null;
-  }
-
-  return normalizedHost.split(".")[0] ?? null;
-}
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    if (!validateCsrfRequest(request)) {
+      return NextResponse.json(
+        { message: "Security check expired. Refresh the page and try again." },
+        { status: 403 },
+      );
+    }
+
     const body = (await request.json()) as {
+      audience?: "superadmin" | "school" | "portal";
       token?: string;
       password?: string;
       tenantSlug?: string | null;
     };
-    const tenantSlug = body.tenantSlug?.trim() || inferTenantSlug(request);
-    const baseUrl = tenantSlug ? getDashboardApiBaseUrl(tenantSlug) : null;
+    const audience = body.audience ?? "school";
+    const baseUrl = getDashboardApiBaseUrl(body.tenantSlug ?? undefined);
 
     if (!baseUrl) {
       return NextResponse.json(
-        { message: "Live password reset is not configured for this tenant." },
+        { message: unavailableMessage },
         { status: 503 },
       );
     }
 
-    const response = await fetch(`${baseUrl}/auth/password/reset`, {
+    const response = await fetch(`${baseUrl}/auth/password-recovery/reset`, {
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
+        "x-auth-audience": audience,
+        ...(body.tenantSlug ? { "x-tenant-id": body.tenantSlug } : {}),
       },
       body: JSON.stringify({
         token: body.token,
@@ -42,18 +46,25 @@ export async function POST(request: Request) {
       }),
       cache: "no-store",
     });
-    const payload = await response.json().catch(() => null);
+    const payload = (await response.json().catch(() => null)) as
+      | { message?: string }
+      | null;
 
-    return NextResponse.json(payload ?? {}, { status: response.status });
-  } catch (error) {
     return NextResponse.json(
       {
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to reset the password.",
+        success: response.ok,
+        message: response.ok
+          ? (payload?.message ?? "Password updated successfully.")
+          : (payload?.message ?? unavailableMessage),
       },
-      { status: 400 },
+      { status: response.ok ? 200 : response.status },
+    );
+  } catch {
+    return NextResponse.json(
+      {
+        message: unavailableMessage,
+      },
+      { status: 500 },
     );
   }
 }

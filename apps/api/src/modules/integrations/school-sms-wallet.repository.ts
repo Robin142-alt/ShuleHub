@@ -95,6 +95,22 @@ export class SchoolSmsWalletRepository {
     credit_cost: number;
     sent_by_user_id?: string | null;
   }): Promise<ReservedSmsCredits> {
+    return this.databaseService.withRequestTransaction(() =>
+      this.reserveSmsCreditsInTransaction(input),
+    );
+  }
+
+  private async reserveSmsCreditsInTransaction(input: {
+    tenant_id: string;
+    recipient_ciphertext: string;
+    recipient_last4: string | null;
+    recipient_hash: string;
+    message_ciphertext?: string | null;
+    message_preview?: string | null;
+    message_type?: string | null;
+    credit_cost: number;
+    sent_by_user_id?: string | null;
+  }): Promise<ReservedSmsCredits> {
     const wallet = await this.getOrCreateWalletForUpdate(input.tenant_id);
 
     if (
@@ -136,10 +152,42 @@ export class SchoolSmsWalletRepository {
             monthly_used = monthly_used + $2,
             updated_at = NOW()
         WHERE tenant_id = $1
+          AND (
+            allow_negative_balance
+            OR sms_balance >= $2
+          )
+          AND (
+            monthly_limit IS NULL
+            OR allow_negative_balance
+            OR monthly_used + $2 <= monthly_limit
+          )
         RETURNING sms_balance, monthly_used
       `,
       [input.tenant_id, input.credit_cost],
     );
+
+    if (!updated.rows[0]) {
+      const currentWallet = await this.getOrCreateWallet(input.tenant_id);
+      const reason =
+        currentWallet.monthly_limit !== null
+        && currentWallet.monthly_used + input.credit_cost > currentWallet.monthly_limit
+        && !currentWallet.allow_negative_balance
+          ? 'SMS monthly limit exceeded'
+          : 'SMS balance exhausted';
+      const log = await this.insertSmsLog({
+        ...input,
+        status: 'rejected',
+        failure_reason: reason,
+      });
+
+      return {
+        accepted: false,
+        reason,
+        log_id: log.id,
+        balance_after: currentWallet.sms_balance,
+      };
+    }
+
     const balanceAfter = updated.rows[0]?.sms_balance ?? wallet.sms_balance - input.credit_cost;
 
     const log = await this.insertSmsLog({ ...input, status: 'queued', failure_reason: null });
@@ -199,6 +247,97 @@ export class SchoolSmsWalletRepository {
         input.provider_message_id ?? null,
       ],
     );
+  }
+
+  async markSmsLogFailed(input: {
+    log_id: string;
+    tenant_id: string;
+    failure_reason: string;
+  }): Promise<void> {
+    await this.databaseService.query(
+      `
+        UPDATE sms_logs
+        SET status = 'failed',
+            failure_reason = $3,
+            updated_at = NOW()
+        WHERE tenant_id = $1
+          AND id = $2::uuid
+      `,
+      [
+        input.tenant_id,
+        input.log_id,
+        input.failure_reason,
+      ],
+    );
+  }
+
+  async refundSmsCredits(input: {
+    tenant_id: string;
+    log_id: string;
+    credit_cost: number;
+    reason: string;
+    actor_user_id?: string | null;
+  }): Promise<void> {
+    await this.databaseService.withRequestTransaction(async () => {
+      await this.databaseService.query(
+        `
+          SELECT pg_advisory_xact_lock(hashtextextended($1, 0))
+        `,
+        [`sms-refund:${input.tenant_id}:${input.log_id}`],
+      );
+
+      const existingRefund = await this.databaseService.query<{ id: string }>(
+        `
+          SELECT id::text
+          FROM sms_wallet_transactions
+          WHERE tenant_id = $1
+            AND transaction_type = 'refund'
+            AND reference = $2
+          LIMIT 1
+        `,
+        [input.tenant_id, input.log_id],
+      );
+
+      if (existingRefund.rows[0]) {
+        return;
+      }
+
+      const updated = await this.databaseService.query<{ sms_balance: number; monthly_used: number }>(
+        `
+          UPDATE school_sms_wallets
+          SET sms_balance = sms_balance + $2,
+              monthly_used = GREATEST(monthly_used - $2, 0),
+              updated_at = NOW()
+          WHERE tenant_id = $1
+          RETURNING sms_balance, monthly_used
+        `,
+        [input.tenant_id, input.credit_cost],
+      );
+      const balanceAfter = updated.rows[0]?.sms_balance ?? 0;
+
+      await this.databaseService.query(
+        `
+          INSERT INTO sms_wallet_transactions (
+            tenant_id,
+            transaction_type,
+            quantity,
+            balance_after,
+            reference,
+            reason,
+            created_by_user_id
+          )
+          VALUES ($1, 'refund', $2, $3, $4, $5, $6)
+        `,
+        [
+          input.tenant_id,
+          input.credit_cost,
+          balanceAfter,
+          input.log_id,
+          input.reason,
+          input.actor_user_id ?? null,
+        ],
+      );
+    });
   }
 
   async listLogs(tenantId: string, limit = 50): Promise<Array<Record<string, unknown>>> {

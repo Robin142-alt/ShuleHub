@@ -1,8 +1,6 @@
-import {
-  requestDashboardApi,
-  type LiveAuthSession,
-} from "@/lib/dashboard/api-client";
+import type { LiveAuthSession } from "@/lib/dashboard/api-client";
 import { formatCurrency } from "@/lib/dashboard/format";
+import { requestSchoolApiProxy } from "@/lib/dashboard/school-api-proxy-client";
 import {
   type DepartmentRequest,
   type InventoryCategory,
@@ -442,9 +440,9 @@ function withSession<T>(
     body?: BodyInit | Record<string, unknown> | null;
   },
 ) {
-  return requestDashboardApi<T>(path, {
-    tenantId: session.tenantId,
-    accessToken: session.accessToken,
+  void session;
+
+  return requestSchoolApiProxy<T>(path, {
     method: options?.method,
     body: options?.body,
   });

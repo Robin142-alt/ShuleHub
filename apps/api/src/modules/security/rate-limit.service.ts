@@ -82,6 +82,36 @@ export class RateLimitService {
       this.configService.get<number>('security.rateLimitMaxRequests') ?? 120,
     );
 
+    if (routeKey === 'auth-session') {
+      return {
+        bucket: routeKey,
+        max_requests: Number(
+          this.configService.get<number>('security.authSessionRateLimitMaxRequests') ?? 10,
+        ),
+        window_seconds: windowSeconds,
+      };
+    }
+
+    if (routeKey === 'auth-recovery') {
+      return {
+        bucket: routeKey,
+        max_requests: Number(
+          this.configService.get<number>('security.authRecoveryRateLimitMaxRequests') ?? 5,
+        ),
+        window_seconds: windowSeconds,
+      };
+    }
+
+    if (routeKey === 'auth-parent-otp') {
+      return {
+        bucket: routeKey,
+        max_requests: Number(
+          this.configService.get<number>('security.parentOtpRateLimitMaxRequests') ?? 5,
+        ),
+        window_seconds: windowSeconds,
+      };
+    }
+
     if (routeKey === 'auth') {
       return {
         bucket: routeKey,
@@ -112,11 +142,35 @@ export class RateLimitService {
   private resolveRouteKey(request: Request): string {
     const path = (request.path || request.originalUrl || request.url).toLowerCase();
 
+    if (path.startsWith('/auth/parent/otp')) {
+      return 'auth-parent-otp';
+    }
+
+    if (
+      path.startsWith('/auth/password-recovery')
+      || path.startsWith('/auth/password/forgot')
+      || path.startsWith('/auth/password/reset')
+      || path.startsWith('/auth/email-verification')
+      || path.startsWith('/auth/magic-link')
+      || path.startsWith('/auth/invitations/accept')
+    ) {
+      return 'auth-recovery';
+    }
+
+    if (path.startsWith('/auth/login') || path.startsWith('/auth/refresh')) {
+      return 'auth-session';
+    }
+
     if (path.startsWith('/auth')) {
       return 'auth';
     }
 
-    if (path.startsWith('/payments/mpesa/callback')) {
+    if (
+      path.startsWith('/payments/mpesa/callback')
+      || path.startsWith('/mpesa/callback')
+      || path.startsWith('/payments/mpesa/c2b')
+      || path.startsWith('/mpesa/c2b')
+    ) {
       return 'mpesa-callback';
     }
 

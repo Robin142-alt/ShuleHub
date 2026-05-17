@@ -5,6 +5,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { AUTH_ANONYMOUS_USER_ID, AUTH_GUEST_ROLE } from '../auth/auth.constants';
 import { RequestContextService } from '../common/request-context/request-context.service';
 import { generateSpanId, generateTraceId } from '../common/request-context/trace.utils';
+import { sanitizeRequestPath } from '../common/request-path.util';
 
 @Injectable()
 export class RequestContextMiddleware implements NestMiddleware {
@@ -24,6 +25,7 @@ export class RequestContextMiddleware implements NestMiddleware {
     const parentSpanId = Array.isArray(parentSpanIdHeader)
       ? parentSpanIdHeader[0] || null
       : parentSpanIdHeader || null;
+    const safePath = sanitizeRequestPath(request.originalUrl || request.url);
 
     response.setHeader('x-request-id', requestId);
     response.setHeader('x-trace-id', traceId);
@@ -44,7 +46,7 @@ export class RequestContextMiddleware implements NestMiddleware {
         client_ip: this.resolveClientIp(request),
         user_agent: this.resolveUserAgent(request),
         method: request.method,
-        path: request.originalUrl || request.url,
+        path: safePath,
         started_at: startedAt,
       },
       next,

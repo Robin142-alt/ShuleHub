@@ -43,6 +43,70 @@ test('SupportRepository leases due queued email notifications with row locking b
   assert.deepEqual(queries[0]?.values, [50, 300000, ['email']]);
 });
 
+test('SupportRepository scopes portal ticket listings and reads to the requester user', async () => {
+  const queries: Array<{ text: string; values: unknown[] }> = [];
+  const repository = new SupportRepository({
+    query: async (text: string, values: unknown[] = []) => {
+      queries.push({ text, values });
+      return { rows: [] };
+    },
+  } as never);
+
+  await repository.listTickets({
+    tenantId: 'tenant-a',
+    requesterUserId: '00000000-0000-0000-0000-000000000001',
+    limit: 25,
+    offset: 0,
+  });
+  await repository.findTicketByIdForAccess('00000000-0000-0000-0000-00000000aaa1', {
+    tenantId: 'tenant-a',
+    requesterUserId: '00000000-0000-0000-0000-000000000001',
+  });
+
+  assert.match(queries[0]?.text ?? '', /ticket\.requester_user_id = \$2::uuid/);
+  assert.deepEqual(queries[0]?.values, [
+    'tenant-a',
+    '00000000-0000-0000-0000-000000000001',
+    false,
+    25,
+    0,
+  ]);
+  assert.match(queries[1]?.text ?? '', /ticket\.tenant_id = \$2/);
+  assert.match(queries[1]?.text ?? '', /ticket\.requester_user_id = \$3::uuid/);
+  assert.deepEqual(queries[1]?.values, [
+    '00000000-0000-0000-0000-00000000aaa1',
+    'tenant-a',
+    '00000000-0000-0000-0000-000000000001',
+  ]);
+});
+
+test('SupportRepository hides internal-note attachments unless explicitly requested', async () => {
+  const queries: Array<{ text: string; values: unknown[] }> = [];
+  const repository = new SupportRepository({
+    query: async (text: string, values: unknown[] = []) => {
+      queries.push({ text, values });
+      return { rows: [] };
+    },
+  } as never);
+
+  await repository.listAttachments('tenant-a', '00000000-0000-0000-0000-00000000aaa1');
+  await repository.listAttachments('tenant-a', '00000000-0000-0000-0000-00000000aaa1', {
+    includeInternal: true,
+  });
+
+  assert.match(queries[0]?.text ?? '', /attachment_type <> 'internal_note'/);
+  assert.deepEqual(queries[0]?.values, [
+    'tenant-a',
+    '00000000-0000-0000-0000-00000000aaa1',
+    false,
+  ]);
+  assert.deepEqual(queries[1]?.values, [
+    'tenant-a',
+    '00000000-0000-0000-0000-00000000aaa1',
+    true,
+  ]);
+});
+
 test('SupportRepository leases due queued email and SMS notifications for provider retry delivery', async () => {
   const queries: Array<{ text: string; values: unknown[] }> = [];
   const repository = new SupportRepository({
@@ -98,6 +162,69 @@ test('SupportRepository lists unresolved tickets with unrecorded SLA breaches', 
   assert.match(breachQuery, /NOT EXISTS/);
   assert.match(breachQuery, /ticket.sla_breached/);
   assert.deepEqual(queries[0]?.values, [40]);
+});
+
+test('SupportRepository analytics include response time, notification delivery, and active incidents', async () => {
+  const queries: string[] = [];
+  const repository = new SupportRepository({
+    query: async (text: string) => {
+      queries.push(text);
+
+      if (text.includes('SELECT status, COUNT')) {
+        return {
+          rows: [
+            { status: 'Open', total: 3 },
+            { status: 'Escalated', total: 2 },
+            { status: 'Resolved', total: 5 },
+          ],
+        };
+      }
+
+      if (text.includes('SELECT priority, COUNT')) {
+        return { rows: [{ priority: 'Critical', total: 2 }] };
+      }
+
+      if (text.includes('percentile_cont')) {
+        return { rows: [{ median_response_minutes: 12.5 }] };
+      }
+
+      if (text.includes('first_response_due_at')) {
+        return { rows: [{ total: 10, met: 8, breached: 1 }] };
+      }
+
+      if (text.includes('FROM support_notifications')) {
+        return { rows: [{ channel: 'email', delivery_status: 'failed', total: 1 }] };
+      }
+
+      if (text.includes('FROM support_incidents')) {
+        return { rows: [{ total: 1 }] };
+      }
+
+      if (text.includes('GROUP BY category, module_affected')) {
+        return { rows: [] };
+      }
+
+      if (text.includes("date_trunc('day'")) {
+        return { rows: [] };
+      }
+
+      return { rows: [{ total: 0 }] };
+    },
+  } as never);
+
+  const analytics = await repository.getAnalytics();
+
+  assert.equal(analytics.open_tickets, 5);
+  assert.equal(analytics.escalated_tickets, 2);
+  assert.equal(analytics.median_response_minutes, 12.5);
+  assert.deepEqual(analytics.first_response_sla, { total: 10, met: 8, breached: 1 });
+  assert.deepEqual(analytics.notification_delivery_state, [
+    { channel: 'email', delivery_status: 'failed', total: 1 },
+  ]);
+  assert.equal(analytics.system_status_incidents, 1);
+  assert.equal(queries.some((query) => query.includes('percentile_cont')), true);
+  assert.equal(queries.some((query) => query.includes('FROM support_notifications')), true);
+  assert.equal(queries.some((query) => query.includes('FROM support_incidents')), true);
 });
 
 test('SupportRepository clears resolved and closed timestamps when tickets reopen', async () => {

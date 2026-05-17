@@ -152,6 +152,18 @@ export default () => ({
       process.env.SECURITY_AUTH_RATE_LIMIT_MAX_REQUESTS,
       20,
     ),
+    authSessionRateLimitMaxRequests: parseNumber(
+      process.env.SECURITY_AUTH_SESSION_RATE_LIMIT_MAX_REQUESTS,
+      10,
+    ),
+    authRecoveryRateLimitMaxRequests: parseNumber(
+      process.env.SECURITY_AUTH_RECOVERY_RATE_LIMIT_MAX_REQUESTS,
+      5,
+    ),
+    parentOtpRateLimitMaxRequests: parseNumber(
+      process.env.SECURITY_PARENT_OTP_RATE_LIMIT_MAX_REQUESTS,
+      5,
+    ),
     mpesaCallbackRateLimitMaxRequests: parseNumber(
       process.env.SECURITY_MPESA_CALLBACK_RATE_LIMIT_MAX_REQUESTS,
       60,

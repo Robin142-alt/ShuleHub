@@ -55,6 +55,7 @@ export interface ReleaseReadinessGateOptions {
   productionMonitoringRunbookSource?: string;
   pilotWorkflowChecklistSource?: string;
   implementation7LiveValidationSource?: string;
+  implementation11MaintainabilityScanSource?: string;
   uploadControllerSources?: Record<string, string>;
   syntheticJourneys?: readonly SyntheticJourney[];
   auditCoverageRequirements?: readonly AuditCoverageRequirement[];
@@ -108,8 +109,18 @@ const REQUIRED_NPM_SCRIPTS = [
   'load:high-volume-workflows',
   'perf:query-plan-review',
   'monitor:synthetic',
+  'maintainability:scan',
   'smoke:providers',
   'release:readiness',
+  'scorecard:production',
+  'certify:pilot',
+  'tenant:isolation:audit',
+  'security:scan',
+  'security:deps',
+  'finance:certify',
+  'library:certify',
+  'discipline:certify',
+  'ci:full',
   'monitor:create-service-account',
   'build:sms-relay',
   'test:sms-relay',
@@ -118,6 +129,7 @@ const REQUIRED_NPM_SCRIPTS = [
   'test:backup-integrity',
   'test:disaster-recovery',
   'dr:backup-restore',
+  'ops:incident-drill',
 ];
 const REQUIRED_DEFAULT_TEST_ARTIFACTS = [
   'app-route-permissions.test.js',
@@ -135,9 +147,11 @@ const REQUIRED_DEFAULT_TEST_ARTIFACTS = [
   'core-api-load.test.js',
   'generate-pilot-school-fixture.test.js',
   'high-volume-workflow-load.test.js',
+  'maintainability-scan.test.js',
   'query-plan-review.test.js',
   'release-readiness-gate.test.js',
   'provider-credential-smoke.test.js',
+  'incident-drill.test.js',
   'report-snapshot-manifest.test.js',
   'report-snapshot.repository.test.js',
   'synthetic-journey-monitor.test.js',
@@ -215,6 +229,17 @@ const REQUIRED_OPERABILITY_WORKFLOW_PATTERNS = [
   { label: 'provider smoke', pattern: /smoke:providers/ },
   { label: 'query-plan review', pattern: /perf:query-plan-review/ },
   { label: 'release readiness', pattern: /release:readiness/ },
+  { label: 'production scorecard', pattern: /scorecard:production/ },
+  { label: 'pilot certification', pattern: /certify:pilot/ },
+  { label: 'finance certification', pattern: /finance:certify/ },
+  { label: 'library certification', pattern: /library:certify/ },
+  { label: 'discipline certification', pattern: /discipline:certify/ },
+  { label: 'tenant isolation audit', pattern: /tenant:isolation:audit/ },
+  { label: 'security scan', pattern: /security:scan/ },
+  { label: 'maintainability scan', pattern: /maintainability:scan/ },
+  { label: 'dependency vulnerability scan', pattern: /security:deps/ },
+  { label: 'backup restore verification', pattern: /dr:backup-restore/ },
+  { label: 'incident drill validation', pattern: /ops:incident-drill/ },
   { label: 'monitor token secret', pattern: /PROD_MONITOR_ACCESS_TOKEN/ },
 ];
 
@@ -249,6 +274,9 @@ export function runReleaseReadinessGate(
   const implementation7LiveValidationSource =
     options.implementation7LiveValidationSource
     ?? readWorkspaceFile(workspaceRoot, 'docs/validation/implementation7-live-validation.md');
+  const implementation11MaintainabilityScanSource =
+    options.implementation11MaintainabilityScanSource
+    ?? readWorkspaceFile(workspaceRoot, 'docs/validation/implementation11-maintainability-scan.md');
   const uploadControllerSources = options.uploadControllerSources ?? {
     'apps/api/src/modules/support/support.controller.ts': readWorkspaceFile(
       workspaceRoot,
@@ -281,6 +309,12 @@ export function runReleaseReadinessGate(
       productionMonitoringRunbookSource,
       pilotWorkflowChecklistSource,
       implementation7LiveValidationSource,
+    }),
+    checkImplementation11MaintainabilityArtifacts({
+      packageJsonSource,
+      productionOperabilityWorkflowSource,
+      productionMonitoringRunbookSource,
+      implementation11MaintainabilityScanSource,
     }),
   ];
 
@@ -345,6 +379,50 @@ function checkImplementation7OperabilityArtifacts(input: {
     'implementation7-operability-artifacts',
     details,
     'Implementation 7 provider, monitoring, workflow, and validation artifacts are present and covered by release gates.',
+  );
+}
+
+function checkImplementation11MaintainabilityArtifacts(input: {
+  packageJsonSource: string;
+  productionOperabilityWorkflowSource: string;
+  productionMonitoringRunbookSource: string;
+  implementation11MaintainabilityScanSource: string;
+}): ReleaseReadinessGateCheck {
+  const packageJson = JSON.parse(input.packageJsonSource) as {
+    scripts?: Record<string, string>;
+  };
+  const scripts = packageJson.scripts ?? {};
+  const defaultTestScript = scripts.test ?? '';
+  const details: string[] = [];
+
+  if (!scripts['maintainability:scan']) {
+    details.push('Missing npm script: maintainability:scan.');
+  }
+
+  if (!defaultTestScript.includes('maintainability-scan.test.js')) {
+    details.push('Default npm test script must include maintainability-scan.test.js.');
+  }
+
+  if (!/maintainability:scan/i.test(input.productionOperabilityWorkflowSource)) {
+    details.push('Production operability workflow must run the maintainability scan.');
+  }
+
+  if (!/maintainability gate|maintainability:scan/i.test(input.productionMonitoringRunbookSource)) {
+    details.push('Production monitoring runbook must document the maintainability gate.');
+  }
+
+  if (!/Implementation 11 Maintainability Scan/i.test(input.implementation11MaintainabilityScanSource)) {
+    details.push('docs/validation/implementation11-maintainability-scan.md must be generated.');
+  }
+
+  if (!/Status:\s*pass/i.test(input.implementation11MaintainabilityScanSource)) {
+    details.push('Implementation 11 maintainability scan artifact must show Status: pass.');
+  }
+
+  return buildCheck(
+    'implementation11-maintainability-artifacts',
+    details,
+    'Implementation 11 maintainability scan is scripted, tested, documented, and generated by CI.',
   );
 }
 

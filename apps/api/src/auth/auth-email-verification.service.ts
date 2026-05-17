@@ -62,7 +62,6 @@ export class AuthEmailVerificationService {
     const verifyUrl = this.buildVerifyUrl(token);
     const subject = 'Verify your ShuleHub ERP email address';
     const payload = {
-      verify_url: verifyUrl,
       display_name: user.display_name,
       expires_at: expiresAt.toISOString(),
       purpose: 'email_verification',

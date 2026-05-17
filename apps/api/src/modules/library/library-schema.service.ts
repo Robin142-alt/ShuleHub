@@ -136,6 +136,12 @@ export class LibrarySchemaService implements OnModuleInit {
         ON library_copies (tenant_id, qr_code)
         WHERE qr_code IS NOT NULL;
 
+      CREATE INDEX IF NOT EXISTS ix_library_copies_tenant_status_created
+        ON library_copies (tenant_id, status, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS ix_library_copies_tenant_accession
+        ON library_copies (tenant_id, accession_number);
+
       CREATE INDEX IF NOT EXISTS ix_library_borrowers_tenant_scan_code
         ON library_borrowers (tenant_id, scan_code)
         WHERE scan_code IS NOT NULL;

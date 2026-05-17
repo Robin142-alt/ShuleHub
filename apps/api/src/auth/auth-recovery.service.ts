@@ -71,7 +71,6 @@ export class AuthRecoveryService {
     const resetUrl = this.buildResetUrl(audience, token);
     const subject = 'Reset your ShuleHub ERP password';
     const payload = {
-      reset_url: resetUrl,
       display_name: user.display_name,
       expires_at: expiresAt.toISOString(),
       purpose: 'password_recovery',

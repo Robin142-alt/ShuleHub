@@ -3,25 +3,17 @@ import { writeFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 
 import format from 'pg-format';
-import { PoolClient, QueryResultRow } from 'pg';
-
-import { DatabaseSecurityService } from '../src/database/database-security.service';
-import {
-  closeRaceTestHarness,
-  createRaceTestHarness,
-  ensureRaceIntegrationEnv,
-  RaceTestHarness,
-} from './support/race-harness';
+import { Pool, PoolClient, QueryResultRow } from 'pg';
 
 type BenchmarkQueryName =
   | 'students_active_page'
-  | 'attendance_student_history'
+  | 'library_available_page'
   | 'payments_recent_page';
 
 interface ScaleConfig {
   tenant_count: number;
   students_per_tenant: number;
-  attendance_days_per_student: number;
+  library_titles_per_tenant: number;
   payments_per_tenant: number;
   sample_tenants: number;
   benchmark_iterations: number;
@@ -37,7 +29,7 @@ interface TenantProbe {
 }
 
 interface IsolationCheckResult {
-  table: 'students' | 'attendance_records' | 'payment_intents';
+  table: 'students' | 'library_copies' | 'payment_intents';
   source_tenant_id: string;
   target_tenant_id: string;
   own_row_count: number;
@@ -104,7 +96,7 @@ interface TenantScaleReport {
   seeded: {
     tenant_count: number;
     student_count: number;
-    attendance_count: number;
+    library_copy_count: number;
     payment_count: number;
     transaction_count: number;
     ledger_entry_count: number;
@@ -125,14 +117,20 @@ const BENCHMARK_SQL: Record<BenchmarkQueryName, string> = {
     ORDER BY created_at DESC
     LIMIT 25
   `,
-  attendance_student_history: `
-    SELECT id, attendance_date, status, updated_at
-    FROM attendance_records
-    WHERE tenant_id = $1
-      AND student_id = $2::uuid
-      AND attendance_date >= $3::date
-      AND attendance_date <= $4::date
-    ORDER BY attendance_date DESC
+  library_available_page: `
+    SELECT
+      library_copies.id,
+      library_catalog_items.title,
+      library_copies.accession_number,
+      library_copies.status,
+      library_copies.created_at
+    FROM library_copies
+    INNER JOIN library_catalog_items
+      ON library_catalog_items.tenant_id = library_copies.tenant_id
+     AND library_catalog_items.id = library_copies.catalog_item_id
+    WHERE library_copies.tenant_id = $1
+      AND library_copies.status = 'available'
+    ORDER BY library_copies.created_at DESC
     LIMIT 30
   `,
   payments_recent_page: `
@@ -151,14 +149,14 @@ const BENCHMARK_SQL: Record<BenchmarkQueryName, string> = {
 };
 
 const main = async (): Promise<void> => {
-  ensureRaceIntegrationEnv();
+  ensureTenantScaleEnv();
   const config = parseConfig();
   const startedAt = new Date();
-  const harness = await createRaceTestHarness();
-  const client = await harness.databaseService.acquireClient();
+  const pool = createPool();
+  const client = await pool.connect();
 
   try {
-    const runtimeRoleName = getRuntimeRoleName(harness);
+    const runtimeRoleName = getRuntimeRoleName();
     await client.query('BEGIN');
     await client.query('SET LOCAL statement_timeout = 0');
 
@@ -199,15 +197,15 @@ const main = async (): Promise<void> => {
   } finally {
     await client.query('ROLLBACK').catch(() => undefined);
     client.release();
-    await closeRaceTestHarness(harness);
+    await pool.end();
   }
 };
 
 const parseConfig = (): ScaleConfig => ({
   tenant_count: parseInteger(process.env.SCALE_TENANTS, 1000, 1000, 10000),
   students_per_tenant: parseInteger(process.env.SCALE_STUDENTS_PER_TENANT, 12, 2, 200),
-  attendance_days_per_student: parseInteger(
-    process.env.SCALE_ATTENDANCE_DAYS_PER_STUDENT,
+  library_titles_per_tenant: parseInteger(
+    process.env.SCALE_LIBRARY_TITLES_PER_TENANT,
     8,
     1,
     120,
@@ -230,6 +228,23 @@ const parseConfig = (): ScaleConfig => ({
     20,
   ),
 });
+
+const ensureTenantScaleEnv = (): void => {
+  process.env.NODE_ENV = process.env.NODE_ENV ?? 'test';
+  process.env.DATABASE_RUNTIME_ROLE = process.env.DATABASE_RUNTIME_ROLE ?? 'shule_hub_runtime';
+
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is required for tenant-scale load verification');
+  }
+};
+
+const createPool = (): Pool =>
+  new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL?.includes('sslmode=require')
+      ? { rejectUnauthorized: false }
+      : undefined,
+  });
 
 const seedScaleDataset = async (
   client: PoolClient,
@@ -390,73 +405,94 @@ const seedScaleDataset = async (
   `);
 
   await client.query(`
-    CREATE TEMP TABLE scale_attendance (
-      attendance_id uuid PRIMARY KEY,
+    CREATE TEMP TABLE scale_library_catalog (
+      catalog_item_id uuid PRIMARY KEY,
       tenant_id text NOT NULL,
-      student_id uuid NOT NULL,
-      attendance_date date NOT NULL,
-      status text NOT NULL,
-      last_modified_at timestamptz NOT NULL
+      tenant_ord integer NOT NULL,
+      title_ord integer NOT NULL,
+      title text NOT NULL,
+      created_at timestamptz NOT NULL
     ) ON COMMIT DROP
   `);
   await client.query(
     `
-      INSERT INTO scale_attendance (
-        attendance_id,
+      INSERT INTO scale_library_catalog (
+        catalog_item_id,
         tenant_id,
-        student_id,
-        attendance_date,
-        status,
-        last_modified_at
+        tenant_ord,
+        title_ord,
+        title,
+        created_at
       )
       SELECT
         gen_random_uuid(),
         tenant_id,
-        student_id,
-        (CURRENT_DATE - ((attendance_ord - 1) || ' days')::interval)::date,
-        CASE attendance_ord % 4
-          WHEN 0 THEN 'present'
-          WHEN 1 THEN 'absent'
-          WHEN 2 THEN 'late'
-          ELSE 'excused'
-        END,
-        created_at + make_interval(hours => attendance_ord)
-      FROM scale_students
-      CROSS JOIN generate_series(1, $1) AS seeded(attendance_ord)
+        tenant_ord,
+        title_ord,
+        'Book ' || tenant_ord::text || '-' || title_ord::text,
+        NOW() - make_interval(mins => ((tenant_ord - 1) * $1) + title_ord)
+      FROM scale_tenants
+      CROSS JOIN generate_series(1, $1) AS seeded(title_ord)
     `,
-    [config.attendance_days_per_student],
+    [config.library_titles_per_tenant],
   );
   await client.query(`
-    INSERT INTO attendance_records (
+    INSERT INTO library_catalog_items (
       id,
       tenant_id,
-      student_id,
-      attendance_date,
-      status,
-      notes,
-      metadata,
-      source_device_id,
-      last_modified_at,
-      last_operation_id,
-      sync_version,
+      isbn,
+      title,
+      author,
+      category,
       created_at,
       updated_at
     )
     SELECT
-      attendance_id,
+      catalog_item_id,
       tenant_id,
-      student_id,
-      attendance_date,
+      '978-9966-' || LPAD(tenant_ord::text, 4, '0') || '-' || LPAD(title_ord::text, 3, '0'),
+      title,
+      'ShuleHub Scale Fixture',
+      CASE title_ord % 4
+        WHEN 0 THEN 'Reference'
+        WHEN 1 THEN 'English'
+        WHEN 2 THEN 'Science'
+        ELSE 'CBC'
+      END,
+      created_at,
+      created_at
+    FROM scale_library_catalog
+  `);
+  await client.query(`
+    INSERT INTO library_copies (
+      id,
+      tenant_id,
+      catalog_item_id,
+      accession_number,
       status,
-      'seeded-attendance',
-      '{"seed":"tenant-scale"}'::jsonb,
-      NULL,
-      last_modified_at,
-      NULL,
-      NULL,
-      last_modified_at,
-      last_modified_at
-    FROM scale_attendance
+      barcode,
+      qr_code,
+      shelf_location,
+      created_at,
+      updated_at
+    )
+    SELECT
+      gen_random_uuid(),
+      tenant_id,
+      catalog_item_id,
+      'LIB-' || LPAD(tenant_ord::text, 4, '0') || '-' || LPAD(title_ord::text, 3, '0'),
+      CASE title_ord % 9
+        WHEN 0 THEN 'issued'
+        WHEN 1 THEN 'reserved'
+        WHEN 2 THEN 'damaged'
+        ELSE 'available'
+      END,
+      'BAR-' || LPAD(tenant_ord::text, 4, '0') || '-' || LPAD(title_ord::text, 3, '0'),
+      'QR-' || LPAD(tenant_ord::text, 4, '0') || '-' || LPAD(title_ord::text, 3, '0'),
+      'SHELF-' || ((title_ord % 12) + 1)::text,
+      created_at,
+      created_at
+    FROM scale_library_catalog
   `);
 
   await client.query(`
@@ -848,7 +884,8 @@ const analyzeSeededTables = async (client: PoolClient): Promise<void> => {
   await client.query(`
     ANALYZE accounts;
     ANALYZE students;
-    ANALYZE attendance_records;
+    ANALYZE library_catalog_items;
+    ANALYZE library_copies;
     ANALYZE idempotency_keys;
     ANALYZE transactions;
     ANALYZE ledger_entries;
@@ -864,7 +901,7 @@ const loadSeededCounts = async (
   const row = await queryRow<{
     tenant_count: string;
     student_count: string;
-    attendance_count: string;
+    library_copy_count: string;
     payment_count: string;
     transaction_count: string;
     ledger_entry_count: string;
@@ -874,7 +911,7 @@ const loadSeededCounts = async (
       SELECT
         (SELECT COUNT(*)::text FROM scale_tenants) AS tenant_count,
         (SELECT COUNT(*)::text FROM scale_students) AS student_count,
-        (SELECT COUNT(*)::text FROM scale_attendance) AS attendance_count,
+        (SELECT COUNT(*)::text FROM scale_library_catalog) AS library_copy_count,
         (SELECT COUNT(*)::text FROM scale_payments) AS payment_count,
         (SELECT COUNT(*)::text FROM transactions WHERE request_id = 'tenant-scale-seed') AS transaction_count,
         (SELECT COUNT(*)::text FROM ledger_entries WHERE metadata ->> 'seed' = 'tenant-scale') AS ledger_entry_count
@@ -884,7 +921,7 @@ const loadSeededCounts = async (
   return {
     tenant_count: Number(row.tenant_count),
     student_count: Number(row.student_count),
-    attendance_count: Number(row.attendance_count),
+    library_copy_count: Number(row.library_copy_count),
     payment_count: Number(row.payment_count),
     transaction_count: Number(row.transaction_count),
     ledger_entry_count: Number(row.ledger_entry_count),
@@ -964,10 +1001,10 @@ const runIsolationChecks = async (
     results.push(
       await buildIsolationCheck(
         client,
-        'attendance_records',
+        'library_copies',
         sourceTenant.tenant_id,
         targetTenant.tenant_id,
-        `SELECT COUNT(*)::int AS value FROM attendance_records WHERE tenant_id = $1`,
+        `SELECT COUNT(*)::int AS value FROM library_copies WHERE tenant_id = $1`,
       ),
     );
     results.push(
@@ -1036,9 +1073,9 @@ const runExplainChecks = async (
     results.push(
       await explainBenchmarkQuery(
         client,
-        'attendance_student_history',
+        'library_available_page',
         probe,
-        ['ix_attendance_records_student_date'],
+        ['ix_library_copies_tenant_status_created', 'ix_library_copies_tenant_accession'],
       ),
     );
     results.push(
@@ -1116,7 +1153,7 @@ const runBenchmarks = async (
 ): Promise<BenchmarkSummary[]> => {
   const measurementsByQuery = new Map<BenchmarkQueryName, BenchmarkMeasurement[]>([
     ['students_active_page', []],
-    ['attendance_student_history', []],
+    ['library_available_page', []],
     ['payments_recent_page', []],
   ]);
 
@@ -1261,8 +1298,8 @@ const benchmarkValues = (
   switch (benchmark) {
     case 'students_active_page':
       return [probe.tenant_id];
-    case 'attendance_student_history':
-      return [probe.tenant_id, probe.sample_student_id, '2020-01-01', '2030-12-31'];
+    case 'library_available_page':
+      return [probe.tenant_id];
     case 'payments_recent_page':
       return [probe.tenant_id];
   }
@@ -1302,8 +1339,8 @@ const isBenchmarkTargetRelation = (
   switch (benchmark) {
     case 'students_active_page':
       return relationName === 'students';
-    case 'attendance_student_history':
-      return relationName === 'attendance_records';
+    case 'library_available_page':
+      return relationName === 'library_copies';
     case 'payments_recent_page':
       return relationName === 'payment_intents';
   }

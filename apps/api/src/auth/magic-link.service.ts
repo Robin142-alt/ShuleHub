@@ -21,9 +21,13 @@ export class MagicLinkService {
     const now = input.now ?? new Date().toISOString();
     const result = await this.databaseService.query<ConsumedMagicLink>(
       `
+        WITH auth_operation AS (
+          SELECT set_config('app.auth_action_token_operation', 'magic_login_consume', true)
+        )
         UPDATE auth_action_tokens
         SET consumed_at = $2::timestamptz,
             updated_at = NOW()
+        FROM auth_operation
         WHERE token_hash = $1
           AND purpose = 'magic_login'
           AND consumed_at IS NULL

@@ -77,16 +77,21 @@ export class ParentPortalAuthRepository {
     return result.rows[0] ?? null;
   }
 
-  async consumeChallenge(tenantId: string, challengeId: string): Promise<void> {
-    await this.databaseService.query(
+  async consumeChallenge(tenantId: string, challengeId: string): Promise<boolean> {
+    const result = await this.databaseService.query<{ id: string }>(
       `
         UPDATE parent_otp_challenges
         SET consumed_at = NOW()
         WHERE tenant_id = $1
           AND id = $2::uuid
+          AND consumed_at IS NULL
+          AND expires_at > NOW()
+        RETURNING id::text
       `,
       [tenantId, challengeId],
     );
+
+    return Boolean(result.rows[0]);
   }
 
   async incrementAttempts(tenantId: string, challengeId: string): Promise<void> {

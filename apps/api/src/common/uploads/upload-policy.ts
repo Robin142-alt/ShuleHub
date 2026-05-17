@@ -26,7 +26,6 @@ const ALLOWED_MIME_TYPES = new Set([
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/zip',
   'image/jpeg',
   'image/png',
   'image/webp',
@@ -48,7 +47,6 @@ const ALLOWED_EXTENSIONS = new Set([
   '.webp',
   '.xls',
   '.xlsx',
-  '.zip',
 ]);
 
 const UNSAFE_FILENAME_CHARACTERS = /[\u0000-\u001f\u007f<>:"/\\|?*]/;
@@ -165,10 +163,8 @@ function matchesDeclaredContent(extension: string, mimeType: string, buffer: Buf
 
 function isZipBackedDocument(extension: string, mimeType: string): boolean {
   return (
-    extension === '.zip'
-    || extension === '.docx'
+    extension === '.docx'
     || extension === '.xlsx'
-    || mimeType === 'application/zip'
     || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     || mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   );

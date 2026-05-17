@@ -46,9 +46,11 @@ const passingPackageJsonSource = JSON.stringify({
       'dist/apps/api/src/scripts/core-api-load.test.js',
       'dist/apps/api/src/scripts/generate-pilot-school-fixture.test.js',
       'dist/apps/api/src/scripts/high-volume-workflow-load.test.js',
+      'dist/apps/api/src/scripts/maintainability-scan.test.js',
       'dist/apps/api/src/scripts/query-plan-review.test.js',
       'dist/apps/api/src/scripts/release-readiness-gate.test.js',
       'dist/apps/api/src/scripts/provider-credential-smoke.test.js',
+      'dist/apps/api/src/scripts/incident-drill.test.js',
       'dist/apps/api/src/scripts/synthetic-journey-monitor.test.js',
       'dist/apps/api/src/common/uploads/streaming-upload.service.test.js',
       'dist/apps/api/src/modules/academics/academics.test.js',
@@ -66,8 +68,18 @@ const passingPackageJsonSource = JSON.stringify({
     'load:high-volume-workflows': 'node apps/api/src/scripts/high-volume-workflow-load.ts',
     'perf:query-plan-review': 'node apps/api/src/scripts/query-plan-review.ts',
     'monitor:synthetic': 'node apps/api/src/scripts/synthetic-journey-monitor.ts',
+    'maintainability:scan': 'node apps/api/src/scripts/maintainability-scan.ts',
     'smoke:providers': 'node apps/api/src/scripts/provider-credential-smoke.ts',
     'release:readiness': 'node dist/apps/api/src/scripts/release-readiness-gate.js',
+    'scorecard:production': 'node apps/api/src/scripts/generate-production-scorecard.ts',
+    'certify:pilot': 'node apps/api/src/scripts/run-pilot-certification.ts',
+    'tenant:isolation:audit': 'node apps/api/src/scripts/tenant-isolation-audit.ts',
+    'security:scan': 'node apps/api/src/scripts/security-scan.ts',
+    'security:deps': 'npm audit --omit=dev --audit-level=high',
+    'finance:certify': 'node apps/api/src/scripts/certify-finance.ts',
+    'library:certify': 'node apps/api/src/scripts/certify-library.ts',
+    'discipline:certify': 'node apps/api/src/scripts/certify-discipline.ts',
+    'ci:full': 'npm run build && npm run security:deps',
     'monitor:create-service-account': 'node apps/api/src/scripts/create-monitoring-service-account.ts',
     'build:sms-relay': 'npm --prefix apps/sms-relay run build',
     'test:sms-relay': 'npm --prefix apps/sms-relay run test',
@@ -76,6 +88,7 @@ const passingPackageJsonSource = JSON.stringify({
     'test:backup-integrity': 'jest apps/api/test/backup-integrity.integration-spec.ts',
     'test:disaster-recovery': 'jest apps/api/test/disaster-recovery.integration-spec.ts',
     'dr:backup-restore': 'npm run test:backup-integrity && npm run test:disaster-recovery',
+    'ops:incident-drill': 'node apps/api/src/scripts/incident-drill.ts',
   },
 });
 
@@ -123,16 +136,30 @@ const passingProductionOperabilityWorkflowSource = `
         - run: npm run monitor:synthetic
           env:
             SYNTHETIC_MONITOR_TOKEN: \${{ secrets.PROD_MONITOR_ACCESS_TOKEN }}
+        - run: npm run maintainability:scan
         - run: npm run load:core-api
         - run: npm run smoke:providers
         - run: npm run perf:query-plan-review
         - run: npm run release:readiness
+        - run: npm run scorecard:production
+        - run: npm run certify:pilot
+        - run: npm run finance:certify
+        - run: npm run library:certify
+        - run: npm run discipline:certify
+        - run: npm run tenant:isolation:audit
+        - run: npm run security:scan
+        - run: npm run security:deps
+        - run: npm run dr:backup-restore > production-backup-restore.txt
+        - run: npm run ops:incident-drill -- --dry-run > production-incident-drill.json
 `;
 
 const passingProductionMonitoringRunbookSource = `
   # Production Monitoring Runbook
   ## Rotation
   Rotate monitor token every 90 days with monitor:create-service-account.
+
+  ## Maintainability Gate
+  Run npm run maintainability:scan before production deployments.
 `;
 
 const passingPilotWorkflowChecklistSource = `
@@ -145,6 +172,11 @@ const passingImplementation7LiveValidationSource = `
   Live SMS provider smoke: Pending.
   Live object storage smoke: Pending.
   Real pilot school workflow checklist: Pending.
+`;
+
+const passingImplementation11MaintainabilityScanSource = `
+  # Implementation 11 Maintainability Scan
+  Status: pass
 `;
 
 const passingDisasterRecoveryRunbookSource = `
@@ -258,6 +290,27 @@ test('runReleaseReadinessGate fails when Implementation 7 operability artifacts 
   assert.match(
     result.checks.find((check) => check.id === 'implementation7-operability-artifacts')?.details.join('\n') ?? '',
     /live SMS provider check|monitor token secret|monitor token rotation|platform-owner school creation/i,
+  );
+});
+
+test('runReleaseReadinessGate fails when Implementation 11 maintainability artifacts are missing', () => {
+  const result = runGate({
+    packageJsonSource: JSON.stringify({
+      scripts: {
+        ...JSON.parse(passingPackageJsonSource).scripts,
+        'maintainability:scan': undefined,
+        test: 'node --test dist/apps/api/src/scripts/release-readiness-gate.test.js',
+      },
+    }),
+    productionOperabilityWorkflowSource: 'name: Production Operability',
+    productionMonitoringRunbookSource: '# Monitoring',
+    implementation11MaintainabilityScanSource: '# Implementation 11 Maintainability Scan\nStatus: fail',
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(
+    result.checks.find((check) => check.id === 'implementation11-maintainability-artifacts')?.details.join('\n') ?? '',
+    /maintainability scan|maintainability gate|implementation11-maintainability-scan/i,
   );
 });
 
@@ -459,6 +512,7 @@ function runGate(overrides: ReleaseReadinessGateOptions = {}) {
     productionMonitoringRunbookSource: passingProductionMonitoringRunbookSource,
     pilotWorkflowChecklistSource: passingPilotWorkflowChecklistSource,
     implementation7LiveValidationSource: passingImplementation7LiveValidationSource,
+    implementation11MaintainabilityScanSource: passingImplementation11MaintainabilityScanSource,
     ...overrides,
   });
 }

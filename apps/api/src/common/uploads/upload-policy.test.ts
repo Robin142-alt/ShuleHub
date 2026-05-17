@@ -76,6 +76,19 @@ test('validateUploadedFile rejects unsupported upload types even when the filena
   );
 });
 
+test('validateUploadedFile rejects archive uploads to avoid unbounded nested content', () => {
+  assert.throws(
+    () =>
+      validateUploadedFile({
+        originalname: 'diagnostics.zip',
+        mimetype: 'application/zip',
+        size: 1024,
+        buffer: Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+      }),
+    /Unsupported file type/,
+  );
+});
+
 test('validateUploadedFile rejects unsafe original filenames before storage', () => {
   for (const originalname of [
     '../fee-statement.pdf',
@@ -297,6 +310,48 @@ test('UploadMalwareScanService skips live scans when provider config is absent a
     },
     fetchImpl,
   );
+
+  assert.equal(result, undefined);
+});
+
+test('UploadMalwareScanService requires a configured scan provider in production by default', async () => {
+  const service = new UploadMalwareScanService({
+    get: (key: string) => (key === 'app.nodeEnv' ? 'production' : undefined),
+  } as never);
+
+  await assert.rejects(
+    () =>
+      service.scanIfConfigured({
+        originalname: 'incident-note.txt',
+        mimetype: 'text/plain',
+        size: 128,
+        buffer: Buffer.from('support note'),
+      }),
+    /provider is required/i,
+  );
+});
+
+test('UploadMalwareScanService can explicitly allow unscanned development-style uploads', async () => {
+  const service = new UploadMalwareScanService({
+    get: (key: string) => {
+      if (key === 'app.nodeEnv') {
+        return 'production';
+      }
+
+      if (key === 'UPLOAD_MALWARE_SCAN_ALLOW_UNSCANNED') {
+        return 'true';
+      }
+
+      return undefined;
+    },
+  } as never);
+
+  const result = await service.scanIfConfigured({
+    originalname: 'incident-note.txt',
+    mimetype: 'text/plain',
+    size: 128,
+    buffer: Buffer.from('support note'),
+  });
 
   assert.equal(result, undefined);
 });

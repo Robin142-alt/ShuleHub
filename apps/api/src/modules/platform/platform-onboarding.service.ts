@@ -204,10 +204,7 @@ export class PlatformOnboardingService {
         input.tenantId,
         input.adminEmail,
         'You have been invited to ShuleHub ERP',
-        JSON.stringify({
-          ...input.payload,
-          invite_url: input.inviteUrl,
-        }),
+        JSON.stringify(input.payload),
       ],
     );
     const outboxId = outboxResult.rows[0]?.id;
@@ -250,7 +247,7 @@ export class PlatformOnboardingService {
       .replace(/-{2,}/g, '-');
 
     if (!/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(normalized)) {
-      throw new BadRequestException('Use a school workspace code with letters, numbers, and hyphens.');
+      throw new BadRequestException('Use a school URL slug with letters, numbers, and hyphens.');
     }
 
     return normalized;

@@ -14,6 +14,7 @@ import { InventoryModuleScreen } from "@/components/modules/inventory/inventory-
 import { ErpShell } from "@/components/school/erp-shell";
 import { UserManagementPanel } from "@/components/school/user-management-panel";
 import { SupportCenterWorkspace } from "@/components/support/support-center-workspace";
+import { LearnerPicker } from "@/components/common/learner-picker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -29,6 +30,7 @@ import { getCsrfToken } from "@/lib/auth/csrf-client";
 import type { ExperienceNotificationItem } from "@/lib/experiences/types";
 import { getSchoolKpiSummary, getSchoolWorkspace, schoolSectionLabels, type SchoolExperienceRole, type SchoolSubscriptionView } from "@/lib/experiences/school-data";
 import { toSchoolPath, toSchoolStudentPath } from "@/lib/routing/experience-routes";
+import type { LearnerLookupItem } from "@/lib/students/student-lookup";
 
 type SchoolRouteMode = "hosted" | "public";
 type ManualReceiptMethod = "cash" | "cheque" | "bank_deposit" | "eft" | "mpesa_c2b";
@@ -409,7 +411,7 @@ function buildBulkFeeStudents(drafts: BulkFeeStudentDraft[]) {
     const studentName = draft.student_name.trim();
 
     if (!studentId || !studentName) {
-      return { error: "Each billing row needs a student ID and student name.", students };
+          return { error: "Each billing row needs a learner and learner name.", students };
     }
 
     if (seenStudentIds.has(studentId)) {
@@ -1298,6 +1300,7 @@ function SchoolFinancePage({
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [invoiceDraft, setInvoiceDraft] = useState({ studentId: "", studentName: "", amount: "", dueAt: "" });
+  const [selectedInvoiceLearner, setSelectedInvoiceLearner] = useState<LearnerLookupItem | null>(null);
   const [paymentDraft, setPaymentDraft] = useState({
     payment_method: "cash" as ManualReceiptMethod,
     student_id: "",
@@ -1306,6 +1309,7 @@ function SchoolFinancePage({
     amount: "",
     reference: "",
   });
+  const [selectedPaymentLearner, setSelectedPaymentLearner] = useState<LearnerLookupItem | null>(null);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [financeMessage, setFinanceMessage] = useState<string | null>(null);
@@ -1450,6 +1454,7 @@ function SchoolFinancePage({
 
   function openInvoiceModal() {
     setInvoiceDraft({ studentId: "", studentName: "", amount: "", dueAt: "" });
+    setSelectedInvoiceLearner(null);
     setInvoiceError(null);
     setShowInvoiceModal(true);
   }
@@ -1468,6 +1473,7 @@ function SchoolFinancePage({
       amount: "",
       reference: "",
     });
+    setSelectedPaymentLearner(null);
     setPaymentError(null);
     setShowPaymentModal(true);
   }
@@ -1864,7 +1870,7 @@ function SchoolFinancePage({
 
   async function saveInvoice() {
     const validationError = getMissingFieldError([
-      { label: "Student ID", value: invoiceDraft.studentId },
+      { label: "Learner", value: invoiceDraft.studentId },
       { label: "Student name", value: invoiceDraft.studentName },
       { label: "Amount", value: invoiceDraft.amount },
     ]);
@@ -1909,6 +1915,7 @@ function SchoolFinancePage({
       setInvoiceError(null);
       setFinanceMessage(`Invoice created for ${invoiceDraft.studentName.trim()}.`);
       setInvoiceDraft({ studentId: "", studentName: "", amount: "", dueAt: "" });
+      setSelectedInvoiceLearner(null);
       setShowInvoiceModal(false);
       await loadFinanceActivity();
       await loadStudentBalances();
@@ -1974,6 +1981,7 @@ function SchoolFinancePage({
         amount: "",
         reference: "",
       });
+      setSelectedPaymentLearner(null);
       setShowPaymentModal(false);
       await loadFinanceActivity();
       await loadStudentBalances();
@@ -1982,6 +1990,20 @@ function SchoolFinancePage({
       setPaymentError(caught instanceof Error ? caught.message : "Payment could not be recorded.");
     }
   }
+
+  const invoiceOptions = activity
+    .filter((entry) => entry.kind === "invoice")
+    .map((entry) => ({
+      id: entry.invoice_id ?? entry.id,
+      reference: entry.reference,
+      studentId: entry.student_id,
+      studentName: entry.student_name,
+      amount: formatMinorKes(entry.amount_minor),
+      status: entry.status,
+    }));
+  const filteredInvoiceOptions = invoiceOptions.filter(
+    (invoice) => !selectedPaymentLearner || invoice.studentId === selectedPaymentLearner.id,
+  );
 
   return (
     <div className="space-y-6">
@@ -2239,7 +2261,7 @@ function SchoolFinancePage({
               {bulkStudents.map((student) => (
                 <div key={student.id} className="grid gap-2 md:grid-cols-2 xl:grid-cols-[1fr_1fr_0.8fr_0.8fr_0.9fr_auto]">
                   <input
-                    aria-label="Bulk billing student ID"
+                    aria-label="Bulk billing learner roster key"
                     className="input-base"
                     value={student.student_id}
                     onChange={(event) => updateBulkStudent(student.id, "student_id", event.target.value)}
@@ -2655,19 +2677,23 @@ function SchoolFinancePage({
             </div>
           ) : null}
           <div className="grid gap-4 md:grid-cols-2">
-          <label className="space-y-2 text-sm text-foreground">
-            <span className="font-medium">Student ID</span>
-            <input
-              aria-label="Invoice student ID"
-              value={invoiceDraft.studentId}
-              onChange={(event) => {
-                setInvoiceDraft((current) => ({ ...current, studentId: event.target.value }));
+          <div className="md:col-span-2">
+            <LearnerPicker
+              label="Learner"
+              tenantSlug={tenantSlug ?? ""}
+              value={selectedInvoiceLearner}
+              onChange={(learner) => {
+                setSelectedInvoiceLearner(learner);
+                setInvoiceDraft((current) => ({
+                  ...current,
+                  studentId: learner?.id ?? "",
+                  studentName: learner?.name ?? "",
+                }));
                 setInvoiceError(null);
               }}
-              className="input-base"
-              placeholder="Student UUID"
+              hint="Search name or admission number, then enter the invoice amount."
             />
-          </label>
+          </div>
           <label className="space-y-2 text-sm text-foreground">
             <span className="font-medium">Student name</span>
             <input
@@ -2769,31 +2795,39 @@ function SchoolFinancePage({
               placeholder="Amount in KES"
             />
           </label>
-          <label className="space-y-2 text-sm text-foreground">
-            <span className="font-medium">Student ID</span>
-            <input
-              aria-label="Payment student ID"
-              value={paymentDraft.student_id}
-              onChange={(event) => {
-                setPaymentDraft((current) => ({ ...current, student_id: event.target.value }));
+          <div className="space-y-2 text-sm text-foreground">
+            <LearnerPicker
+              label="Payment student or admission number"
+              tenantSlug={tenantSlug ?? ""}
+              value={selectedPaymentLearner}
+              onChange={(learner) => {
+                setSelectedPaymentLearner(learner);
+                setPaymentDraft((current) => ({
+                  ...current,
+                  student_id: learner?.id ?? "",
+                }));
                 setPaymentError(null);
               }}
-              className="input-base"
-              placeholder="Student UUID"
             />
-          </label>
+          </div>
           <label className="space-y-2 text-sm text-foreground">
-            <span className="font-medium">Invoice ID</span>
-            <input
-              aria-label="Payment invoice ID"
+            <span className="font-medium">Select invoice</span>
+            <select
+              aria-label="Payment invoice"
               value={paymentDraft.invoice_id}
               onChange={(event) => {
                 setPaymentDraft((current) => ({ ...current, invoice_id: event.target.value }));
                 setPaymentError(null);
               }}
               className="input-base"
-              placeholder="Invoice UUID"
-            />
+            >
+              <option value="">Match automatically or select invoice</option>
+              {filteredInvoiceOptions.map((invoice) => (
+                <option key={invoice.id} value={invoice.id}>
+                  {invoice.reference} - {invoice.studentName ?? "Learner"} - {invoice.amount}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="space-y-2 text-sm text-foreground md:col-span-2">
             <span className="font-medium">Payer name</span>
@@ -2991,6 +3025,7 @@ function MpesaC2bReviewPanel({ tenantSlug }: { tenantSlug?: string | null }) {
   const [selectedPaymentId, setSelectedPaymentId] = useState("");
   const [invoiceId, setInvoiceId] = useState("");
   const [studentId, setStudentId] = useState("");
+  const [selectedReviewLearner, setSelectedReviewLearner] = useState<LearnerLookupItem | null>(null);
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -3086,6 +3121,7 @@ function MpesaC2bReviewPanel({ tenantSlug }: { tenantSlug?: string | null }) {
       setSelectedPaymentId("");
       setInvoiceId("");
       setStudentId("");
+      setSelectedReviewLearner(null);
       setNotes("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Paybill deposit could not be reconciled.");
@@ -3116,19 +3152,23 @@ function MpesaC2bReviewPanel({ tenantSlug }: { tenantSlug?: string | null }) {
             ))}
           </select>
           <input
-            aria-label="Invoice ID"
+            aria-label="Invoice reference"
             className="input-base"
-            placeholder="Invoice ID"
+            placeholder="Invoice number"
             value={invoiceId}
             onChange={(event) => setInvoiceId(event.target.value)}
           />
-          <input
-            aria-label="Student ID"
-            className="input-base"
-            placeholder="Student ID"
-            value={studentId}
-            onChange={(event) => setStudentId(event.target.value)}
-          />
+          <div className="sm:col-span-2">
+            <LearnerPicker
+              label="Learner name or admission number"
+              tenantSlug={tenantSlug ?? ""}
+              value={selectedReviewLearner}
+              onChange={(learner) => {
+                setSelectedReviewLearner(learner);
+                setStudentId(learner?.id ?? "");
+              }}
+            />
+          </div>
           <input
             aria-label="Reconciliation notes"
             className="input-base sm:col-span-3"
@@ -3188,6 +3228,7 @@ function ManualReceiptsPanel({ tenantSlug }: { tenantSlug?: string | null }) {
     fee_control_account_code: "1100-AR-FEES",
     notes: "",
   });
+  const [selectedReceiptLearner, setSelectedReceiptLearner] = useState<LearnerLookupItem | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -3299,6 +3340,8 @@ function ManualReceiptsPanel({ tenantSlug }: { tenantSlug?: string | null }) {
       );
       setDraft((current) => ({
         ...current,
+        student_id: "",
+        invoice_id: "",
         amount: "",
         payer_name: "",
         cheque_number: "",
@@ -3306,6 +3349,7 @@ function ManualReceiptsPanel({ tenantSlug }: { tenantSlug?: string | null }) {
         deposit_reference: "",
         notes: "",
       }));
+      setSelectedReceiptLearner(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Manual receipt could not be saved.");
     } finally {
@@ -3401,19 +3445,27 @@ function ManualReceiptsPanel({ tenantSlug }: { tenantSlug?: string | null }) {
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         <input
-          aria-label="Student ID"
+          aria-label="Invoice reference"
           className="input-base"
-          placeholder="Student UUID"
-          value={draft.student_id}
-          onChange={(event) => setDraft((current) => ({ ...current, student_id: event.target.value }))}
-        />
-        <input
-          aria-label="Invoice ID"
-          className="input-base"
-          placeholder="Invoice UUID"
+          placeholder="Invoice number or receipt reference"
           value={draft.invoice_id}
           onChange={(event) => setDraft((current) => ({ ...current, invoice_id: event.target.value }))}
         />
+        <div className="lg:col-span-2">
+          <LearnerPicker
+            label="Learner name or admission number"
+            tenantSlug={tenantSlug ?? ""}
+            value={selectedReceiptLearner}
+            onChange={(learner) => {
+              setSelectedReceiptLearner(learner);
+              setDraft((current) => ({
+                ...current,
+                student_id: learner?.id ?? "",
+                payer_name: learner?.name ?? current.payer_name,
+              }));
+            }}
+          />
+        </div>
         <input
           aria-label="Payer name"
           className="input-base"

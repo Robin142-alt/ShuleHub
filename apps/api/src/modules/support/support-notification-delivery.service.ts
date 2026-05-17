@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { AuthEmailService } from '../../auth/auth-email.service';
 import { RequestContextService } from '../../common/request-context/request-context.service';
+import { SmsDispatchService } from '../integrations/sms-dispatch.service';
 import { SupportRepository } from './repositories/support.repository';
 
 export interface SupportNotificationDeliveryRecord {
@@ -23,7 +24,13 @@ export interface SupportNotificationDeliveryRecord {
   created_at: string;
 }
 
-export type SupportNotificationReadinessState = 'configured' | 'partial' | 'missing';
+export type SupportNotificationReadinessState =
+  | 'configured'
+  | 'disabled'
+  | 'missing'
+  | 'missing_provider'
+  | 'missing_credentials'
+  | 'degraded';
 
 export type SupportNotificationProviderStatus = {
   status: SupportNotificationReadinessState;
@@ -36,10 +43,13 @@ export type SupportNotificationProviderStatus = {
   };
   sms: {
     status: SupportNotificationReadinessState;
+    dispatch_provider_configured: boolean;
+    dispatch_provider_status: SupportNotificationReadinessState;
     webhook_url_configured: boolean;
     webhook_token_configured: boolean;
     recipients_configured: boolean;
     recipient_count: number;
+    missing: string[];
   };
   retry: {
     worker_enabled: boolean;
@@ -61,6 +71,7 @@ export class SupportNotificationDeliveryService implements OnModuleInit, OnModul
     private readonly emailService: AuthEmailService,
     private readonly supportRepository: SupportRepository,
     @Optional() private readonly requestContext?: RequestContextService,
+    @Optional() private readonly smsDispatchService?: SmsDispatchService,
   ) {}
 
   onModuleInit(): void {
@@ -107,24 +118,21 @@ export class SupportNotificationDeliveryService implements OnModuleInit, OnModul
     }
   }
 
-  getProviderStatus(): SupportNotificationProviderStatus {
+  async getProviderStatus(): Promise<SupportNotificationProviderStatus> {
     const transactionalEmail = this.emailService.getTransactionalEmailStatus();
     const emailRecipients = this.getConfiguredSupportRecipients();
     const smsRecipients = this.getConfiguredSupportSmsRecipients();
     const smsWebhookUrlConfigured = this.getSmsWebhookUrl().length > 0;
     const smsWebhookTokenConfigured = this.getSmsWebhookToken().length > 0;
     const emailConfigured = transactionalEmail.status === 'configured' && emailRecipients.length > 0;
-    const smsConfigured =
-      smsWebhookUrlConfigured
-      && smsWebhookTokenConfigured
-      && smsRecipients.length > 0;
-    const smsPartiallyConfigured =
-      smsWebhookUrlConfigured
-      || smsWebhookTokenConfigured
-      || smsRecipients.length > 0;
+    const smsReadiness = await this.resolveSmsReadiness(
+      smsRecipients.length > 0,
+      smsWebhookUrlConfigured,
+      smsWebhookTokenConfigured,
+    );
 
     return {
-      status: this.resolveProviderStatus(emailConfigured, smsConfigured, smsPartiallyConfigured),
+      status: this.resolveProviderStatus(emailConfigured, smsReadiness.status),
       email: {
         status: emailConfigured ? 'configured' : 'missing',
         provider: transactionalEmail.provider,
@@ -133,11 +141,14 @@ export class SupportNotificationDeliveryService implements OnModuleInit, OnModul
         recipient_count: emailRecipients.length,
       },
       sms: {
-        status: smsConfigured ? 'configured' : smsPartiallyConfigured ? 'partial' : 'missing',
+        status: smsReadiness.status,
+        dispatch_provider_configured: smsReadiness.dispatchProviderConfigured,
+        dispatch_provider_status: smsReadiness.dispatchProviderStatus,
         webhook_url_configured: smsWebhookUrlConfigured,
         webhook_token_configured: smsWebhookTokenConfigured,
         recipients_configured: smsRecipients.length > 0,
         recipient_count: smsRecipients.length,
+        missing: smsReadiness.missing,
       },
       retry: {
         worker_enabled: this.isRetryWorkerEnabled(),
@@ -250,15 +261,8 @@ export class SupportNotificationDeliveryService implements OnModuleInit, OnModul
         return;
       }
 
-      const webhookUrl = this.getSmsWebhookUrl();
-
-      if (!webhookUrl) {
-        await this.markTerminalFailure(notification, 'Support SMS webhook URL is not configured');
-        return;
-      }
-
       for (const recipient of recipients) {
-        await this.sendSmsWebhook(webhookUrl, recipient, notification);
+        await this.sendSupportSms(recipient, notification);
       }
 
       await this.supportRepository.markNotificationDelivery(notification.id, 'sent', {
@@ -275,11 +279,28 @@ export class SupportNotificationDeliveryService implements OnModuleInit, OnModul
     }
   }
 
-  private async sendSmsWebhook(
-    webhookUrl: string,
+  private async sendSupportSms(
     recipient: string,
     notification: SupportNotificationDeliveryRecord,
   ): Promise<void> {
+    if (this.smsDispatchService) {
+      await this.smsDispatchService.send({
+        tenant_id: notification.tenant_id,
+        to: recipient,
+        title: notification.title,
+        message: notification.body,
+        metadata: notification.metadata,
+        source: 'support_notification',
+      });
+      return;
+    }
+
+    const webhookUrl = this.getSmsWebhookUrl();
+
+    if (!webhookUrl) {
+      throw new Error('Support SMS provider is not configured');
+    }
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -418,17 +439,86 @@ export class SupportNotificationDeliveryService implements OnModuleInit, OnModul
     return value.trim();
   }
 
+  private async resolveSmsReadiness(
+    recipientsConfigured: boolean,
+    webhookUrlConfigured: boolean,
+    webhookTokenConfigured: boolean,
+  ): Promise<{
+    status: SupportNotificationReadinessState;
+    dispatchProviderConfigured: boolean;
+    dispatchProviderStatus: SupportNotificationReadinessState;
+    missing: string[];
+  }> {
+    if (!recipientsConfigured && !webhookUrlConfigured && !webhookTokenConfigured) {
+      return {
+        status: 'disabled',
+        dispatchProviderConfigured: false,
+        dispatchProviderStatus: 'disabled',
+        missing: [],
+      };
+    }
+
+    if (this.smsDispatchService) {
+      const readiness = await this.smsDispatchService.getReadiness();
+      const status = this.mapSmsDispatchReadiness(readiness.status);
+      const missing = [...readiness.missing];
+
+      if (!recipientsConfigured) {
+        missing.push('support_sms_recipients');
+      }
+
+      return {
+        status: recipientsConfigured ? status : 'missing_credentials',
+        dispatchProviderConfigured: readiness.status === 'configured',
+        dispatchProviderStatus: status,
+        missing,
+      };
+    }
+
+    const webhookConfigured = webhookUrlConfigured && webhookTokenConfigured && recipientsConfigured;
+    const missing = [
+      webhookUrlConfigured ? null : 'support_notification_sms_webhook_url',
+      webhookTokenConfigured ? null : 'support_notification_sms_webhook_token',
+      recipientsConfigured ? null : 'support_notification_sms_recipients',
+    ].filter((entry): entry is string => Boolean(entry));
+
+    return {
+      status: webhookConfigured ? 'configured' : 'missing_credentials',
+      dispatchProviderConfigured: webhookConfigured,
+      dispatchProviderStatus: webhookConfigured ? 'configured' : 'missing_credentials',
+      missing,
+    };
+  }
+
   private resolveProviderStatus(
     emailConfigured: boolean,
-    smsConfigured: boolean,
-    smsPartiallyConfigured: boolean,
+    smsStatus: SupportNotificationReadinessState,
   ): SupportNotificationReadinessState {
-    if (emailConfigured && smsConfigured) {
+    const smsReadyOrDisabled = smsStatus === 'configured' || smsStatus === 'disabled';
+
+    if (emailConfigured && smsReadyOrDisabled) {
       return 'configured';
     }
 
-    if (emailConfigured || smsPartiallyConfigured) {
-      return 'partial';
+    if (!emailConfigured && smsStatus === 'configured') {
+      return 'configured';
+    }
+
+    if (smsStatus === 'missing_provider' || smsStatus === 'missing_credentials' || smsStatus === 'degraded') {
+      return smsStatus;
+    }
+
+    return 'missing';
+  }
+
+  private mapSmsDispatchReadiness(status: string): SupportNotificationReadinessState {
+    if (
+      status === 'configured'
+      || status === 'missing_provider'
+      || status === 'missing_credentials'
+      || status === 'degraded'
+    ) {
+      return status;
     }
 
     return 'missing';

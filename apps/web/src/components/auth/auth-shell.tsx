@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Activity,
   CheckCircle2,
@@ -39,40 +39,28 @@ function resolveTrustIcon(icon: AuthTrustNote["icon"]) {
 }
 
 function AnimatedBackground({ dark }: { dark: boolean }) {
-  const reduceMotion = useReducedMotion();
-
   return (
     <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
       <div
         className={`absolute inset-0 ${
           dark
-            ? "bg-[linear-gradient(135deg,#020617_0%,#0f172a_52%,#064e3b_100%)]"
-            : "bg-[linear-gradient(135deg,#ecfdf5_0%,#f8fafc_48%,#e0f2fe_100%)]"
+            ? "bg-[linear-gradient(135deg,#020617_0%,#0f172a_44%,#064e3b_100%)]"
+            : "bg-[linear-gradient(135deg,#ecfdf5_0%,#ffffff_48%,#e0f2fe_100%)]"
         }`}
       />
-      <motion.div
-        className="absolute -left-28 top-12 h-96 w-96 rounded-full bg-emerald-300/20 blur-3xl"
-        animate={
-          reduceMotion
-            ? undefined
-            : {
-                x: [0, 18, 0],
-                y: [0, 10, 0],
-              }
-        }
-        transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+      <div
+        className={`absolute inset-0 ${
+          dark
+            ? "bg-[linear-gradient(90deg,rgba(16,185,129,0.14)_0%,transparent_36%,rgba(14,165,233,0.12)_100%)]"
+            : "bg-[linear-gradient(90deg,rgba(16,185,129,0.10)_0%,transparent_42%,rgba(14,165,233,0.10)_100%)]"
+        }`}
       />
-      <motion.div
-        className="absolute -right-24 bottom-0 h-80 w-80 rounded-full bg-sky-300/20 blur-3xl"
-        animate={
-          reduceMotion
-            ? undefined
-            : {
-                x: [0, -16, 0],
-                y: [0, -12, 0],
-              }
-        }
-        transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
+      <div
+        className={`absolute inset-0 ${
+          dark
+            ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,transparent_34%,rgba(2,6,23,0.18)_100%)]"
+            : "bg-[linear-gradient(180deg,rgba(255,255,255,0.72)_0%,transparent_40%,rgba(236,253,245,0.55)_100%)]"
+        }`}
       />
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:44px_44px] opacity-40" />
     </div>
@@ -281,8 +269,8 @@ export function AuthShell({
             aria-hidden="true"
             className={`absolute inset-x-0 top-0 h-40 lg:hidden ${
               dark
-                ? "bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.22),transparent_62%)]"
-                : "bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.16),transparent_62%)]"
+                ? "bg-[linear-gradient(180deg,rgba(16,185,129,0.22),transparent_72%)]"
+                : "bg-[linear-gradient(180deg,rgba(16,185,129,0.16),transparent_72%)]"
             }`}
           />
           <button
