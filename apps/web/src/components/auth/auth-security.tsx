@@ -193,7 +193,7 @@ export function TenantSelector({
           aria-invalid={Boolean(error)}
         />
         <span className="pointer-events-none absolute left-4 top-2 text-[11px] font-semibold text-slate-500 transition-all duration-200 peer-placeholder-shown:top-[18px] peer-placeholder-shown:text-sm peer-placeholder-shown:font-medium peer-focus:top-2 peer-focus:text-[11px] peer-focus:font-semibold peer-focus:text-emerald-700">
-          School code or workspace
+          School email domain
         </span>
       </label>
 
@@ -201,7 +201,7 @@ export function TenantSelector({
         <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
           <div className="flex items-start gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-700">
             <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />
-            Enter the secure workspace code provided in your invitation email.
+            The system resolves the correct workspace from the signed-in account.
           </div>
         </div>
       ) : null}

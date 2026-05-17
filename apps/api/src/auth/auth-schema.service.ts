@@ -444,6 +444,9 @@ export class AuthSchemaService implements OnModuleInit {
             USING ERRCODE = '42501';
         END IF;
 
+        PERFORM set_config('app.auth_action_token_operation', 'password_recovery_create', true);
+        PERFORM set_config('app.auth_email_outbox_operation', 'password_recovery_create', true);
+
         UPDATE auth_action_tokens
         SET consumed_at = NOW()
         WHERE user_id = input_user_id
@@ -491,6 +494,8 @@ export class AuthSchemaService implements OnModuleInit {
         RETURNING id INTO created_outbox_id;
 
         RETURN QUERY SELECT created_token_id, created_outbox_id;
+        PERFORM set_config('app.auth_action_token_operation', '', true);
+        PERFORM set_config('app.auth_email_outbox_operation', '', true);
       END;
       $$;
 
@@ -529,6 +534,9 @@ export class AuthSchemaService implements OnModuleInit {
           RAISE EXCEPTION 'Email verification tokens are only issued on verification routes'
             USING ERRCODE = '42501';
         END IF;
+
+        PERFORM set_config('app.auth_action_token_operation', 'email_verification_create', true);
+        PERFORM set_config('app.auth_email_outbox_operation', 'email_verification_create', true);
 
         UPDATE auth_action_tokens
         SET consumed_at = NOW()
@@ -577,6 +585,8 @@ export class AuthSchemaService implements OnModuleInit {
         RETURNING id INTO created_outbox_id;
 
         RETURN QUERY SELECT created_token_id, created_outbox_id;
+        PERFORM set_config('app.auth_action_token_operation', '', true);
+        PERFORM set_config('app.auth_email_outbox_operation', '', true);
       END;
       $$;
 
@@ -608,6 +618,8 @@ export class AuthSchemaService implements OnModuleInit {
             USING ERRCODE = '22023';
         END IF;
 
+        PERFORM set_config('app.auth_email_outbox_operation', 'mark_delivery', true);
+
         UPDATE auth_email_outbox
         SET
           status = input_status,
@@ -618,6 +630,8 @@ export class AuthSchemaService implements OnModuleInit {
             ELSE next_attempt_at
           END
         WHERE id = input_outbox_id;
+
+        PERFORM set_config('app.auth_email_outbox_operation', '', true);
       END;
       $$;
 
@@ -655,6 +669,8 @@ export class AuthSchemaService implements OnModuleInit {
             USING ERRCODE = '42501';
         END IF;
 
+        PERFORM set_config('app.auth_action_token_operation', 'password_recovery_consume', true);
+
         SELECT token.id, token.user_id, token.email, token.tenant_id
         INTO token_id, token_user_id, token_email, token_tenant_id
         FROM auth_action_tokens token
@@ -689,6 +705,7 @@ export class AuthSchemaService implements OnModuleInit {
 
         RETURN QUERY
         SELECT token_user_id, token_email, token_tenant_id;
+        PERFORM set_config('app.auth_action_token_operation', '', true);
       END;
       $$;
 
@@ -725,6 +742,8 @@ export class AuthSchemaService implements OnModuleInit {
             USING ERRCODE = '42501';
         END IF;
 
+        PERFORM set_config('app.auth_action_token_operation', 'email_verification_consume', true);
+
         SELECT token.id, token.user_id, token.email, token.tenant_id
         INTO token_id, token_user_id, token_email, token_tenant_id
         FROM auth_action_tokens token
@@ -759,6 +778,7 @@ export class AuthSchemaService implements OnModuleInit {
 
         RETURN QUERY
         SELECT token_user_id, token_email, token_tenant_id;
+        PERFORM set_config('app.auth_action_token_operation', '', true);
       END;
       $$;
 
@@ -802,6 +822,8 @@ export class AuthSchemaService implements OnModuleInit {
           RAISE EXCEPTION 'Invitation tokens are only consumed on invitation acceptance routes'
             USING ERRCODE = '42501';
         END IF;
+
+        PERFORM set_config('app.auth_action_token_operation', 'invite_acceptance_consume', true);
 
         SELECT token.id, token.tenant_id, token.email, token.metadata
         INTO token_id, invite_tenant_id, invite_email, invite_metadata
@@ -913,6 +935,7 @@ export class AuthSchemaService implements OnModuleInit {
           lower(invite_email),
           invite_display_name,
           invite_role_code;
+        PERFORM set_config('app.auth_action_token_operation', '', true);
       END;
       $$;
 
@@ -1277,18 +1300,26 @@ export class AuthSchemaService implements OnModuleInit {
       USING (
         tenant_id = current_setting('app.tenant_id', true)
         OR NULLIF(current_setting('app.role', true), '') = 'platform_owner'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/invitations/accept%'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/password-recovery/%'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/email-verification/%'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/magic-link/%'
+        OR COALESCE(NULLIF(current_setting('app.auth_action_token_operation', true), ''), '') IN (
+          'password_recovery_create',
+          'password_recovery_consume',
+          'email_verification_create',
+          'email_verification_consume',
+          'invite_acceptance_consume',
+          'magic_login_consume'
+        )
       )
       WITH CHECK (
         tenant_id = current_setting('app.tenant_id', true)
         OR NULLIF(current_setting('app.role', true), '') = 'platform_owner'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/invitations/accept%'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/password-recovery/%'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/email-verification/%'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/magic-link/%'
+        OR COALESCE(NULLIF(current_setting('app.auth_action_token_operation', true), ''), '') IN (
+          'password_recovery_create',
+          'password_recovery_consume',
+          'email_verification_create',
+          'email_verification_consume',
+          'invite_acceptance_consume',
+          'magic_login_consume'
+        )
       );
 
       DROP POLICY IF EXISTS auth_email_outbox_rls_policy ON auth_email_outbox;
@@ -1297,16 +1328,20 @@ export class AuthSchemaService implements OnModuleInit {
       USING (
         tenant_id = current_setting('app.tenant_id', true)
         OR NULLIF(current_setting('app.role', true), '') = 'platform_owner'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/password-recovery/%'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/email-verification/request%'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/magic-link/%'
+        OR COALESCE(NULLIF(current_setting('app.auth_email_outbox_operation', true), ''), '') IN (
+          'password_recovery_create',
+          'email_verification_create',
+          'mark_delivery'
+        )
       )
       WITH CHECK (
         tenant_id = current_setting('app.tenant_id', true)
         OR NULLIF(current_setting('app.role', true), '') = 'platform_owner'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/password-recovery/%'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/email-verification/request%'
-        OR COALESCE(NULLIF(current_setting('app.path', true), ''), '') LIKE '%/auth/magic-link/%'
+        OR COALESCE(NULLIF(current_setting('app.auth_email_outbox_operation', true), ''), '') IN (
+          'password_recovery_create',
+          'email_verification_create',
+          'mark_delivery'
+        )
       );
 
       DROP POLICY IF EXISTS auth_mfa_challenges_rls_policy ON auth_mfa_challenges;

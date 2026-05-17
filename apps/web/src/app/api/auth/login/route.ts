@@ -4,7 +4,10 @@ import type { NextRequest } from "next/server";
 import { validateCsrfRequest } from "@/lib/auth/csrf";
 import { isExperienceAudience } from "@/lib/auth/experience-audience";
 import { createServerAuthClient } from "@/lib/auth/server-auth-client";
-import { setExperienceSessionCookies } from "@/lib/auth/server-session";
+import {
+  setExperienceSessionCookies,
+  toPublicExperienceGatewaySession,
+} from "@/lib/auth/server-session";
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.json({
       redirectTo: session.redirectTo,
-      session,
+      session: toPublicExperienceGatewaySession(session),
       user: session.user,
     });
 

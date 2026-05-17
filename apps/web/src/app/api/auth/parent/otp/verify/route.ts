@@ -2,7 +2,11 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { validateCsrfRequest } from "@/lib/auth/csrf";
-import { setExperienceSessionCookies, type ExperienceGatewaySession } from "@/lib/auth/server-session";
+import {
+  setExperienceSessionCookies,
+  toPublicExperienceGatewaySession,
+  type ExperienceGatewaySession,
+} from "@/lib/auth/server-session";
 import { getDashboardApiBaseUrl, type LiveAuthUser } from "@/lib/dashboard/api-client";
 
 type BackendAuthResponse = {
@@ -62,7 +66,11 @@ export async function POST(request: NextRequest) {
     viewer: "parent",
     user: payload.user,
   } satisfies ExperienceGatewaySession;
-  const response = NextResponse.json({ redirectTo: homePath, session, user: payload.user });
+  const response = NextResponse.json({
+    redirectTo: homePath,
+    session: toPublicExperienceGatewaySession(session),
+    user: payload.user,
+  });
   setExperienceSessionCookies(response, session);
 
   return response;

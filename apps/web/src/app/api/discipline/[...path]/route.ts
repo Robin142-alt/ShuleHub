@@ -12,6 +12,8 @@ type RouteContext = {
 
 export const dynamic = "force-dynamic";
 
+const MAX_PROXY_MULTIPART_BYTES = 11 * 1024 * 1024;
+
 export async function GET(request: NextRequest, context: RouteContext) {
   return proxyDisciplineRequest(request, context);
 }
@@ -60,6 +62,12 @@ async function proxyDisciplineRequest(request: NextRequest, context: RouteContex
   upstreamQuery.delete("tenantSlug");
   const query = upstreamQuery.toString();
   const contentType = request.headers.get("content-type") ?? "";
+  const multipartTooLarge = getMultipartContentLengthViolation(request, contentType);
+
+  if (multipartTooLarge) {
+    return multipartTooLarge;
+  }
+
   const body = await buildProxyBody(request);
   const upstreamResponse = await fetch(`${baseUrl}${upstreamPath}${query ? `?${query}` : ""}`, {
     method: request.method,
@@ -100,4 +108,29 @@ async function buildProxyBody(request: Request) {
 
 function isFormContent(contentType: string) {
   return contentType.toLowerCase().includes("multipart/form-data");
+}
+
+function getMultipartContentLengthViolation(request: Request, contentType: string) {
+  if (!isFormContent(contentType)) {
+    return null;
+  }
+
+  const contentLengthHeader = request.headers.get("content-length");
+  const contentLength = Number(contentLengthHeader);
+
+  if (!contentLengthHeader || !Number.isFinite(contentLength) || contentLength <= 0) {
+    return NextResponse.json(
+      { message: "Multipart uploads must include a valid content length." },
+      { status: 411 },
+    );
+  }
+
+  if (contentLength > MAX_PROXY_MULTIPART_BYTES) {
+    return NextResponse.json(
+      { message: "Uploaded file exceeds the supported size limit." },
+      { status: 413 },
+    );
+  }
+
+  return null;
 }

@@ -20,3 +20,5 @@ railway.json
 **/.npm-cache/
 artifacts/
 .deploy-staging/
+apps/web/test-results/
+apps/web/playwright-report/

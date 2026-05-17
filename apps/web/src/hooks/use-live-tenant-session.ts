@@ -14,8 +14,6 @@ export function useLiveTenantSession(tenantId: string) {
   const session: LiveAuthSession | null = authSession.session
     ? {
         tenantId: authSession.session.tenantSlug ?? tenantId,
-        accessToken: authSession.session.accessToken,
-        refreshToken: authSession.session.refreshToken,
         user: authSession.session.user,
       }
     : null;

@@ -1,0 +1,51 @@
+name: Security Audit
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Tenant isolation audit
+        run: npm run tenant:isolation:audit
+
+      - name: Security scan
+        run: npm run security:scan
+
+      - name: Maintainability scan
+        run: npm run maintainability:scan
+
+      - name: Dependency vulnerability scan
+        run: npm run security:deps
+
+      - name: Upload security artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-${{ github.run_id }}
+          path: |
+            docs/security/implementation10-threat-model.md
+            docs/security/implementation10-security-audit.md
+            docs/security/implementation10-security-scan.md
+            docs/validation/implementation11-maintainability-scan.md
+          if-no-files-found: ignore
+          retention-days: 14

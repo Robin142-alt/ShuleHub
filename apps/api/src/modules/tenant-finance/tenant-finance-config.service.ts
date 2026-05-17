@@ -290,7 +290,7 @@ export class TenantFinanceConfigService {
       mpesa_clearing_account_code?: string;
       fee_control_account_code?: string;
     },
-  ): Promise<ResolvedTenantMpesaConfig> {
+  ): Promise<TenantFinanceSummary> {
     const mpesaConfig = await this.repository.upsertMpesaConfig({
       tenant_id: tenantId,
       shortcode: input.shortcode,
@@ -339,7 +339,7 @@ export class TenantFinanceConfigService {
       },
     });
 
-    return this.resolveMpesaConfigForTenant(tenantId);
+    return this.getSummary(tenantId);
   }
 
   async createBankAccount(

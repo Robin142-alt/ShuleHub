@@ -118,6 +118,17 @@ export interface CounsellingSession {
   outcome_summary: string | null;
 }
 
+export interface LearnerDisciplineContext {
+  student_id: string;
+  learner_label: string;
+  admission_number: string;
+  class_label: string | null;
+  academic_year_label: string | null;
+  class_id?: string | null;
+  academic_term_id?: string | null;
+  academic_year_id?: string | null;
+}
+
 export interface CreateIncidentInput {
   student_id: string;
   class_id: string;
@@ -166,7 +177,7 @@ async function disciplineRequest<T>(
     method,
     headers: {
       Accept: "application/json",
-      ...(token ? { "x-csrf-token": token } : {}),
+      ...(token ? { "x-shulehub-csrf": token } : {}),
       ...(!isFormData && options?.body ? { "Content-Type": "application/json" } : {}),
     },
     body: requestBody,
@@ -196,7 +207,7 @@ async function counsellingRequest<T>(
     method,
     headers: {
       Accept: "application/json",
-      ...(token ? { "x-csrf-token": token } : {}),
+      ...(token ? { "x-shulehub-csrf": token } : {}),
       ...(options?.body ? { "Content-Type": "application/json" } : {}),
     },
     body: options?.body ? JSON.stringify(options.body) : undefined,
@@ -236,6 +247,51 @@ export function fetchDisciplineIncidentDetail(tenantSlug: string, incidentId: st
 
 export function fetchOffenseCategories(tenantSlug: string) {
   return disciplineRequest<OffenseCategory[]>(tenantSlug, "offense-categories");
+}
+
+export async function fetchLearnerDisciplineContext(
+  tenantSlug: string,
+  studentId: string,
+): Promise<LearnerDisciplineContext> {
+  const response = await fetch(
+    `/api/admissions/students/${encodeURIComponent(studentId)}/profile?tenantSlug=${encodeURIComponent(tenantSlug)}`,
+    { credentials: "same-origin", cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error("Learner context could not be loaded.");
+  }
+
+  const payload = (await response.json()) as {
+    student: {
+      id: string;
+      admission_number: string;
+      first_name: string;
+      last_name: string;
+    };
+    academic_enrollment?: {
+      class_name?: string | null;
+      stream_name?: string | null;
+      academic_year?: string | null;
+      class_id?: string | null;
+      academic_term_id?: string | null;
+      academic_year_id?: string | null;
+    } | null;
+  };
+  const enrollment = payload.academic_enrollment ?? null;
+
+  return {
+    student_id: payload.student.id,
+    learner_label: `${payload.student.first_name} ${payload.student.last_name}`.trim(),
+    admission_number: payload.student.admission_number,
+    class_label: enrollment
+      ? [enrollment.class_name, enrollment.stream_name].filter(Boolean).join(" ") || null
+      : null,
+    academic_year_label: enrollment?.academic_year ?? null,
+    class_id: enrollment?.class_id ?? null,
+    academic_term_id: enrollment?.academic_term_id ?? null,
+    academic_year_id: enrollment?.academic_year_id ?? null,
+  };
 }
 
 export function createDisciplineIncident(tenantSlug: string, input: CreateIncidentInput) {

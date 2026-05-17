@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import { isProductionReadyModule } from "@/lib/features/module-readiness";
 
 const schoolNavItems = [
   { id: "dashboard", label: "Dashboard", href: "", icon: LayoutDashboard },
@@ -55,8 +56,9 @@ export function SchoolShell({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const basePath = `/school/${role}`;
-  const mainItems = schoolNavItems.filter((i) => i.id !== "settings");
-  const bottomItems = schoolNavItems.filter((i) => i.id === "settings");
+  const visibleSchoolNavItems = schoolNavItems.filter((item) => isProductionReadyModule(item.id));
+  const mainItems = visibleSchoolNavItems.filter((i) => i.id !== "settings");
+  const bottomItems = visibleSchoolNavItems.filter((i) => i.id === "settings");
 
   return (
     <div className="min-h-screen bg-[#f7f8fa]">
@@ -76,7 +78,7 @@ export function SchoolShell({
         <div className="border-b border-[#e8eaed] px-5 py-3">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8b8f9a]">Current term</span>
-            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">Term 2, 2026</span>
+            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">Configured live</span>
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 py-3 custom-scrollbar">
@@ -113,8 +115,8 @@ export function SchoolShell({
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-xs font-bold text-white shadow-sm">{(userName ?? "WM").slice(0, 2).toUpperCase()}</div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-[#1a1d26]">{userName ?? "Dr. Wanjiku Muthoni"}</p>
-              <p className="text-[11px] text-[#8b8f9a]">{userRole ?? "Principal"}</p>
+              <p className="truncate text-sm font-medium text-[#1a1d26]">{userName ?? "Signed-in user"}</p>
+              <p className="text-[11px] text-[#8b8f9a]">{userRole ?? "School operator"}</p>
             </div>
           </div>
         </div>
@@ -131,7 +133,7 @@ export function SchoolShell({
             </div>
             <nav className="px-3 py-3">
               <div className="space-y-0.5">
-                {schoolNavItems.map((item) => {
+                {visibleSchoolNavItems.map((item) => {
                   const Icon = item.icon;
                   const href = item.href ? `${basePath}${item.href}` : basePath;
                   const isActive = item.href === "" ? pathname === basePath : pathname.startsWith(`${basePath}${item.href}`);
@@ -168,7 +170,7 @@ export function SchoolShell({
                 <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-bold text-white">4</span>
               </button>
               <button type="button" className="hidden items-center gap-2 rounded-xl border border-[#e8eaed] px-3 py-2 text-sm text-[#5a5e6a] md:flex">
-                <span>{userName ?? "Dr. Wanjiku"}</span>
+                <span>{userName ?? "Account"}</span>
                 <ChevronDown className="h-3.5 w-3.5" />
               </button>
             </div>

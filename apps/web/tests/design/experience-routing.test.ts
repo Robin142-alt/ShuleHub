@@ -130,6 +130,48 @@ describe("experience routing", () => {
     });
   });
 
+  test("does not route inactive academic aliases into the school workspace", () => {
+    const cookies = {
+      [SCHOOL_SESSION_COOKIE]: serializeExperienceSession({
+        experience: "school",
+        homePath: "/dashboard",
+        role: "teacher",
+        tenantSlug: "greenfield",
+        userLabel: "Teacher",
+      }),
+    };
+
+    expect(
+      evaluateExperienceRouting({
+        host: "greenfield.shulehub.test",
+        pathname: "/academics/dashboard",
+        cookies,
+      }),
+    ).toEqual({
+      action: "redirect",
+      location: "/dashboard",
+      headers: {
+        "x-platform-experience": "school",
+        "x-tenant-slug": "greenfield",
+      },
+    });
+
+    expect(
+      evaluateExperienceRouting({
+        host: "greenfield.shulehub.test",
+        pathname: "/school/teacher/academics",
+        cookies,
+      }),
+    ).toEqual({
+      action: "redirect",
+      location: "/dashboard",
+      headers: {
+        "x-platform-experience": "school",
+        "x-tenant-slug": "greenfield",
+      },
+    });
+  });
+
   test("allows authenticated storekeeper sessions to open dedicated inventory routes", () => {
     expect(
       evaluateExperienceRouting({

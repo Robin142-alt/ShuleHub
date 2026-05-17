@@ -137,6 +137,17 @@ describe("experience actions", () => {
       .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(jsonResponse(emptyReconciliationReport()))
       .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse([
+        {
+          id: "student-mercy-atieno",
+          admission_number: "ADM-024",
+          first_name: "Mercy",
+          last_name: "Atieno",
+          class_name: "Grade 8",
+          stream_name: "East",
+          primary_guardian_phone: "+254700000000",
+        },
+      ]))
       .mockResolvedValueOnce(jsonResponse({ token: "csrf-payment-token" }))
       .mockResolvedValueOnce(jsonResponse({ id: "manual-payment-1", status: "cleared" }))
       .mockResolvedValueOnce(jsonResponse([]))
@@ -157,9 +168,8 @@ describe("experience actions", () => {
       await user.click(screen.getByRole("button", { name: /record payment/i }));
 
       const dialog = await screen.findByRole("dialog", { name: /record payment/i });
-      fireEvent.change(within(dialog).getByLabelText(/payment student/i), {
-        target: { value: "Mercy Atieno" },
-      });
+      await user.type(within(dialog).getByLabelText(/payment student/i), "Mercy");
+      await user.click(await within(dialog).findByRole("button", { name: /Mercy Atieno/i }));
       fireEvent.change(within(dialog).getByLabelText(/payment amount/i), {
         target: { value: "18500" },
       });

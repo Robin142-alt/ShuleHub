@@ -2,6 +2,7 @@ import type {
   PortalViewer,
   SchoolExperienceRole,
 } from "@/lib/experiences/types";
+import { isProductionReadyModule } from "@/lib/features/module-readiness";
 import {
   isPortalSection,
   isSchoolSection,
@@ -149,6 +150,10 @@ function isLibrarianLibraryPath(pathname: string) {
   return pathname === "/library" || pathname.startsWith("/library/");
 }
 
+function isRoutableSchoolSection(section: string) {
+  return isSchoolSection(section) && isProductionReadyModule(section);
+}
+
 function getInternalPrefix(experience: Exclude<PlatformExperience, "public">) {
   switch (experience) {
     case "superadmin":
@@ -206,8 +211,8 @@ function mapProtectedPathToInternal(
       return `${prefix}/dashboard`;
     }
 
-    const roleDashboardSection = pathname.match(/^\/(finance|academics)\/dashboard$/)?.[1];
-    if (roleDashboardSection && isSchoolSection(roleDashboardSection)) {
+    const roleDashboardSection = pathname.match(/^\/([^/]+)\/dashboard$/)?.[1];
+    if (roleDashboardSection && isRoutableSchoolSection(roleDashboardSection)) {
       return `${prefix}/${roleDashboardSection}`;
     }
 
@@ -219,7 +224,7 @@ function mapProtectedPathToInternal(
       return `${prefix}${pathname}`;
     }
 
-    if (pathname.startsWith("/") && isSchoolSection(pathname.slice(1))) {
+    if (pathname.startsWith("/") && isRoutableSchoolSection(pathname.slice(1))) {
       return `${prefix}${pathname}`;
     }
 
@@ -282,7 +287,7 @@ function resolveLegacyCompatibilityPath(
     const schoolSectionMatch = pathname.match(/^\/school\/[^/]+(?:\/([^/]+))?$/);
     if (schoolSectionMatch) {
       const section = schoolSectionMatch[1];
-      return section && isSchoolSection(section) ? `/${section}` : toSchoolPath("dashboard");
+      return section && isRoutableSchoolSection(section) ? `/${section}` : toSchoolPath("dashboard");
     }
 
     const legacyDashboardStudentMatch =
@@ -295,7 +300,7 @@ function resolveLegacyCompatibilityPath(
       pathname.match(/^\/dashboard\/[^/]+(?:\/([^/]+))?$/);
     if (legacyDashboardSectionMatch) {
       const section = legacyDashboardSectionMatch[1];
-      return section && isSchoolSection(section) ? `/${section}` : toSchoolPath("dashboard");
+      return section && isRoutableSchoolSection(section) ? `/${section}` : toSchoolPath("dashboard");
     }
 
     return null;

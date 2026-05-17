@@ -17,9 +17,12 @@ export interface LiveAuthUser {
 
 export interface LiveAuthSession {
   tenantId: string;
+  user: LiveAuthUser;
+}
+
+export interface LiveAuthTokenSession extends LiveAuthSession {
   accessToken: string;
   refreshToken: string;
-  user: LiveAuthUser;
 }
 
 interface AuthResponse {
@@ -36,7 +39,81 @@ export interface ReadinessResponse {
     postgres: string;
     redis: string;
     bullmq: string;
+    transactional_email?: string;
+    cors?: string;
+    support_notifications?: string;
+    object_storage?: string;
+    malware_scanning?: string;
   };
+  email?: {
+    provider?: string;
+    status: string;
+    api_key_configured?: boolean;
+    sender_configured?: boolean;
+    public_app_url_configured?: boolean;
+  };
+  cors?: {
+    status: string;
+    credentials?: boolean;
+    allow_all_origins?: boolean;
+    origin_count?: number;
+    production_locked?: boolean;
+    error?: string;
+  };
+  support_notifications?: {
+    status: string;
+    email?: {
+      status: string;
+      provider?: string;
+      transactional_email?: string;
+      recipients_configured?: boolean;
+      recipient_count?: number;
+    };
+    sms?: {
+      status: string;
+      dispatch_provider_configured?: boolean;
+      dispatch_provider_status?: string;
+      webhook_url_configured?: boolean;
+      webhook_token_configured?: boolean;
+      recipients_configured?: boolean;
+      recipient_count?: number;
+      missing?: string[];
+    };
+    retry?: {
+      worker_enabled?: boolean;
+      interval_ms?: number;
+      batch_size?: number;
+      lease_ms?: number;
+      max_attempts?: number;
+    };
+  } | null;
+  object_storage?: {
+    status: string;
+    enabled?: boolean;
+    provider?: string;
+    endpoint_configured?: boolean;
+    bucket_configured?: boolean;
+    region_configured?: boolean;
+    access_key_configured?: boolean;
+    secret_key_configured?: boolean;
+    missing?: string[];
+  };
+  malware_scanning?: {
+    status: string;
+    required?: boolean;
+    provider_configured?: boolean;
+    api_url_configured?: boolean;
+    api_token_configured?: boolean;
+    health_url_configured?: boolean;
+    missing?: string[];
+  };
+  database_pool?: {
+    total_connections?: number;
+    idle_connections?: number;
+    active_connections?: number;
+    waiting_requests?: number;
+  };
+  circuit_breakers?: Record<string, unknown>;
   slo: {
     generated_at: string;
     overall_status: "healthy" | "degraded" | "critical" | "unknown";
@@ -183,7 +260,7 @@ export async function loginToDashboardApi(input: {
   tenantId: string;
   email: string;
   password: string;
-}): Promise<LiveAuthSession> {
+}): Promise<LiveAuthTokenSession> {
   const response = await requestDashboardApi<AuthResponse>("/auth/login", {
     method: "POST",
     tenantId: input.tenantId,
@@ -201,7 +278,7 @@ export async function loginToDashboardApi(input: {
   };
 }
 
-export async function fetchApiMe(session: LiveAuthSession) {
+export async function fetchApiMe(session: LiveAuthTokenSession) {
   const response = await requestDashboardApi<{ user: LiveAuthUser }>("/auth/me", {
     tenantId: session.tenantId,
     accessToken: session.accessToken,

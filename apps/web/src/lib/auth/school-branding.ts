@@ -25,7 +25,7 @@ const defaultBranding: SchoolBranding = {
   county: "Secure tenant access",
   supportEmail: "support@shulehub.co.ke",
   supportPhone: "Use your invitation channel",
-  heroMessage: "Use the secure workspace code from your ShuleHub invitation to access your school operations.",
+  heroMessage: "Sign in with your email and password to open the verified school workspace assigned to your account.",
   logoMark: "SH",
 };
 

@@ -256,6 +256,7 @@ test('DatabaseFileStorageService creates signed private read tokens and reads te
   });
   const file = await storage.readWithSignedToken({
     tenantId: 'tenant-a',
+    actorUserId: 'user-1',
     token: signedRead.token,
     signingSecret: 'test-signing-secret',
     now: '2026-05-14T13:00:00.000Z',
@@ -272,6 +273,25 @@ test('DatabaseFileStorageService creates signed private read tokens and reads te
     'tenant-a',
     'tenant/tenant-a/admissions/document.pdf',
   ]);
+});
+
+test('DatabaseFileStorageService requires actor binding when minting signed private read tokens', () => {
+  const storage = new DatabaseFileStorageService({
+    query: async () => {
+      throw new Error('token creation should not query');
+    },
+  } as never);
+
+  assert.throws(
+    () =>
+      storage.createSignedReadToken({
+        tenantId: 'tenant-a',
+        storagePath: 'tenant/tenant-a/admissions/document.pdf',
+        expiresAt: '2026-05-14T13:15:00.000Z',
+        signingSecret: 'test-signing-secret',
+      }),
+    /require an actor user/i,
+  );
 });
 
 test('DatabaseFileStorageService reads signed external object storage files through the adapter', async () => {
@@ -322,6 +342,7 @@ test('DatabaseFileStorageService reads signed external object storage files thro
 
   const file = await storage.readWithSignedToken({
     tenantId: 'tenant-a',
+    actorUserId: 'user-1',
     token,
     signingSecret: 'test-signing-secret',
     now: '2026-05-14T13:00:00.000Z',
@@ -378,6 +399,7 @@ test('DatabaseFileStorageService rejects external object storage reads with chec
     () =>
       storage.readWithSignedToken({
         tenantId: 'tenant-a',
+        actorUserId: 'user-1',
         token,
         signingSecret: 'test-signing-secret',
         now: '2026-05-14T13:00:00.000Z',
@@ -406,6 +428,7 @@ test('DatabaseFileStorageService rejects expired or tenant-mismatched signed rea
     () =>
       storage.readWithSignedToken({
         tenantId: 'tenant-a',
+        actorUserId: 'user-1',
         token,
         signingSecret: 'test-signing-secret',
         now: '2026-05-14T13:16:00.000Z',
@@ -417,11 +440,42 @@ test('DatabaseFileStorageService rejects expired or tenant-mismatched signed rea
     () =>
       storage.readWithSignedToken({
         tenantId: 'tenant-b',
+        actorUserId: 'user-1',
         token,
         signingSecret: 'test-signing-secret',
         now: '2026-05-14T13:00:00.000Z',
       }),
     /tenant-scoped/i,
+  );
+  assert.equal(queryCount, 0);
+});
+
+test('DatabaseFileStorageService rejects actor-mismatched signed read tokens before querying', async () => {
+  let queryCount = 0;
+  const storage = new DatabaseFileStorageService({
+    query: async () => {
+      queryCount += 1;
+      throw new Error('actor-mismatched token should not read');
+    },
+  } as never);
+  const token = storage.createSignedReadToken({
+    tenantId: 'tenant-a',
+    storagePath: 'tenant/tenant-a/support/ticket-1/private-note.pdf',
+    actorUserId: 'user-1',
+    expiresAt: '2026-05-14T13:15:00.000Z',
+    signingSecret: 'test-signing-secret',
+  }).token;
+
+  await assert.rejects(
+    () =>
+      storage.readWithSignedToken({
+        tenantId: 'tenant-a',
+        actorUserId: 'user-2',
+        token,
+        signingSecret: 'test-signing-secret',
+        now: '2026-05-14T13:00:00.000Z',
+      }),
+    /does not belong to this actor/i,
   );
   assert.equal(queryCount, 0);
 });

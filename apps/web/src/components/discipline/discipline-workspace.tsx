@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { MetricGrid } from "@/components/experience/metric-grid";
+import { LearnerPicker } from "@/components/common/learner-picker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -32,9 +33,10 @@ import {
   fetchCounsellingReferrals,
   fetchCounsellingSessions,
   fetchDisciplineAnalytics,
-  fetchDisciplineIncidentDetail,
-  fetchDisciplineIncidents,
-  fetchOffenseCategories,
+      fetchDisciplineIncidentDetail,
+      fetchDisciplineIncidents,
+      fetchLearnerDisciplineContext,
+      fetchOffenseCategories,
   fetchParentDisciplineIncidents,
   generateDisciplineDocument,
   updateDisciplineStatus,
@@ -44,12 +46,14 @@ import {
   type CounsellingSession,
   type DisciplineAnalytics,
   type DisciplineIncident,
-  type DisciplineIncidentDetail,
-  type DisciplineSeverity,
+      type DisciplineIncidentDetail,
+      type LearnerDisciplineContext,
+      type DisciplineSeverity,
   type DisciplineStatus,
   type OffenseCategory,
 } from "@/lib/discipline/discipline-live";
 import { downloadTextFile, openPrintDocument } from "@/lib/dashboard/export";
+import type { LearnerLookupItem } from "@/lib/students/student-lookup";
 
 type NoticeTone = "success" | "error" | "info";
 
@@ -135,6 +139,10 @@ function formatDate(value: string | null | undefined) {
 
 function humanize(value: string) {
   return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function unresolvedLearnerLabel(studentId: string | null | undefined) {
+  return studentId ? "Learner not resolved" : "No learner linked";
 }
 
 function Notice({ tone, children }: { tone: NoticeTone; children: string }) {
@@ -251,13 +259,18 @@ export function DisciplineWorkspace({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: NoticeTone; message: string } | null>(null);
   const [incidentForm, setIncidentForm] = useState(createBlankIncidentForm);
+  const [selectedIncidentLearner, setSelectedIncidentLearner] = useState<LearnerLookupItem | null>(null);
+  const [incidentLearnerContext, setIncidentLearnerContext] = useState<LearnerDisciplineContext | null>(null);
+  const [incidentContextLoading, setIncidentContextLoading] = useState(false);
   const [offenseForm, setOffenseForm] = useState(createBlankOffenseForm);
   const [actionForm, setActionForm] = useState(createBlankActionForm);
   const [commentText, setCommentText] = useState("");
   const [commentVisibility, setCommentVisibility] = useState<"public" | "internal">("public");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedCounsellingLearner, setSelectedCounsellingLearner] = useState<LearnerLookupItem | null>(null);
   const [counsellingStudentId, setCounsellingStudentId] = useState("");
   const [counsellingReason, setCounsellingReason] = useState("");
+  const [selectedSessionLearner, setSelectedSessionLearner] = useState<LearnerLookupItem | null>(null);
   const [sessionStudentId, setSessionStudentId] = useState("");
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().slice(0, 16));
 
@@ -329,6 +342,48 @@ export function DisciplineWorkspace({
     };
   }, [normalizedTenantSlug, selectedIncidentId]);
 
+  async function selectIncidentLearner(learner: LearnerLookupItem | null) {
+    setSelectedIncidentLearner(learner);
+    setIncidentLearnerContext(null);
+    setIncidentForm((current) => ({
+      ...current,
+      student_id: learner?.id ?? "",
+      class_id: "",
+      academic_term_id: "",
+      academic_year_id: "",
+    }));
+
+    if (!learner || !normalizedTenantSlug) {
+      return;
+    }
+
+    setIncidentContextLoading(true);
+    try {
+      const context = await fetchLearnerDisciplineContext(normalizedTenantSlug, learner.id);
+      setIncidentLearnerContext(context);
+      setIncidentForm((current) => ({
+        ...current,
+        student_id: context.student_id,
+        class_id: context.class_id ?? "",
+        academic_term_id: context.academic_term_id ?? "",
+        academic_year_id: context.academic_year_id ?? "",
+      }));
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: error instanceof Error ? error.message : "Learner context could not be loaded.",
+      });
+    } finally {
+      setIncidentContextLoading(false);
+    }
+  }
+
+  const incidentAcademicContextReady = Boolean(
+    incidentForm.class_id
+      && incidentForm.academic_term_id
+      && incidentForm.academic_year_id,
+  );
+
   const metrics = useMemo(
     () => [
       {
@@ -380,7 +435,7 @@ export function DisciplineWorkspace({
     },
     { id: "severity", header: "Severity", render: (row) => <StatusPill label={humanize(row.severity)} tone={severityTone[row.severity]} /> },
     { id: "status", header: "Status", render: (row) => <StatusPill label={humanize(row.status)} tone={statusTone[row.status]} /> },
-    { id: "student", header: "Student", render: (row) => <span className="font-mono text-xs">{row.student_id.slice(0, 8)}</span> },
+    { id: "student", header: "Learner", render: (row) => <span className="text-sm text-muted">{unresolvedLearnerLabel(row.student_id)}</span> },
     { id: "date", header: "Date", render: (row) => formatDate(row.occurred_at) },
     {
       id: "actions",
@@ -398,6 +453,17 @@ export function DisciplineWorkspace({
 
   async function submitIncident() {
     if (!normalizedTenantSlug) return;
+    if (!incidentForm.student_id) {
+      setNotice({ tone: "error", message: "Select a learner before creating this discipline case." });
+      return;
+    }
+    if (!incidentAcademicContextReady) {
+      setNotice({
+        tone: "error",
+        message: "Select the learner's active class and term before creating this case. Discipline records cannot be saved against unknown academic context.",
+      });
+      return;
+    }
     if (!incidentForm.offense_category_id && categories[0]) {
       setIncidentForm((current) => ({ ...current, offense_category_id: categories[0].id }));
     }
@@ -412,9 +478,11 @@ export function DisciplineWorkspace({
         action_taken: incidentForm.action_taken || undefined,
         recommendations: incidentForm.recommendations || undefined,
       });
-      setNotice({ tone: "success", message: `Incident ${response.incident.incident_number} was created.` });
-      setIncidentForm(createBlankIncidentForm());
-      setSelectedIncidentId(response.incident.id);
+          setNotice({ tone: "success", message: `Incident ${response.incident.incident_number} was created.` });
+          setIncidentForm(createBlankIncidentForm());
+          setSelectedIncidentLearner(null);
+          setIncidentLearnerContext(null);
+          setSelectedIncidentId(response.incident.id);
       await loadOperationalData();
     } catch (error) {
       setNotice({ tone: "error", message: error instanceof Error ? error.message : "Incident could not be created." });
@@ -515,18 +583,31 @@ export function DisciplineWorkspace({
 
   async function referForCounselling() {
     if (!normalizedTenantSlug || !counsellingStudentId.trim() || !counsellingReason.trim()) return;
+    const referralClassId = incidentForm.class_id || selectedIncident?.incident.class_id || "";
+    const referralTermId = incidentForm.academic_term_id || selectedIncident?.incident.academic_term_id || "";
+    const referralYearId = incidentForm.academic_year_id || selectedIncident?.incident.academic_year_id || "";
+
+    if (!referralClassId || !referralTermId || !referralYearId) {
+      setNotice({
+        tone: "error",
+        message: "Open an existing case or resolve the learner's active class and term before creating a counselling referral.",
+      });
+      return;
+    }
+
     setBusy(true);
     try {
       await createCounsellingReferral(normalizedTenantSlug, {
         student_id: counsellingStudentId.trim(),
-        class_id: incidentForm.class_id || selectedIncident?.incident.class_id || "",
-        academic_term_id: incidentForm.academic_term_id || selectedIncident?.incident.academic_term_id || "",
-        academic_year_id: incidentForm.academic_year_id || selectedIncident?.incident.academic_year_id || "",
+        class_id: referralClassId,
+        academic_term_id: referralTermId,
+        academic_year_id: referralYearId,
         incident_id: selectedIncidentId ?? undefined,
         reason: counsellingReason.trim(),
         risk_level: "medium",
       });
       setCounsellingStudentId("");
+      setSelectedCounsellingLearner(null);
       setCounsellingReason("");
       setNotice({ tone: "success", message: "Counselling referral created." });
       setReferrals(await fetchCounsellingReferrals(normalizedTenantSlug));
@@ -549,6 +630,7 @@ export function DisciplineWorkspace({
         agenda: "Follow-up support session",
       });
       setSessionStudentId("");
+      setSelectedSessionLearner(null);
       setNotice({ tone: "success", message: "Counselling session scheduled." });
       setSessions(await fetchCounsellingSessions(normalizedTenantSlug));
       setCounsellingDashboard(await fetchCounsellingDashboard(normalizedTenantSlug));
@@ -705,10 +787,29 @@ export function DisciplineWorkspace({
             panel: (
               <Card className="p-5">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <TextInput label="Student record ID" value={incidentForm.student_id} required onChange={(value) => setIncidentForm((current) => ({ ...current, student_id: value }))} />
-                  <TextInput label="Class record ID" value={incidentForm.class_id} required onChange={(value) => setIncidentForm((current) => ({ ...current, class_id: value }))} />
-                  <TextInput label="Academic term ID" value={incidentForm.academic_term_id} required onChange={(value) => setIncidentForm((current) => ({ ...current, academic_term_id: value }))} />
-                  <TextInput label="Academic year ID" value={incidentForm.academic_year_id} required onChange={(value) => setIncidentForm((current) => ({ ...current, academic_year_id: value }))} />
+                  <div className="md:col-span-2">
+                    <LearnerPicker
+                      label="Search learner by name or admission number"
+                      tenantSlug={normalizedTenantSlug}
+                      value={selectedIncidentLearner}
+                      onChange={(learner) => {
+                        void selectIncidentLearner(learner);
+                      }}
+                      hint="The learner is linked to the case; active class and term are resolved from admissions when available."
+                    />
+                  </div>
+                  <div className="md:col-span-2 rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm text-muted">
+                    {incidentContextLoading
+                      ? "Loading learner class and term context..."
+                      : incidentLearnerContext
+                        ? `Learner context: ${incidentLearnerContext.learner_label} (${incidentLearnerContext.admission_number}) - ${incidentLearnerContext.class_label ?? "Class pending"} - ${incidentLearnerContext.academic_year_label ?? "Academic year pending"}`
+                        : "Search learner by name or admission number to load their active class and term context."}
+                    {!incidentAcademicContextReady && selectedIncidentLearner ? (
+                      <span className="mt-2 block text-amber-700">
+                        Select the learner&apos;s active class and term before creating this case. Discipline records cannot be saved against unknown academic context.
+                      </span>
+                    ) : null}
+                  </div>
                   <label className="space-y-2 text-sm text-foreground">
                     <span className="font-medium">Offense category</span>
                     <select className="input-base" value={incidentForm.offense_category_id} onChange={(event) => setIncidentForm((current) => ({ ...current, offense_category_id: event.target.value }))}>
@@ -739,7 +840,7 @@ export function DisciplineWorkspace({
                     <input type="checkbox" checked={incidentForm.save_as_draft} onChange={(event) => setIncidentForm((current) => ({ ...current, save_as_draft: event.target.checked }))} />
                     Save as review draft
                   </label>
-                  <Button onClick={() => void submitIncident()} disabled={busy || !categories.length}>Create incident</Button>
+                  <Button onClick={() => void submitIncident()} disabled={busy || !categories.length || !incidentAcademicContextReady}>Create incident</Button>
                 </div>
               </Card>
             ),
@@ -752,14 +853,23 @@ export function DisciplineWorkspace({
                 dashboard={counsellingDashboard}
                 referrals={referrals}
                 sessions={sessions}
+                tenantSlug={normalizedTenantSlug}
+                selectedReferralLearner={selectedCounsellingLearner}
                 studentId={counsellingStudentId}
                 reason={counsellingReason}
+                selectedSessionLearner={selectedSessionLearner}
                 sessionStudentId={sessionStudentId}
                 sessionDate={sessionDate}
                 busy={busy}
-                onStudentIdChange={setCounsellingStudentId}
+                onReferralLearnerChange={(learner) => {
+                  setSelectedCounsellingLearner(learner);
+                  setCounsellingStudentId(learner?.id ?? "");
+                }}
                 onReasonChange={setCounsellingReason}
-                onSessionStudentIdChange={setSessionStudentId}
+                onSessionLearnerChange={(learner) => {
+                  setSelectedSessionLearner(learner);
+                  setSessionStudentId(learner?.id ?? "");
+                }}
                 onSessionDateChange={setSessionDate}
                 onRefer={referForCounselling}
                 onSchedule={scheduleSession}
@@ -997,14 +1107,17 @@ function CounsellingPanel({
   dashboard,
   referrals,
   sessions,
+  tenantSlug,
+  selectedReferralLearner,
   studentId,
   reason,
+  selectedSessionLearner,
   sessionStudentId,
   sessionDate,
   busy,
-  onStudentIdChange,
+  onReferralLearnerChange,
   onReasonChange,
-  onSessionStudentIdChange,
+  onSessionLearnerChange,
   onSessionDateChange,
   onRefer,
   onSchedule,
@@ -1012,14 +1125,17 @@ function CounsellingPanel({
   dashboard: CounsellingDashboard | null;
   referrals: CounsellingReferral[];
   sessions: CounsellingSession[];
+  tenantSlug: string;
+  selectedReferralLearner: LearnerLookupItem | null;
   studentId: string;
   reason: string;
+  selectedSessionLearner: LearnerLookupItem | null;
   sessionStudentId: string;
   sessionDate: string;
   busy: boolean;
-  onStudentIdChange: (value: string) => void;
+  onReferralLearnerChange: (learner: LearnerLookupItem | null) => void;
   onReasonChange: (value: string) => void;
-  onSessionStudentIdChange: (value: string) => void;
+  onSessionLearnerChange: (learner: LearnerLookupItem | null) => void;
   onSessionDateChange: (value: string) => void;
   onRefer: () => Promise<void>;
   onSchedule: () => Promise<void>;
@@ -1041,11 +1157,17 @@ function CounsellingPanel({
               <h3 className="section-title text-lg">Create referral</h3>
               <p className="text-sm text-muted">Refer a student to counselling without exposing confidential notes.</p>
             </div>
-          </div>
-          <div className="mt-4 space-y-3">
-            <TextInput label="Student record ID" value={studentId} onChange={onStudentIdChange} />
-            <TextArea label="Referral reason" value={reason} onChange={onReasonChange} />
-            <Button onClick={() => void onRefer()} disabled={busy || !studentId.trim() || !reason.trim()}>Create referral</Button>
+              </div>
+              <div className="mt-4 space-y-3">
+                <LearnerPicker
+                  label="Search learner by name or admission number"
+                  tenantSlug={tenantSlug}
+                  value={selectedReferralLearner}
+                  onChange={onReferralLearnerChange}
+                  hint="Counselling referrals use the selected learner and the open case academic context."
+                />
+                <TextArea label="Referral reason" value={reason} onChange={onReasonChange} />
+                <Button onClick={() => void onRefer()} disabled={busy || !studentId.trim() || !reason.trim()}>Create referral</Button>
           </div>
         </Card>
         <Card className="p-5">
@@ -1055,11 +1177,16 @@ function CounsellingPanel({
               <h3 className="section-title text-lg">Schedule session</h3>
               <p className="text-sm text-muted">Private counselling sessions are visible only to authorized users.</p>
             </div>
-          </div>
-          <div className="mt-4 space-y-3">
-            <TextInput label="Student record ID" value={sessionStudentId} onChange={onSessionStudentIdChange} />
-            <TextInput label="Scheduled for" type="datetime-local" value={sessionDate} onChange={onSessionDateChange} />
-            <Button onClick={() => void onSchedule()} disabled={busy || !sessionStudentId.trim()}>Schedule session</Button>
+              </div>
+              <div className="mt-4 space-y-3">
+                <LearnerPicker
+                  label="Search learner by name or admission number"
+                  tenantSlug={tenantSlug}
+                  value={selectedSessionLearner}
+                  onChange={onSessionLearnerChange}
+                />
+                <TextInput label="Scheduled for" type="datetime-local" value={sessionDate} onChange={onSessionDateChange} />
+                <Button onClick={() => void onSchedule()} disabled={busy || !sessionStudentId.trim()}>Schedule session</Button>
           </div>
         </Card>
       </div>
@@ -1069,7 +1196,7 @@ function CounsellingPanel({
           rows={referrals}
           getRowKey={(row) => row.id}
           columns={[
-            { id: "student", header: "Student", render: (row) => <span className="font-mono text-xs">{row.student_id.slice(0, 8)}</span> },
+            { id: "student", header: "Learner", render: (row) => <span className="text-sm text-muted">{unresolvedLearnerLabel(row.student_id)}</span> },
             { id: "risk", header: "Risk", render: (row) => humanize(row.risk_level) },
             { id: "status", header: "Status", render: (row) => humanize(row.status) },
           ]}
@@ -1080,7 +1207,7 @@ function CounsellingPanel({
           rows={sessions}
           getRowKey={(row) => row.id}
           columns={[
-            { id: "student", header: "Student", render: (row) => <span className="font-mono text-xs">{row.student_id.slice(0, 8)}</span> },
+            { id: "student", header: "Learner", render: (row) => <span className="text-sm text-muted">{unresolvedLearnerLabel(row.student_id)}</span> },
             { id: "scheduled", header: "Scheduled", render: (row) => formatDate(row.scheduled_for) },
             { id: "status", header: "Status", render: (row) => humanize(row.status) },
           ]}

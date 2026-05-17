@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { validateCsrfRequest } from "@/lib/auth/csrf";
 import {
   readAccessCookie,
   readExperienceSessionCookie,
@@ -11,7 +13,14 @@ import {
   requestDashboardApi,
 } from "@/lib/dashboard/api-client";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  if (!validateCsrfRequest(request)) {
+    return NextResponse.json(
+      { synced: false, message: "Security check expired. Refresh the page and try again." },
+      { status: 403 },
+    );
+  }
+
   const cookieStore = await cookies();
   const session = readExperienceSessionCookie(cookieStore, "school");
 

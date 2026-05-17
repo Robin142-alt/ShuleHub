@@ -141,6 +141,52 @@ test('SupportController exposes public system status without support permissions
   assert.equal(Reflect.hasMetadata(PERMISSIONS_KEY, handler), false);
 });
 
+test('SupportService scopes portal ticket lists to the signed-in requester', async () => {
+  const requestContext = new RequestContextService();
+  const captured: Record<string, unknown> = {};
+  const service = new SupportService(
+    requestContext,
+    {} as never,
+    {
+      listTickets: async (options: Record<string, unknown>) => {
+        captured.options = options;
+        return [];
+      },
+    } as never,
+    {} as never,
+  );
+
+  await requestContext.run(
+    {
+      request_id: 'req-support-portal-list-1',
+      tenant_id: 'tenant-baraka',
+      user_id: '00000000-0000-0000-0000-000000000701',
+      role: 'parent',
+      audience: 'portal',
+      session_id: 'session-parent',
+      permissions: ['support:view'],
+      is_authenticated: true,
+      client_ip: '127.0.0.1',
+      user_agent: 'parent-portal',
+      method: 'GET',
+      path: '/support/tickets',
+      started_at: '2026-05-08T08:10:00.000Z',
+    },
+    () => service.listTickets({ limit: 20, offset: 0 }),
+  );
+
+  assert.deepEqual(captured.options, {
+    tenantId: 'tenant-baraka',
+    requesterUserId: '00000000-0000-0000-0000-000000000701',
+    search: undefined,
+    status: undefined,
+    priority: undefined,
+    module: undefined,
+    limit: 20,
+    offset: 0,
+  });
+});
+
 test('SupportSchemaService adds full-text indexes for ticket and knowledge-base search', async () => {
   let schemaSql = '';
   const service = new SupportSchemaService({
@@ -291,6 +337,33 @@ test('SupportService dispatches critical ticket notifications through the delive
     } as never,
     {} as never,
     {
+      getProviderStatus: async () => ({
+        status: 'configured',
+        email: {
+          status: 'configured',
+          provider: 'resend',
+          transactional_email: 'configured',
+          recipients_configured: true,
+          recipient_count: 1,
+        },
+        sms: {
+          status: 'configured',
+          dispatch_provider_configured: true,
+          dispatch_provider_status: 'configured',
+          webhook_url_configured: true,
+          webhook_token_configured: true,
+          recipients_configured: true,
+          recipient_count: 1,
+          missing: [],
+        },
+        retry: {
+          worker_enabled: true,
+          interval_ms: 60000,
+          batch_size: 25,
+          lease_ms: 120000,
+          max_attempts: 4,
+        },
+      }),
       deliverCreatedNotifications: async (notifications: Array<Record<string, unknown>>) => {
         (captured.deliveredNotifications as Array<Record<string, unknown>>).push(...notifications);
       },
@@ -818,4 +891,59 @@ test('SupportService scans attachments before tenant file persistence when uploa
     status: 'clean',
     scannedAt: '2026-05-14T14:20:00.000Z',
   });
+});
+
+test('SupportService rejects internal note attachment targets from school users', async () => {
+  const requestContext = new RequestContextService();
+  const service = new SupportService(
+    requestContext,
+    {
+      withRequestTransaction: async <T>(callback: () => Promise<T>): Promise<T> => callback(),
+    } as never,
+    {
+      findTicketByIdForAccess: async () => ({
+        id: '00000000-0000-0000-0000-00000000aaa1',
+        tenant_id: 'tenant-baraka',
+        requester_user_id: '00000000-0000-0000-0000-000000000001',
+        status: 'Open',
+      }),
+    } as never,
+    {
+      save: async () => {
+        throw new Error('school user should not persist internal-note attachments');
+      },
+    } as never,
+  );
+
+  await assert.rejects(
+    () =>
+      requestContext.run(
+        {
+          request_id: 'req-support-upload-internal-note-1',
+          tenant_id: 'tenant-baraka',
+          user_id: '00000000-0000-0000-0000-000000000001',
+          role: 'principal',
+          session_id: 'session-school',
+          permissions: ['support:reply', 'support:view'],
+          is_authenticated: true,
+          client_ip: '127.0.0.1',
+          user_agent: 'school-console',
+          method: 'POST',
+          path: '/support/tickets/00000000-0000-0000-0000-00000000aaa1/attachments',
+          started_at: '2026-05-14T14:20:00.000Z',
+        },
+        () =>
+          service.uploadAttachment(
+            '00000000-0000-0000-0000-00000000aaa1',
+            { internal_note_id: '00000000-0000-0000-0000-00000000ddd1' },
+            {
+              originalname: 'incident-note.txt',
+              mimetype: 'text/plain',
+              size: 128,
+              buffer: Buffer.from('support incident note'),
+            },
+          ),
+      ),
+    /Only support agents can attach files to internal notes/,
+  );
 });

@@ -516,7 +516,7 @@ export function SupportCenterWorkspace({
             <div className="mt-5 flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-muted" />
               <span className="text-sm text-muted">
-                {currentIncident?.updated_at ? `Updated ${currentIncident.updated_at}` : "Status feed pending"}
+                {currentIncident?.updated_at ? `Updated ${currentIncident.updated_at}` : "Live status feed not connected"}
               </span>
             </div>
           </Card>

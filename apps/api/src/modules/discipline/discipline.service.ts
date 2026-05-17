@@ -694,7 +694,6 @@ export class DisciplineService {
 
     return (
       this.hasPermission('discipline:manage')
-      || this.hasPermission('discipline:reports')
       || context.permissions.includes('*:*')
       || HIGH_AUTHORITY_ROLES.has(context.role ?? '')
     );

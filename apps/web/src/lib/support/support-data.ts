@@ -212,11 +212,41 @@ export const knowledgeBaseArticles = [
 ];
 
 export const systemStatusComponents = [
-  { id: "api", name: "API status", status: "Telemetry pending", uptime: "Connect status API", latency: "N/A" },
-  { id: "payments", name: "Payment systems", status: "Telemetry pending", uptime: "Connect status API", latency: "N/A" },
-  { id: "mpesa", name: "MPESA integrations", status: "Telemetry pending", uptime: "Connect status API", latency: "N/A" },
-  { id: "queues", name: "Queues", status: "Telemetry pending", uptime: "Connect status API", latency: "N/A" },
-  { id: "dashboards", name: "Uptime", status: "Telemetry pending", uptime: "Connect status API", latency: "N/A" },
+  {
+    id: "api",
+    name: "API status",
+    status: "Configuration required",
+    uptime: "Live status feed not connected",
+    latency: "Awaiting health data",
+  },
+  {
+    id: "payments",
+    name: "Payment systems",
+    status: "Configuration required",
+    uptime: "Live status feed not connected",
+    latency: "Awaiting health data",
+  },
+  {
+    id: "mpesa",
+    name: "MPESA integrations",
+    status: "Configuration required",
+    uptime: "Live status feed not connected",
+    latency: "Awaiting health data",
+  },
+  {
+    id: "queues",
+    name: "Queues",
+    status: "Configuration required",
+    uptime: "Live status feed not connected",
+    latency: "Awaiting health data",
+  },
+  {
+    id: "dashboards",
+    name: "Uptime",
+    status: "Configuration required",
+    uptime: "Live status feed not connected",
+    latency: "Awaiting health data",
+  },
 ];
 
 export const supportAnalytics = {
@@ -224,7 +254,7 @@ export const supportAnalytics = {
     { id: "unresolved", label: "Unresolved tickets", value: "0", helper: "No live support data loaded" },
     { id: "breach", label: "SLA breach risk", value: "0", helper: "No overdue live tickets" },
     { id: "critical", label: "Critical tickets", value: "0", helper: "Instant escalation and support visibility" },
-    { id: "response", label: "Median first response", value: "N/A", helper: "Available after real tickets are created" },
+    { id: "response", label: "Median first response", value: "No data yet", helper: "Available after real tickets are created" },
   ],
   recurringIssues: [],
   heatmap: [],

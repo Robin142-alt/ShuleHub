@@ -6,7 +6,7 @@ describe("SaaS identity role routing", () => {
     expect(getRoleHomePath("platform_owner")).toBe("/superadmin/dashboard");
     expect(getRoleHomePath("principal")).toBe("/dashboard");
     expect(getRoleHomePath("bursar")).toBe("/finance/dashboard");
-    expect(getRoleHomePath("teacher")).toBe("/academics/dashboard");
+    expect(getRoleHomePath("teacher")).toBe("/dashboard");
     expect(getRoleHomePath("storekeeper")).toBe("/inventory/dashboard");
     expect(getRoleHomePath("librarian")).toBe("/library/dashboard");
     expect(getRoleHomePath("parent")).toBe("/portal/dashboard");

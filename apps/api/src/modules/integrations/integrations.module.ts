@@ -14,6 +14,7 @@ import { ParentPortalAuthService } from './parent-portal-auth.service';
 import { SchoolSmsController } from './school-sms.controller';
 import { SchoolSmsWalletRepository } from './school-sms-wallet.repository';
 import { SchoolSmsWalletService } from './school-sms-wallet.service';
+import { SmsDispatchService } from './sms-dispatch.service';
 
 @Module({
   imports: [SecurityModule],
@@ -27,6 +28,7 @@ import { SchoolSmsWalletService } from './school-sms-wallet.service';
     IntegrationsSchemaService,
     PlatformSmsRepository,
     PlatformSmsService,
+    SmsDispatchService,
     SchoolSmsWalletRepository,
     SchoolSmsWalletService,
     DarajaIntegrationRepository,
@@ -37,6 +39,7 @@ import { SchoolSmsWalletService } from './school-sms-wallet.service';
   exports: [
     IntegrationsSchemaService,
     PlatformSmsService,
+    SmsDispatchService,
     SchoolSmsWalletService,
     DarajaIntegrationService,
     DarajaIntegrationRepository,

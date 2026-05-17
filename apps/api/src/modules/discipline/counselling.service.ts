@@ -115,6 +115,7 @@ export class CounsellingService {
 
   async updateSession(sessionId: string, dto: UpdateCounsellingSessionDto) {
     this.assertPermission('counselling:write');
+    await this.requireSession(sessionId);
     const session = await this.counsellingRepository.updateSession({
       ...dto,
       tenant_id: this.requireTenantId(),
@@ -158,7 +159,7 @@ export class CounsellingService {
       session_id: session.id,
     });
 
-    return notes.map((note) => this.presentNote(note));
+    return Promise.all(notes.map((note) => this.presentNote(note)));
   }
 
   async createImprovementPlan(dto: CreateImprovementPlanDto) {
@@ -193,8 +194,8 @@ export class CounsellingService {
     return referral;
   }
 
-  private presentNote(note: CounsellingNoteEntity) {
-    if (!this.canReadNote(note)) {
+  private async presentNote(note: CounsellingNoteEntity) {
+    if (!(await this.canReadNote(note))) {
       return {
         id: note.id,
         visibility: note.visibility,
@@ -215,7 +216,7 @@ export class CounsellingService {
     };
   }
 
-  private canReadNote(note: CounsellingNoteEntity): boolean {
+  private async canReadNote(note: CounsellingNoteEntity): Promise<boolean> {
     const context = this.requestContext.requireStore();
 
     if (this.hasPermission('counselling:manage') || note.counsellor_user_id === context.user_id) {
@@ -227,7 +228,11 @@ export class CounsellingService {
     }
 
     if (note.visibility === 'parent_visible' && this.hasPermission('portal:read_own_children')) {
-      return true;
+      return this.disciplineRepository.isParentLinkedToStudent({
+        tenant_id: note.tenant_id,
+        parent_user_id: context.user_id,
+        student_id: note.student_id,
+      });
     }
 
     return false;
@@ -243,7 +248,33 @@ export class CounsellingService {
       throw new NotFoundException('Counselling session was not found');
     }
 
+    if (!(await this.canAccessSession(session))) {
+      throw new ForbiddenException('You cannot access this counselling session');
+    }
+
     return session;
+  }
+
+  private async canAccessSession(session: { counsellor_user_id: string; student_id: string }): Promise<boolean> {
+    const context = this.requestContext.requireStore();
+
+    if (
+      this.hasPermission('counselling:manage')
+      || this.hasPermission('discipline:manage')
+      || session.counsellor_user_id === context.user_id
+    ) {
+      return true;
+    }
+
+    if (this.hasPermission('portal:read_own_children')) {
+      return this.disciplineRepository.isParentLinkedToStudent({
+        tenant_id: this.requireTenantId(),
+        parent_user_id: context.user_id,
+        student_id: session.student_id,
+      });
+    }
+
+    return false;
   }
 
   private assertCounsellingRead(): void {
@@ -251,6 +282,7 @@ export class CounsellingService {
       !this.hasPermission('counselling:read')
       && !this.hasPermission('counselling:manage')
       && !this.hasPermission('discipline:manage')
+      && !this.hasPermission('portal:read_own_children')
     ) {
       throw new ForbiddenException('Counselling permission is required');
     }

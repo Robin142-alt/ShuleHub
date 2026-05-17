@@ -29,6 +29,11 @@ export type ExperienceGatewaySession = {
   user: LiveAuthUser;
 };
 
+export type PublicExperienceGatewaySession = Omit<
+  ExperienceGatewaySession,
+  "accessToken" | "refreshToken"
+>;
+
 type CookieReader = {
   get(name: string): { value: string } | undefined;
 };
@@ -78,6 +83,20 @@ function toExperienceSession(
     viewer: (session.viewer ?? "parent") as PortalViewer,
     userLabel: session.userLabel,
   };
+}
+
+export function toPublicExperienceGatewaySession(
+  session: ExperienceGatewaySession,
+): PublicExperienceGatewaySession {
+  const publicSession = { ...session } as Omit<
+    ExperienceGatewaySession,
+    "accessToken" | "refreshToken"
+  > & Partial<Pick<ExperienceGatewaySession, "accessToken" | "refreshToken">>;
+
+  delete publicSession.accessToken;
+  delete publicSession.refreshToken;
+
+  return publicSession;
 }
 
 export function setExperienceSessionCookies(

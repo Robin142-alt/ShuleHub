@@ -51,6 +51,29 @@ test('AuthSchemaService defines email verification token functions and route pol
   assert.match(bootstrapSql, /\/auth\/email-verification\//);
 });
 
+test('AuthSchemaService does not grant broad public path access to auth token tables', async () => {
+  let bootstrapSql = '';
+  const service = new AuthSchemaService({
+    runSchemaBootstrap: async (sql: string) => {
+      bootstrapSql = sql;
+    },
+  } as never);
+
+  await service.onModuleInit();
+
+  const authTokenPolicy = bootstrapSql.match(
+    /CREATE POLICY auth_action_tokens_rls_policy[\s\S]+?CREATE POLICY auth_email_outbox_rls_policy/,
+  )?.[0] ?? '';
+  const emailOutboxPolicy = bootstrapSql.match(
+    /CREATE POLICY auth_email_outbox_rls_policy[\s\S]+?DROP POLICY IF EXISTS auth_mfa_challenges_rls_policy/,
+  )?.[0] ?? '';
+
+  assert.match(authTokenPolicy, /app\.auth_action_token_operation/);
+  assert.match(emailOutboxPolicy, /app\.auth_email_outbox_operation/);
+  assert.doesNotMatch(authTokenPolicy, /app\.path/);
+  assert.doesNotMatch(emailOutboxPolicy, /app\.path/);
+});
+
 test('AuthSchemaService returns auth security state from user lookup functions', async () => {
   let bootstrapSql = '';
   const service = new AuthSchemaService({

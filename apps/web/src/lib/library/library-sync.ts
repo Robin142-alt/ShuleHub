@@ -2,6 +2,7 @@ import type {
   LibraryBorrowInput,
   LibraryReturnInput,
 } from "@/lib/library/library-data";
+import { getCsrfToken } from "@/lib/auth/csrf-client";
 
 export interface LibrarySyncResult {
   synced: boolean;
@@ -36,6 +37,7 @@ async function postLibrarySync(path: string, payload: Record<string, unknown>) {
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      "x-shulehub-csrf": await getCsrfToken(),
     },
     body: JSON.stringify(payload),
   });

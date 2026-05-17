@@ -1,4 +1,4 @@
-import { requestDashboardApi, type LiveAuthSession } from "@/lib/dashboard/api-client";
+import type { LiveAuthSession } from "@/lib/dashboard/api-client";
 import {
   advanceAdmissionsStudentAcademicLifecycleLive,
   fetchAdmissionsReportExportLive,
@@ -8,16 +8,26 @@ import {
   createAdmissionsDataset,
 } from "@/lib/modules/admissions-data";
 
-jest.mock("@/lib/dashboard/api-client", () => ({
-  requestDashboardApi: jest.fn(),
+jest.mock("@/lib/auth/csrf-client", () => ({
+  getCsrfToken: jest.fn(async () => "csrf-token"),
 }));
 
+function jsonResponse(body: unknown, init?: ResponseInit) {
+  return {
+    status: init?.status ?? 200,
+    ok: (init?.status ?? 200) >= 200 && (init?.status ?? 200) < 300,
+    json: async () => body,
+  } as Response;
+}
+
 describe("admissions live API client", () => {
+  beforeEach(() => {
+    Object.assign(global, { fetch: jest.fn() });
+  });
+
   it("posts academic lifecycle actions to the admissions API endpoint", async () => {
     const session: LiveAuthSession = {
       tenantId: "tenant-a",
-      accessToken: "access-token",
-      refreshToken: "refresh-token",
       user: {
         user_id: "user-1",
         tenant_id: "tenant-a",
@@ -28,13 +38,12 @@ describe("admissions live API client", () => {
         session_id: "session-1",
       },
     };
-    const mockedRequest = jest.mocked(requestDashboardApi);
-    mockedRequest.mockResolvedValueOnce({
+    jest.mocked(global.fetch).mockResolvedValueOnce(jsonResponse({
       lifecycle_event: {
         id: "event-1",
         event_type: "promotion",
       },
-    });
+    }));
 
     await advanceAdmissionsStudentAcademicLifecycleLive(session, "student-1", {
       action: "promotion",
@@ -43,27 +52,28 @@ describe("admissions live API client", () => {
       reason: "End of year promotion",
     });
 
-    expect(mockedRequest).toHaveBeenCalledWith(
-      "/admissions/students/student-1/academic-lifecycle",
-      {
-        tenantId: "tenant-a",
-        accessToken: "access-token",
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/admissions/students/student-1/academic-lifecycle",
+      expect.objectContaining({
         method: "POST",
-        body: {
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          "x-shulehub-csrf": "csrf-token",
+        }),
+        body: expect.any(String),
+      }),
+    );
+    expect(JSON.parse(String(jest.mocked(global.fetch).mock.calls[0]?.[1]?.body))).toEqual({
           action: "promotion",
           class_name: "Grade 8",
           stream_name: "North",
           reason: "End of year promotion",
-        },
-      },
-    );
+    });
   });
 
   it("fetches server-side admissions report export artifacts", async () => {
     const session: LiveAuthSession = {
       tenantId: "tenant-a",
-      accessToken: "access-token",
-      refreshToken: "refresh-token",
       user: {
         user_id: "user-1",
         tenant_id: "tenant-a",
@@ -74,8 +84,7 @@ describe("admissions live API client", () => {
         session_id: "session-1",
       },
     };
-    const mockedRequest = jest.mocked(requestDashboardApi);
-    mockedRequest.mockResolvedValueOnce({
+    jest.mocked(global.fetch).mockResolvedValueOnce(jsonResponse({
       report_id: "applications",
       title: "Applications register",
       filename: "admissions-applications.csv",
@@ -84,16 +93,16 @@ describe("admissions live API client", () => {
       row_count: 1,
       checksum_sha256: "checksum",
       csv: "Applicant,Application No\r\nAchieng,APP-20260514-001\r\n",
-    });
+    }));
 
     const artifact = await fetchAdmissionsReportExportLive(session, "applications");
 
-    expect(mockedRequest).toHaveBeenCalledWith(
-      "/admissions/reports/applications/export",
-      {
-        tenantId: "tenant-a",
-        accessToken: "access-token",
-      },
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/admissions/reports/applications/export",
+      expect.objectContaining({
+        method: "GET",
+        credentials: "same-origin",
+      }),
     );
     expect(artifact).toMatchObject({
       filename: "admissions-applications.csv",

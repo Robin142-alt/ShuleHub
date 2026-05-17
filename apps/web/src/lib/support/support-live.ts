@@ -113,6 +113,12 @@ export type LiveSupportAnalyticsPayload = {
   sla_breaches?: number;
   recurring_issues?: Array<{ category: string; module_affected: string; total: number }>;
   ticket_heatmap?: Array<{ day: string; total: number }>;
+  median_response_minutes?: number;
+  first_response_sla?: { total: number; met: number; breached: number };
+  open_tickets?: number;
+  escalated_tickets?: number;
+  notification_delivery_state?: Array<{ channel: string; delivery_status: string; total: number }>;
+  system_status_incidents?: number;
 };
 
 export type LiveSupportNotificationRecord = {
@@ -240,13 +246,20 @@ export function mapLiveSupportAnalytics(payload: LiveSupportAnalyticsPayload): S
   const critical = priorityCounts
     .filter((item) => item.priority === "Critical")
     .reduce((total, item) => total + Number(item.total ?? 0), 0);
+  const firstResponseSla = payload.first_response_sla;
+  const firstResponseRate = firstResponseSla && firstResponseSla.total > 0
+    ? Math.round((firstResponseSla.met / firstResponseSla.total) * 100)
+    : null;
+  const failedNotifications = (payload.notification_delivery_state ?? [])
+    .filter((item) => item.delivery_status === "failed")
+    .reduce((total, item) => total + Number(item.total ?? 0), 0);
 
   return {
     metrics: [
       {
         id: "unresolved",
         label: "Unresolved tickets",
-        value: String(unresolved),
+        value: String(payload.open_tickets ?? unresolved),
         helper: "Open, in progress, waiting, and escalated",
       },
       {
@@ -257,15 +270,35 @@ export function mapLiveSupportAnalytics(payload: LiveSupportAnalyticsPayload): S
       },
       {
         id: "critical",
-        label: "Critical tickets",
-        value: String(critical),
-        helper: "Instant escalation and support visibility",
+        label: "Escalated tickets",
+        value: String(payload.escalated_tickets ?? critical),
+        helper: "Tickets requiring platform support leadership visibility",
       },
       {
-        id: "response",
-        label: "Queue source",
-        value: "Live",
-        helper: "Backed by the support ticket database",
+        id: "median-response",
+        label: "Median response",
+        value: `${Number(payload.median_response_minutes ?? 0).toFixed(1)} min`,
+        helper: "Median first response time across tickets answered in the last 30 days",
+      },
+      {
+        id: "first-response-sla",
+        label: "First response SLA",
+        value: firstResponseRate === null ? "No data" : `${firstResponseRate}%`,
+        helper: firstResponseSla
+          ? `${firstResponseSla.met} met, ${firstResponseSla.breached} overdue, ${firstResponseSla.total} total`
+          : "No first-response SLA data has been recorded yet",
+      },
+      {
+        id: "notification-state",
+        label: "Notification failures",
+        value: String(failedNotifications),
+        helper: "Failed support email or SMS deliveries in the last 7 days",
+      },
+      {
+        id: "system-incidents",
+        label: "System incidents",
+        value: String(payload.system_status_incidents ?? 0),
+        helper: "Active incidents from the support system status table",
       },
     ],
     recurringIssues: (payload.recurring_issues ?? []).map(

@@ -1,6 +1,7 @@
 import { Injectable, NestMiddleware, Optional } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 
+import { sanitizeRequestPath } from '../common/request-path.util';
 import { SloMetricsService } from '../modules/observability/slo-metrics.service';
 import { StructuredLoggerService } from '../modules/observability/structured-logger.service';
 
@@ -14,10 +15,11 @@ export class RequestLoggingMiddleware implements NestMiddleware {
   use(request: Request, response: Response, next: NextFunction): void {
     const startedAt = process.hrtime.bigint();
     let settled = false;
+    const safePath = sanitizeRequestPath(request.originalUrl || request.url);
 
     this.logger.logRequest('request.received', {
       method: request.method,
-      path: request.originalUrl || request.url,
+      path: safePath,
     });
 
     const finalize = (event: 'request.completed' | 'request.aborted'): void => {
@@ -48,7 +50,7 @@ export class RequestLoggingMiddleware implements NestMiddleware {
         duration_ms: durationMs,
         status_code: response.statusCode,
         method: request.method,
-        path: request.originalUrl || request.url,
+        path: safePath,
         event,
       });
     };

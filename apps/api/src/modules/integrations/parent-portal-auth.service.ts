@@ -104,8 +104,21 @@ export class ParentPortalAuthService {
       phone_hash: challenge.phone_hash,
     });
 
-    if (!subject) {
+    if (
+      !subject
+      || subject.user_id !== challenge.user_id
+      || subject.tenant_id !== challenge.tenant_id
+    ) {
       throw new UnauthorizedException('Parent account is no longer active');
+    }
+
+    const consumed = await this.parentPortalAuthRepository.consumeChallenge(
+      challenge.tenant_id,
+      challenge.id,
+    );
+
+    if (!consumed) {
+      throw new UnauthorizedException('Verification code has expired');
     }
 
     await this.authorizationRepository.ensureTenantAuthorizationBaseline(subject.tenant_id);
@@ -135,8 +148,6 @@ export class ParentPortalAuthService {
       ip_address: this.requestContext.getStore()?.client_ip ?? null,
       user_agent: this.requestContext.getStore()?.user_agent ?? null,
     });
-    await this.parentPortalAuthRepository.consumeChallenge(challenge.tenant_id, challenge.id);
-
     return {
       tokens: {
         access_token: tokenPair.access_token,

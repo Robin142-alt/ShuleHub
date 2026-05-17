@@ -16,11 +16,19 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getCsrfToken } from "@/lib/auth/csrf-client";
+import {
+  fetchApiObservabilityAlerts,
+  fetchApiObservabilityHealth,
+  fetchApiReadiness,
+  isDashboardApiConfigured,
+} from "@/lib/dashboard/api-client";
 import type { ExperienceNotificationItem } from "@/lib/experiences/types";
 import {
   callbackFailures,
   infrastructureEvents,
   infrastructureMetrics,
+  mapObservabilityAlertsToInfrastructureEvents,
+  mapReadinessToInfrastructureMetrics,
   mpesaMonitoringRows,
   platformUsersRows,
   revenuePoints,
@@ -217,7 +225,7 @@ function TenantsTable() {
       schoolForm.adminName.trim().length < 2 ||
       !schoolForm.adminEmail.includes("@")
     ) {
-      setCreateError("Enter the school name, workspace code, admin name, and admin email.");
+      setCreateError("Enter the school name, school URL slug, admin name, and admin email.");
       return;
     }
 
@@ -382,8 +390,8 @@ function TenantsTable() {
             },
             {
               id: "tenantId",
-              label: "Workspace code",
-              placeholder: "Unique workspace code",
+              label: "School URL slug",
+              placeholder: "Unique school URL slug",
               value: schoolForm.tenantId,
             },
             {
@@ -672,17 +680,97 @@ function AuditLogsPage() {
 }
 
 function InfrastructurePage() {
+  const [metrics, setMetrics] = useState(infrastructureMetrics);
+  const [events, setEvents] = useState(infrastructureEvents);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "degraded" | "error">(
+    isDashboardApiConfigured() ? "loading" : "degraded",
+  );
+  const [message, setMessage] = useState(
+    isDashboardApiConfigured()
+      ? "Loading live infrastructure readiness..."
+      : "Production API base URL is not configured for this frontend deployment.",
+  );
+
+  useEffect(() => {
+    if (!isDashboardApiConfigured()) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadInfrastructure() {
+      setLoadState("loading");
+      setMessage("Loading live infrastructure readiness...");
+
+      const [readinessResult, healthResult, alertsResult] = await Promise.allSettled([
+        fetchApiReadiness(),
+        fetchApiObservabilityHealth(),
+        fetchApiObservabilityAlerts(),
+      ]);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (readinessResult.status !== "fulfilled") {
+        setLoadState("error");
+        setMessage("Live infrastructure readiness could not be loaded. Check API routing and platform credentials.");
+        setMetrics(infrastructureMetrics);
+        setEvents([
+          {
+            id: "infrastructure-unavailable",
+            title: "Infrastructure telemetry unavailable",
+            detail: readinessResult.reason instanceof Error
+              ? readinessResult.reason.message
+              : "The readiness endpoint did not respond successfully.",
+            timeLabel: "Action",
+            tone: "critical",
+          },
+        ]);
+        return;
+      }
+
+      const health = healthResult.status === "fulfilled" ? healthResult.value : null;
+      const alerts = alertsResult.status === "fulfilled" ? alertsResult.value.alerts : [];
+      const degraded = readinessResult.value.status === "degraded"
+        || health?.overall_status === "degraded"
+        || health?.overall_status === "critical"
+        || alerts.some((alert) => alert.severity === "critical");
+
+      setMetrics(mapReadinessToInfrastructureMetrics(readinessResult.value, health));
+      setEvents(mapObservabilityAlertsToInfrastructureEvents(alerts, readinessResult.value));
+      setLoadState(degraded ? "degraded" : "ready");
+      setMessage(
+        degraded
+          ? "Live telemetry is connected, but one or more dependencies need attention."
+          : "Live telemetry is connected and no active infrastructure alerts were returned.",
+      );
+    }
+
+    void loadInfrastructure();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const stateTone = loadState === "ready" ? "ok" : loadState === "loading" || loadState === "degraded" ? "warning" : "critical";
+
   return (
     <div className="space-y-6">
       <SuperadminPageHeader
         title="Infrastructure"
         description="API latency, queue depth, Redis health, PostgreSQL health, and platform error rates in one surface."
+        actions={<StatusPill label={loadState === "ready" ? "Live" : loadState === "loading" ? "Loading" : loadState === "degraded" ? "Degraded" : "Action"} tone={stateTone} />}
       />
-      <MetricGrid items={infrastructureMetrics} />
+      <Card className="p-4">
+        <p className="text-sm leading-6 text-muted">{message}</p>
+      </Card>
+      <MetricGrid items={metrics} />
       <ActivityListCard
         title="Operational events"
         subtitle="Recent system behavior that impacts SLOs, worker recovery, or tenant trust."
-        items={infrastructureEvents}
+        items={events}
       />
     </div>
   );

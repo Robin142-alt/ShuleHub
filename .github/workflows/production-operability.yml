@@ -6,6 +6,7 @@ on:
     - cron: "7 * * * *"
     - cron: "17 */6 * * *"
     - cron: "33 2 * * *"
+    - cron: "21 3 * * 0"
   workflow_dispatch:
     inputs:
       check:
@@ -19,7 +20,13 @@ on:
           - core-load
           - providers
           - query-plan
+          - maintainability
           - readiness
+          - scorecard
+          - pilot
+          - security
+          - backup-restore
+          - incident-drill
 
 permissions:
   contents: read
@@ -98,11 +105,61 @@ jobs:
         if: github.event.inputs.check == 'all' || github.event.inputs.check == 'readiness' || github.event.schedule == '33 2 * * *'
         run: npm run release:readiness > production-release-readiness.json
 
+      - name: Maintainability scan
+        if: github.event.inputs.check == 'all' || github.event.inputs.check == 'maintainability' || github.event.schedule == '33 2 * * *'
+        run: npm run maintainability:scan
+
+      - name: Production scorecard
+        if: github.event.inputs.check == 'all' || github.event.inputs.check == 'scorecard' || github.event.schedule == '33 2 * * *'
+        run: npm run scorecard:production
+
+      - name: Pilot workflow certification
+        if: github.event.inputs.check == 'all' || github.event.inputs.check == 'pilot' || github.event.schedule == '33 2 * * *'
+        env:
+          PILOT_CERTIFICATION_LIVE: ${{ secrets.PILOT_CERTIFICATION_LIVE || 'false' }}
+          PILOT_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
+          PILOT_WEB_BASE_URL: ${{ secrets.PROD_WEB_BASE_URL }}
+          PILOT_TENANT_ID: ${{ secrets.PROD_MONITOR_TENANT_ID }}
+          PILOT_ACCESS_TOKEN: ${{ secrets.PROD_MONITOR_ACCESS_TOKEN }}
+        run: |
+          npm run certify:pilot
+          npm run finance:certify
+          npm run library:certify
+          npm run discipline:certify
+
+      - name: Security and tenant isolation audit
+        if: github.event.inputs.check == 'all' || github.event.inputs.check == 'security' || github.event.schedule == '33 2 * * *'
+        run: |
+          npm run tenant:isolation:audit
+          npm run security:scan
+          npm run security:deps
+
+      - name: Backup restore verification
+        if: github.event.inputs.check == 'all' || github.event.inputs.check == 'backup-restore' || github.event.schedule == '21 3 * * 0'
+        env:
+          DATABASE_URL: ${{ secrets.DR_DATABASE_URL }}
+        run: npm run dr:backup-restore > production-backup-restore.txt
+
+      - name: Incident drill validation
+        if: github.event.inputs.check == 'all' || github.event.inputs.check == 'incident-drill' || github.event.schedule == '21 3 * * 0'
+        run: npm run ops:incident-drill -- --dry-run > production-incident-drill.json
+
       - name: Upload sanitized operability artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: production-operability-${{ github.run_id }}
-          path: production-*.json
+          path: |
+            production-*.json
+            production-*.txt
+            docs/scorecards/production-readiness-scorecard.md
+            docs/validation/implementation10-pilot-certification.md
+            docs/validation/implementation10-finance-certification.md
+            docs/validation/implementation10-library-certification.md
+            docs/validation/implementation10-discipline-certification.md
+            docs/validation/implementation11-maintainability-scan.md
+            docs/security/implementation10-threat-model.md
+            docs/security/implementation10-security-audit.md
+            docs/security/implementation10-security-scan.md
           if-no-files-found: ignore
           retention-days: 14
